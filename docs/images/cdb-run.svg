@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="540" viewBox="0 0 1100 540" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>Three ways cdb runs: the machine's cdb, inside comando, a server of your own</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9AA0A6"/></marker>
+</defs>
+<rect width="1100" height="540" fill="url(#bg)"/>
+<text x="40" y="46" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">CDB · WHERE IT RUNS</text>
+<text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One engine, three ways to run it</text>
+
+<!-- panel 1 -->
+<rect x="40" y="108" width="326" height="350" rx="10" fill="#171717" stroke="#2E2E2E" stroke-width="1"/>
+<text x="58" y="136" font-size="13" fill="#9AA0A6" letter-spacing="2">1 · THE MACHINE'S CDB</text>
+<rect x="58" y="154" width="88" height="44" rx="6" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="102" y="181" text-anchor="middle" font-size="13" fill="#6FAEE8">comando</text>
+<rect x="158" y="154" width="88" height="44" rx="6" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="202" y="181" text-anchor="middle" font-size="13" fill="#6FAEE8">comando</text>
+<rect x="258" y="154" width="90" height="44" rx="6" fill="#1E1E1E" stroke="#6CC69A" stroke-width="1.2"/>
+<text x="303" y="181" text-anchor="middle" font-size="13" fill="#6CC69A">the kit</text>
+<line x1="102" y1="198" x2="160" y2="246" stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#a)"/>
+<line x1="202" y1="198" x2="203" y2="246" stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#a)"/>
+<line x1="303" y1="198" x2="246" y2="246" stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="78" y="250" width="250" height="88" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+<text x="94" y="277" font-size="15" fill="#E7C55A" font-family="Menlo, Consolas, monospace">CdbServe</text>
+<text x="94" y="300" font-size="13" font-weight="300" fill="#C9CDD2">a process of its own</text>
+<text x="94" y="320" font-size="13" font-weight="300" fill="#C9CDD2">HTTP 9000 · PostgreSQL wire 8812</text>
+<line x1="203" y1="338" x2="203" y2="364" stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="203" y="386" text-anchor="middle" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">~/.comando-cdb/cdb/</text>
+<text x="203" y="418" text-anchor="middle" font-size="13" font-weight="300" fill="#9AA0A6">one server for the whole machine;</text>
+<text x="203" y="437" text-anchor="middle" font-size="13" font-weight="300" fill="#9AA0A6">it outlives the comando that starts it</text>
+
+<!-- panel 2 -->
+<rect x="387" y="108" width="326" height="350" rx="10" fill="#171717" stroke="#2E2E2E" stroke-width="1"/>
+<text x="405" y="136" font-size="13" fill="#9AA0A6" letter-spacing="2">2 · INSIDE COMANDO</text>
+<rect x="405" y="154" width="290" height="184" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="421" y="181" font-size="15" fill="#6FAEE8">comando</text>
+<text x="421" y="204" font-size="13" font-weight="300" fill="#C9CDD2">a connection whose host is</text>
+<text x="421" y="224" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">cdb</text>
+<text x="452" y="224" font-size="13" font-weight="300" fill="#C9CDD2">or</text>
+<text x="472" y="224" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">cdb:&lt;folder&gt;</text>
+<rect x="435" y="244" width="230" height="76" rx="8" fill="#191919" stroke="#E7C55A" stroke-width="1.5"/>
+<text x="451" y="272" font-size="15" fill="#E7C55A">cdb</text>
+<text x="451" y="296" font-size="13" font-weight="300" fill="#C9CDD2">the same engine, in this process</text>
+<line x1="550" y1="338" x2="550" y2="364" stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="550" y="386" text-anchor="middle" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">~/.comando/cdb/</text>
+<text x="550" y="418" text-anchor="middle" font-size="13" font-weight="300" fill="#9AA0A6">no server and no port;</text>
+<text x="550" y="437" text-anchor="middle" font-size="13" font-weight="300" fill="#9AA0A6">one process holds a folder at a time</text>
+
+<!-- panel 3 -->
+<rect x="734" y="108" width="326" height="350" rx="10" fill="#171717" stroke="#2E2E2E" stroke-width="1"/>
+<text x="752" y="136" font-size="13" fill="#9AA0A6" letter-spacing="2">3 · A SERVER OF YOUR OWN</text>
+<rect x="772" y="154" width="250" height="44" rx="6" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="897" y="181" text-anchor="middle" font-size="13" fill="#AEB6C1">your clients</text>
+<line x1="897" y1="198" x2="897" y2="246" stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="772" y="250" width="250" height="88" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+<text x="788" y="277" font-size="14" fill="#E7C55A" font-family="Menlo, Consolas, monospace">CdbServe &lt;root&gt; &lt;port&gt;</text>
+<text x="788" y="300" font-size="13" fill="#C9CDD2" font-family="Menlo, Consolas, monospace">--pg-port  --bind</text>
+<text x="788" y="320" font-size="13" fill="#C9CDD2" font-family="Menlo, Consolas, monospace">--auth-dir</text>
+<line x1="897" y1="338" x2="897" y2="364" stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="897" y="386" text-anchor="middle" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">&lt;root&gt;/</text>
+<text x="897" y="418" text-anchor="middle" font-size="13" font-weight="300" fill="#9AA0A6">your folder, your ports, your secrets;</text>
+<text x="897" y="437" text-anchor="middle" font-size="13" font-weight="300" fill="#9AA0A6">the same doors as the machine's cdb</text>
+
+<!-- legend -->
+<rect x="40" y="482" width="14" height="14" rx="3" fill="#E7C55A"/>
+<text x="62" y="494" font-size="13" fill="#C9CDD2">cdb</text>
+<rect x="120" y="482" width="14" height="14" rx="3" fill="#6FAEE8"/>
+<text x="142" y="494" font-size="13" fill="#C9CDD2">comando</text>
+<rect x="240" y="482" width="14" height="14" rx="3" fill="#6CC69A"/>
+<text x="262" y="494" font-size="13" fill="#C9CDD2">the kit</text>
+<rect x="340" y="482" width="14" height="14" rx="3" fill="#AEB6C1"/>
+<text x="362" y="494" font-size="13" fill="#C9CDD2">your own clients</text>
+<text x="1060" y="518" text-anchor="end" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/cdb</text>
+</svg>

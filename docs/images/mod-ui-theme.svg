@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="590" viewBox="0 0 1000 590" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>A theme is four tiers of tokens: the palette of raw colours, the roles that say what a colour means, the component map where each widget names roles, and the content palettes derived in OKLCH for syntax, terminal, diff and plots; a theme file passes ThemeRules before it becomes the Theme</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="590" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">MODULE UI · THEMES</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Four tiers of tokens: two colours chosen, the rest follows</text>
+
+  <g fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3">
+    <rect x="40" y="106" width="206" height="270" rx="8"/>
+    <rect x="278" y="106" width="206" height="270" rx="8"/>
+    <rect x="516" y="106" width="206" height="270" rx="8"/>
+    <rect x="754" y="106" width="206" height="270" rx="8"/>
+  </g>
+  <g stroke="#9AA0A6" stroke-width="1.3">
+    <line x1="248" y1="240" x2="276" y2="240" marker-end="url(#ar)"/>
+    <line x1="486" y1="240" x2="514" y2="240" marker-end="url(#ar)"/>
+    <line x1="724" y1="240" x2="752" y2="240" marker-end="url(#ar)"/>
+  </g>
+  <g font-size="13" letter-spacing="2" fill="#E7C55A">
+    <text x="56" y="134">1 · PALETTE</text>
+    <text x="294" y="134">2 · ROLES</text>
+    <text x="532" y="134">3 · COMPONENTS</text>
+    <text x="770" y="134">4 · CONTENT</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="56" y="156">the raw colours</text>
+    <text x="294" y="156">what a colour means</text>
+    <text x="532" y="156">each part names a role</text>
+    <text x="770" y="156">derived, never picked</text>
+  </g>
+
+  <!-- palette -->
+  <g stroke="#5A5A5A" stroke-width="1">
+    <rect x="56" y="176" width="18" height="18" rx="4" fill="#121212"/>
+    <rect x="56" y="208" width="18" height="18" rx="4" fill="#FFEDAA"/>
+    <rect x="56" y="240" width="18" height="18" rx="4" fill="#E7C55A"/>
+    <rect x="56" y="272" width="18" height="18" rx="4" fill="#9E8230"/>
+    <rect x="56" y="304" width="18" height="18" rx="4" fill="#E2DCCD"/>
+    <rect x="56" y="336" width="18" height="18" rx="4" fill="#D97757"/>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="84" y="190">ground: Graphite</text>
+    <text x="84" y="222">tint: highlight</text>
+    <text x="84" y="254">tint: body</text>
+    <text x="84" y="286">tint: shade</text>
+    <text x="84" y="318">ink: ivory text</text>
+    <text x="84" y="350">Claude's orange</text>
+  </g>
+
+  <!-- roles -->
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="294" y="190">LINK</text>
+    <text x="294" y="238">the tint</text>
+    <text x="294" y="286">ATTENTION</text>
+    <text x="294" y="334">DANGER</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="294" y="208">a link, and nothing else</text>
+    <text x="294" y="256">structure, selection, focus</text>
+    <text x="294" y="304">what needs you</text>
+    <text x="294" y="352">what is broken</text>
+  </g>
+
+  <!-- components -->
+  <g font-size="13" fill="#E8E8E8">
+    <text x="532" y="190">the tab in front</text>
+    <text x="532" y="238">a selected row</text>
+    <text x="532" y="286">the focus ring</text>
+    <text x="532" y="334">a link in a page</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="532" y="208">uses the tint</text>
+    <text x="532" y="256">uses the tint</text>
+    <text x="532" y="304">uses the tint</text>
+    <text x="532" y="352">uses LINK</text>
+  </g>
+
+  <!-- content -->
+  <text x="770" y="190" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">ContentPalette</text>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="770" y="222">syntax colours</text>
+    <text x="770" y="246">terminal colours</text>
+    <text x="770" y="270">diff colours</text>
+    <text x="770" y="294">plot series</text>
+  </g>
+  <text x="770" y="328" font-size="13" fill="#9AA0A6">computed from tiers 1</text>
+  <text x="770" y="346" font-size="13" fill="#9AA0A6">and 2 in OKLCH (</text>
+  <text x="872" y="346" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">Oklch</text>
+  <text x="912" y="346" font-size="13" fill="#9AA0A6">)</text>
+
+  <!-- a theme file -->
+  <text x="40" y="416" font-size="13" letter-spacing="2" fill="#9AA0A6">FROM A FILE TO THE WINDOW</text>
+  <line x1="40" y1="428" x2="960" y2="428" stroke="#3A3A3A" stroke-width="1"/>
+  <rect x="40" y="446" width="300" height="76" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="56" y="472" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">graphite_gold.json</text>
+  <text x="56" y="492" font-size="13" fill="#9AA0A6">id, label, mode, style, twin,</text>
+  <text x="56" y="510" font-size="13" fill="#9AA0A6">one ground, one tint of three steps</text>
+  <rect x="390" y="446" width="250" height="76" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="406" y="472" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">ThemeRules</text>
+  <text x="406" y="492" font-size="13" fill="#9AA0A6">contrast floors: text stays</text>
+  <text x="406" y="510" font-size="13" fill="#9AA0A6">readable, or the file is refused</text>
+  <rect x="690" y="446" width="270" height="76" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+  <text x="706" y="472" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E7C55A">Theme</text>
+  <text x="706" y="492" font-size="13" fill="#9AA0A6">every widget reads its colours,</text>
+  <text x="706" y="510" font-size="13" fill="#9AA0A6">fonts and spacing from here</text>
+  <line x1="340" y1="484" x2="388" y2="484" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="640" y1="484" x2="688" y2="484" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+
+  <text x="40" y="552" font-size="13" fill="#9AA0A6">The swatches are the real values of the default theme, graphite_gold.</text>
+  <text x="40" y="574" font-size="13" fill="#9AA0A6">comando · docs/modules/ui.md</text>
+</svg>

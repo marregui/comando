@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>How the Classifier decides whether a text is SQL or a prompt for Claude</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="640" fill="url(#bg)"/>
+<text x="48" y="48" font-size="13" fill="#E7C55A" letter-spacing="3">MODULE · CORE · DISPATCH</text>
+<text x="48" y="82" font-size="24" font-weight="300" fill="#E8E8E8">SQL or a prompt? Five questions, asked in order</text>
+
+<text x="120" y="122" font-size="13" fill="#9AA0A6" letter-spacing="2">THE QUESTION</text>
+<text x="820" y="122" font-size="13" fill="#9AA0A6" letter-spacing="2">IF YES, THE TEXT GOES TO</text>
+
+<g font-size="13" fill="#121212" text-anchor="middle" font-weight="600">
+<circle cx="72" cy="164" r="13" fill="#E7C55A"/><text x="72" y="169">1</text>
+<circle cx="72" cy="252" r="13" fill="#E7C55A"/><text x="72" y="257">2</text>
+<circle cx="72" cy="340" r="13" fill="#E7C55A"/><text x="72" y="345">3</text>
+<circle cx="72" cy="428" r="13" fill="#E7C55A"/><text x="72" y="433">4</text>
+<circle cx="72" cy="516" r="13" fill="#E7C55A"/><text x="72" y="521">5</text>
+</g>
+
+<g fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2">
+<rect x="120" y="134" width="580" height="60" rx="8"/>
+<rect x="120" y="222" width="580" height="60" rx="8"/>
+<rect x="120" y="310" width="580" height="60" rx="8"/>
+<rect x="120" y="398" width="580" height="60" rx="8"/>
+<rect x="120" y="486" width="580" height="60" rx="8"/>
+</g>
+<g font-size="14" fill="#E8E8E8">
+<text x="140" y="160">Is the first line a marker?</text>
+<text x="140" y="248">Does it start with a slash and a letter?</text>
+<text x="140" y="345">Is it only comments?</text>
+<text x="140" y="424">Does it start with a SQL keyword in its usual shape,</text>
+<text x="140" y="444">with no English filler word and no closing ? or . ?</text>
+<text x="140" y="521">Anything else</text>
+</g>
+<g font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">
+<text x="140" y="182">-- @sql    or    -- @claude</text>
+<text x="140" y="270">/compact</text>
+</g>
+
+<g fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)">
+<path d="M700,164 L816,164"/>
+<path d="M700,252 L816,252"/>
+<path d="M700,340 L816,340"/>
+<path d="M700,428 L816,428"/>
+<path d="M700,516 L816,516"/>
+<path d="M410,194 L410,220"/>
+<path d="M410,282 L410,308"/>
+<path d="M410,370 L410,396"/>
+<path d="M410,458 L410,484"/>
+</g>
+<g font-size="13" fill="#9AA0A6">
+<text x="420" y="212">no</text>
+<text x="420" y="300">no</text>
+<text x="420" y="388">no</text>
+<text x="420" y="476">no</text>
+</g>
+
+<rect x="820" y="134" width="332" height="60" rx="30" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="986" y="160" font-size="14" fill="#E8E8E8" text-anchor="middle">the side the marker names</text>
+<text x="986" y="180" font-size="13" fill="#9AA0A6" text-anchor="middle">the marker line is removed</text>
+<rect x="820" y="222" width="332" height="60" rx="30" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="986" y="257" font-size="14" fill="#E8E8E8" text-anchor="middle">Claude, as a slash command</text>
+<rect x="820" y="310" width="332" height="60" rx="30" fill="#1E1E1E" stroke="#9AA0A6" stroke-width="1.2"/>
+<text x="986" y="345" font-size="14" fill="#E8E8E8" text-anchor="middle">nowhere</text>
+<rect x="820" y="398" width="332" height="60" rx="30" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="986" y="433" font-size="14" fill="#E8E8E8" text-anchor="middle">the database, as SQL</text>
+<rect x="820" y="486" width="332" height="60" rx="30" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="986" y="521" font-size="14" fill="#E8E8E8" text-anchor="middle">Claude, as a prompt</text>
+
+<g font-size="13" fill="#9AA0A6">
+<rect x="120" y="574" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="142" y="586">comando's database side</text>
+<rect x="330" y="574" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="352" y="586">Claude Code</text>
+<rect x="470" y="574" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="492" y="586">you decide</text>
+</g>
+<text x="48" y="620" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/modules/core.md</text>
+</svg>

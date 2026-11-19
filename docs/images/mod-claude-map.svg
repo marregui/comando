@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="660" viewBox="0 0 1100 660" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The claude module: one adapter between comando's core and one Claude Code process per session</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
+<rect width="1100" height="660" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · CLAUDE</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">An adapter between comando and the Claude Code processes</text>
+
+<rect x="40" y="110" width="250" height="110" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="138" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">core</text>
+<text x="56" y="162" font-size="13" fill="#E8E8E8">the event loop and its state</text>
+<text x="56" y="186" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">ClaudePort · IntentSink</text>
+<text x="56" y="206" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">TranscriptRegistry</text>
+
+<rect x="370" y="110" width="360" height="110" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="386" y="138" font-size="16" fill="#E7C55A" font-family="Menlo, Consolas, monospace">ClaudeAdapter</text>
+<text x="386" y="162" font-size="13" fill="#E8E8E8">one Session per session name</text>
+<text x="386" y="186" font-size="13" fill="#9AA0A6">its strand, its transcript, its mapper,</text>
+<text x="386" y="206" font-size="13" fill="#9AA0A6">the process of its current run</text>
+
+<rect x="810" y="110" width="250" height="110" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="826" y="138" font-size="15" fill="#D98E5F" font-family="Menlo, Consolas, monospace">claude -p</text>
+<text x="826" y="162" font-size="13" fill="#E8E8E8">Claude Code, headless</text>
+<text x="826" y="186" font-size="13" fill="#9AA0A6">one OS process per session</text>
+<text x="826" y="206" font-size="13" fill="#9AA0A6">JSON lines in, JSON lines out</text>
+
+<line x1="290" y1="146" x2="366" y2="146" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="328" y="138" font-size="13" fill="#9AA0A6" text-anchor="middle">calls</text>
+<line x1="370" y1="190" x2="294" y2="190" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="330" y="210" font-size="13" fill="#9AA0A6" text-anchor="middle">intents</text>
+<line x1="730" y1="146" x2="806" y2="146" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="768" y="138" font-size="13" fill="#9AA0A6" text-anchor="middle">stdin</text>
+<line x1="810" y1="190" x2="734" y2="190" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="770" y="210" font-size="13" fill="#9AA0A6" text-anchor="middle">stdout</text>
+
+<text x="40" y="272" font-size="13" fill="#9AA0A6" letter-spacing="2">INSIDE ONE SESSION</text>
+<rect x="40" y="284" width="236" height="104" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="312" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">ClaudeCommand</text>
+<text x="56" y="338" font-size="13" fill="#E8E8E8">builds the command line:</text>
+<text x="56" y="358" font-size="13" fill="#E8E8E8">session id, model, effort,</text>
+<text x="56" y="378" font-size="13" fill="#E8E8E8">comando's MCP server</text>
+<line x1="276" y1="336" x2="298" y2="336" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="302" y="284" width="236" height="104" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="318" y="312" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">ClaudeProcess</text>
+<text x="318" y="338" font-size="13" fill="#E8E8E8">starts the process; a thread</text>
+<text x="318" y="358" font-size="13" fill="#E8E8E8">reads stdout line by line</text>
+<text x="318" y="378" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">claude-out-&lt;session&gt;</text>
+<line x1="538" y1="336" x2="560" y2="336" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="564" y="284" width="236" height="104" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="580" y="312" font-size="14" fill="#E7C55A" font-family="Menlo, Consolas, monospace">the session's strand</text>
+<text x="580" y="338" font-size="13" fill="#E8E8E8">one line at a time, in order;</text>
+<text x="580" y="358" font-size="13" fill="#E8E8E8">the only thread on the mapper</text>
+<text x="580" y="378" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">claude-strand-&lt;session&gt;</text>
+<line x1="800" y1="336" x2="822" y2="336" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="826" y="284" width="234" height="104" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="842" y="312" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">StreamMapper</text>
+<text x="842" y="338" font-size="13" fill="#E8E8E8">turns each event into</text>
+<text x="842" y="358" font-size="13" fill="#E8E8E8">transcript blocks and intents</text>
+
+<text x="40" y="440" font-size="13" fill="#9AA0A6" letter-spacing="2">BESIDE THE SESSIONS</text>
+<rect x="40" y="452" width="236" height="140" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="480" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">MetricsSink</text>
+<text x="56" y="506" font-size="13" fill="#E8E8E8">turns, agents and usage,</text>
+<text x="56" y="526" font-size="13" fill="#E8E8E8">sent as rows to the</text>
+<text x="56" y="546" font-size="13" fill="#E8E8E8">machine's cdb server</text>
+<text x="56" y="574" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">MetricsLog · MetricsLines</text>
+
+<rect x="302" y="452" width="236" height="140" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="318" y="480" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">SubagentFiles</text>
+<text x="318" y="506" font-size="13" fill="#E8E8E8">follows the transcript files</text>
+<text x="318" y="526" font-size="13" fill="#E8E8E8">of a session's sub-agents,</text>
+<text x="318" y="546" font-size="13" fill="#E8E8E8">so you can watch them work</text>
+<text x="318" y="574" font-size="13" fill="#9AA0A6">four tails at most</text>
+
+<rect x="564" y="452" width="236" height="140" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="580" y="480" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">PlanUsageReader</text>
+<text x="580" y="506" font-size="13" fill="#E8E8E8">asks Claude Code how much</text>
+<text x="580" y="526" font-size="13" fill="#E8E8E8">of the plan is used</text>
+<text x="580" y="554" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">ClaudeTopics</text>
+<text x="580" y="578" font-size="13" fill="#E8E8E8">a small model names topics</text>
+
+<rect x="826" y="452" width="234" height="140" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="842" y="480" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">SessionCatalogue</text>
+<text x="842" y="506" font-size="13" fill="#E8E8E8">lists sessions already on disk</text>
+<text x="842" y="534" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">RootLaunch · KitJson</text>
+<text x="842" y="560" font-size="13" fill="#E8E8E8">start a session on a kit root</text>
+<text x="842" y="580" font-size="13" fill="#E8E8E8">of its own</text>
+
+<rect x="620" y="624" width="14" height="14" rx="3" fill="#E7C55A"/><text x="640" y="636" font-size="13" fill="#9AA0A6">centre</text>
+<rect x="710" y="624" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="730" y="636" font-size="13" fill="#9AA0A6">comando's classes</text>
+<rect x="880" y="624" width="14" height="14" rx="3" fill="#D98E5F"/><text x="900" y="636" font-size="13" fill="#9AA0A6">Claude Code</text>
+<text x="40" y="636" font-size="13" fill="#9AA0A6">comando · docs/modules/claude</text>
+</svg>

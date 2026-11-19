@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="590" viewBox="0 0 1100 590" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>A cdb table on disk: one folder per day, one file per column, and the few files a query reads</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+</defs>
+<rect width="1100" height="590" fill="url(#bg)"/>
+<text x="40" y="46" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">CDB · A TABLE ON DISK</text>
+<text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">A query opens only the files it needs</text>
+
+<!-- the query -->
+<rect x="40" y="162" width="240" height="140" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="56" y="189" font-size="15" fill="#E7C55A">the query</text>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="56" y="218">SELECT avg(temperature)</text>
+<text x="56" y="240">FROM rooms</text>
+<text x="56" y="262">WHERE ts &gt;= '2026-11-19'</text>
+</g>
+<text x="56" y="288" font-size="13" font-weight="300" fill="#9AA0A6">1 day and 2 columns: 2 files</text>
+<text x="40" y="334" font-size="13" font-weight="300" fill="#9AA0A6">The time filter picks the folders.</text>
+<text x="40" y="353" font-size="13" font-weight="300" fill="#9AA0A6">The column names pick the files.</text>
+
+<!-- headers -->
+<text x="300" y="126" font-size="13" fill="#9AA0A6" letter-spacing="2">ONE FOLDER PER DAY ↓</text>
+<text x="1050" y="126" text-anchor="end" font-size="13" fill="#9AA0A6" letter-spacing="2">ONE FILE PER COLUMN →</text>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#C9CDD2" text-anchor="middle">
+<text x="512" y="152">ts.d</text>
+<text x="667" y="152">room.d</text>
+<text x="822" y="152">temperature.d</text>
+<text x="977" y="152">note.i + note.d</text>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#C9CDD2">
+<text x="305" y="198">2026-11-17.1/</text>
+<text x="305" y="274">2026-11-18.1/</text>
+<text x="305" y="350" fill="#E7C55A">2026-11-19.2/</text>
+</g>
+
+<!-- grid: skipped cells -->
+<g fill="#1A1A1A" stroke="#333333" stroke-width="1">
+<rect x="440" y="162" width="145" height="64" rx="6"/><rect x="595" y="162" width="145" height="64" rx="6"/><rect x="750" y="162" width="145" height="64" rx="6"/><rect x="905" y="162" width="145" height="64" rx="6"/>
+<rect x="440" y="238" width="145" height="64" rx="6"/><rect x="595" y="238" width="145" height="64" rx="6"/><rect x="750" y="238" width="145" height="64" rx="6"/><rect x="905" y="238" width="145" height="64" rx="6"/>
+<rect x="595" y="314" width="145" height="64" rx="6"/><rect x="905" y="314" width="145" height="64" rx="6"/>
+</g>
+<g font-size="13" font-weight="300" fill="#6E7378" text-anchor="middle">
+<text x="512" y="199">skipped</text><text x="667" y="199">skipped</text><text x="822" y="199">skipped</text><text x="977" y="199">skipped</text>
+<text x="512" y="275">skipped</text><text x="667" y="275">skipped</text><text x="822" y="275">skipped</text><text x="977" y="275">skipped</text>
+<text x="667" y="351">skipped</text><text x="977" y="351">skipped</text>
+</g>
+<!-- grid: read cells -->
+<g fill="#2A2512" stroke="#E7C55A" stroke-width="1.4">
+<rect x="440" y="314" width="145" height="64" rx="6"/><rect x="750" y="314" width="145" height="64" rx="6"/>
+</g>
+<g font-size="14" fill="#E7C55A" text-anchor="middle">
+<text x="512" y="351">read</text><text x="822" y="351">read</text>
+</g>
+
+<!-- types -->
+<g font-size="13" text-anchor="middle">
+<text x="512" y="402" fill="#E8E8E8">TIMESTAMP</text><text x="512" y="421" font-weight="300" fill="#9AA0A6">8 bytes a row</text>
+<text x="667" y="402" fill="#E8E8E8">SYMBOL</text><text x="667" y="421" font-weight="300" fill="#9AA0A6">a 4-byte key a row</text>
+<text x="822" y="402" fill="#E8E8E8">DOUBLE</text><text x="822" y="421" font-weight="300" fill="#9AA0A6">8 bytes a row</text>
+<text x="977" y="402" fill="#E8E8E8">VARCHAR</text><text x="977" y="421" font-weight="300" fill="#9AA0A6">offsets, then the text</text>
+</g>
+
+<!-- side files -->
+<line x1="40" y1="446" x2="1050" y2="446" stroke="#2E2E2E" stroke-width="1"/>
+<text x="40" y="470" font-size="13" fill="#9AA0A6" letter-spacing="2">BESIDE THE DAY FOLDERS, IN THE TABLE'S FOLDER</text>
+<g fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1">
+<rect x="40" y="484" width="240" height="58" rx="8"/><rect x="296" y="484" width="240" height="58" rx="8"/><rect x="552" y="484" width="240" height="58" rx="8"/><rect x="808" y="484" width="242" height="58" rx="8"/>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="14" fill="#E8E8E8">
+<text x="54" y="508">_meta</text><text x="310" y="508">_txn</text><text x="566" y="508">_wal</text><text x="822" y="508">room.sym</text>
+</g>
+<g font-size="13" font-weight="300" fill="#C9CDD2">
+<text x="54" y="529">the table's definition</text>
+<text x="310" y="529">which folders are committed</text>
+<text x="566" y="529">commits not yet in the columns</text>
+<text x="822" y="529">kitchen = 0, attic = 1</text>
+</g>
+<text x="1050" y="572" text-anchor="end" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/cdb</text>
+</svg>

@@ -62,7 +62,7 @@ copy in comando's folder being gone, else the checkout's `./gradlew`.
 `KitRoot` (core) resolves the root; `KitJson` (claude) reads `comando-kit.json` into it. `./gradlew :app:package` builds
 the running system's release file in `app/build/package`; `.github/workflows/release.yml` builds it on the three
 systems on a tag, and makes the release with the commits since the previous tag as its notes; run by hand, it builds
-the three files as the run's artifacts without a release. [Kit and brain §3](../kit-and-brain.md#3-comando-and-a-kit) describes the root,
+the three files as the run's artifacts without a release. [Kit and brain §3](../kit.md#how-comando-hosts-a-kit) describes the root,
 the brain, the Files tab, the upgrade and the backup.
 
 ## Amendments
@@ -72,14 +72,14 @@ the brain, the Files tab, the upgrade and the backup.
 2026-10-27: the kit carries no plugin. Its agents, skills, workflows, hooks (in `settings.json`), scripts (`bin/`, put
 on the Bash tool's `PATH` by a hook at every session start) and tools sit where Claude Code loads them from a config
 folder, so the row "what the kit is" reads "the plugin" as those parts. The author's kit is the reference: a kit
-conforms when it has its layout ([Kit and brain §3](../kit-and-brain.md#3-comando-and-a-kit)). Conformance is documented, not checked;
+conforms when it has its layout ([Kit and brain §3](../kit.md#how-comando-hosts-a-kit)). Conformance is documented, not checked;
 comando's code still reads only `comando-kit.json`. The agent that installs comando offers the reference kit or one the
 user names ([INSTALL.md §5](../../INSTALL.md#5-the-kit)). Miguel decided all three.
 
 2026-11-01, Miguel's decision D8 of the first-release review: no kit is published and none is offered. A kit conforms
 when it has the layout and the contract [Kit and brain](../kit-and-brain.md) describes (§2 the kit's parts, §3 what
 comando does with it), not when it has the author's layout; that document holds everything an agent needs to create a
-default kit and brain ([§8](../kit-and-brain.md#8-creating-a-kit-and-a-brain)) and to check a kit or a brain the user
+default kit and brain ([§8](../kit.md#make-a-minimal-kit)) and to check a kit or a brain the user
 brings. The row "installing the kit" reads: after installing comando, the agent asks whether to create a kit and a
 brain and, on a yes, creates them from that document of the release just installed, or checks the ones the user names
 ([INSTALL.md §5](../../INSTALL.md#5-the-kit)). The row "what the kit is" describes the author's kit, one kit among any

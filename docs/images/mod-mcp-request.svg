@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="600" viewBox="0 0 1100 600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The life of one MCP request: four checks at the door, then a virtual thread runs the tool and may wait for you</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
+<rect width="1100" height="600" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · MCP · ONE REQUEST</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">Four checks at the door, then a thread of its own</text>
+
+<text x="40" y="116" font-size="13" fill="#9AA0A6" letter-spacing="2">AT THE DOOR, IN ORDER</text>
+<text x="400" y="116" font-size="13" fill="#9AA0A6" letter-spacing="2">NO: ANSWERED</text>
+<g font-size="14">
+<rect x="40" y="128" width="310" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="160" fill="#E8E8E8">1 · Is there a free place?</text>
+<rect x="40" y="198" width="310" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="230" fill="#E8E8E8">2 · Does the token name a session?</text>
+<rect x="40" y="268" width="310" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="300" fill="#E8E8E8">3 · Is the Origin local, or absent?</text>
+<rect x="40" y="338" width="310" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="370" fill="#E8E8E8">4 · Does the body arrive in 5 seconds?</text>
+</g>
+<g stroke="#9AA0A6" stroke-width="1.2">
+<line x1="195" y1="180" x2="195" y2="194" marker-end="url(#a)"/>
+<line x1="195" y1="250" x2="195" y2="264" marker-end="url(#a)"/>
+<line x1="195" y1="320" x2="195" y2="334" marker-end="url(#a)"/>
+<line x1="350" y1="154" x2="392" y2="154" marker-end="url(#a)"/>
+<line x1="350" y1="224" x2="392" y2="224" marker-end="url(#a)"/>
+<line x1="350" y1="294" x2="392" y2="294" marker-end="url(#a)"/>
+<line x1="350" y1="364" x2="392" y2="364" marker-end="url(#a)"/>
+</g>
+<g font-size="13">
+<text x="400" y="150" fill="#D98E5F" font-family="Menlo, Consolas, monospace">503, Retry-After: 1</text>
+<text x="400" y="170" fill="#9AA0A6">256 running, or 16 of one session</text>
+<text x="400" y="229" fill="#D98E5F" font-family="Menlo, Consolas, monospace">401</text>
+<text x="400" y="299" fill="#D98E5F" font-family="Menlo, Consolas, monospace">403</text>
+<text x="440" y="299" fill="#9AA0A6">a web page must not reach it</text>
+<text x="400" y="369" fill="#D98E5F">the request is dropped</text>
+</g>
+
+<text x="700" y="116" font-size="13" fill="#9AA0A6" letter-spacing="2">INSIDE, ON A VIRTUAL THREAD</text>
+<path d="M195,390 L195,420 L660,420 L660,154 L696,154" fill="none" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="700" y="128" width="360" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="716" y="160" font-size="14" fill="#E8E8E8">Read one JSON-RPC object</text>
+<rect x="700" y="198" width="360" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="716" y="230" font-size="14" fill="#E8E8E8">Find the tool, check its arguments</text>
+<rect x="700" y="268" width="360" height="92" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="716" y="298" font-size="14" fill="#E7C55A">Run the tool</text>
+<text x="716" y="322" font-size="13" fill="#E8E8E8">a quick one answers at once;</text>
+<text x="716" y="344" font-size="13" fill="#E8E8E8"><tspan font-family="Menlo, Consolas, monospace" fill="#E7C55A">approve</tspan> parks here until you answer the card</text>
+<rect x="700" y="378" width="360" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="716" y="410" font-size="14" fill="#E8E8E8">Write the audit line</text>
+<rect x="700" y="448" width="360" height="52" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="716" y="480" font-size="14" fill="#E8E8E8">One JSON response goes back to Claude Code</text>
+<g stroke="#9AA0A6" stroke-width="1.2">
+<line x1="880" y1="180" x2="880" y2="194" marker-end="url(#a)"/>
+<line x1="880" y1="250" x2="880" y2="264" marker-end="url(#a)"/>
+<line x1="880" y1="360" x2="880" y2="374" marker-end="url(#a)"/>
+<line x1="880" y1="430" x2="880" y2="444" marker-end="url(#a)"/>
+</g>
+
+<rect x="40" y="448" width="580" height="78" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="476" font-size="13" fill="#9AA0A6" letter-spacing="2">WHY PARKING IS CHEAP</text>
+<text x="56" y="500" font-size="13" fill="#E8E8E8">A parked virtual thread holds no OS thread. An approval may wait</text>
+<text x="56" y="518" font-size="13" fill="#E8E8E8">up to 24 hours, and the other requests never notice.</text>
+
+<rect x="640" y="564" width="14" height="14" rx="3" fill="#E7C55A"/><text x="660" y="576" font-size="13" fill="#9AA0A6">the tool runs</text>
+<rect x="770" y="564" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="790" y="576" font-size="13" fill="#9AA0A6">comando's steps</text>
+<rect x="920" y="564" width="14" height="14" rx="3" fill="#D98E5F"/><text x="940" y="576" font-size="13" fill="#9AA0A6">refusals, replies</text>
+<text x="40" y="576" font-size="13" fill="#9AA0A6">comando · docs/modules/mcp</text>
+</svg>

@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="632" viewBox="0 0 1100 632" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>How GROUP BY folds rows: twelve weather rows fall into one bucket per city, and each bucket becomes one result row</title>
+<rect width="1100" height="632" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">CDB SQL · GROUP BY</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">GROUP BY sorts rows into buckets, then folds each bucket into one row.</text>
+
+<rect x="40" y="98" width="1020" height="40" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="123" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace"><tspan fill="#E7C55A">SELECT</tspan> city, count(*) AS readings, avg(temp) AS avg_temp, sum(rain) AS rain <tspan fill="#E7C55A">FROM</tspan> weather <tspan fill="#E7C55A">GROUP BY</tspan> city</text>
+
+<g font-size="13" fill="#9AA0A6" letter-spacing="2">
+<text x="40" y="166">1 · THE ROWS</text><text x="390" y="166">2 · ONE BUCKET PER CITY</text><text x="796" y="166">3 · ONE ROW PER BUCKET</text>
+</g>
+
+<rect x="40" y="176" width="250" height="338" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<path d="M40,202 H290" stroke="#3A3A3A" stroke-width="1"/>
+<g stroke="#2A2A2A" stroke-width="1">
+<path d="M40,228 H290"/><path d="M40,254 H290"/><path d="M40,280 H290"/><path d="M40,306 H290"/><path d="M40,332 H290"/><path d="M40,358 H290"/><path d="M40,384 H290"/><path d="M40,410 H290"/><path d="M40,436 H290"/><path d="M40,462 H290"/><path d="M40,488 H290"/>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#9AA0A6">
+<text x="62" y="194">city</text><text x="150" y="194">temp</text><text x="230" y="194">rain</text>
+</g>
+<g fill="#6FAEE8"><rect x="46" y="206" width="5" height="18"/><rect x="46" y="258" width="5" height="18"/><rect x="46" y="336" width="5" height="18"/><rect x="46" y="388" width="5" height="18"/><rect x="46" y="440" width="5" height="18"/></g>
+<g fill="#6CC69A"><rect x="46" y="232" width="5" height="18"/><rect x="46" y="284" width="5" height="18"/><rect x="46" y="362" width="5" height="18"/><rect x="46" y="414" width="5" height="18"/><rect x="46" y="466" width="5" height="18"/></g>
+<g fill="#D98E5F"><rect x="46" y="310" width="5" height="18"/><rect x="46" y="492" width="5" height="18"/></g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="62" y="220">Madrid</text><text x="150" y="220">18.0</text><text x="230" y="220">0</text>
+<text x="62" y="246">Oslo</text><text x="150" y="246">9.5</text><text x="230" y="246">2</text>
+<text x="62" y="272">Madrid</text><text x="150" y="272">29.5</text><text x="230" y="272">0</text>
+<text x="62" y="298">Oslo</text><text x="150" y="298">14.0</text><text x="230" y="298">5</text>
+<text x="62" y="324">Lima</text><text x="150" y="324">19.0</text><text x="230" y="324">0</text>
+<text x="62" y="350">Madrid</text><text x="150" y="350">27.0</text><text x="230" y="350">0</text>
+<text x="62" y="376">Oslo</text><text x="150" y="376">12.5</text><text x="230" y="376">1</text>
+<text x="62" y="402">Madrid</text><text x="150" y="402">19.5</text><text x="230" y="402">0</text>
+<text x="62" y="428">Oslo</text><text x="150" y="428">8.0</text><text x="230" y="428">0</text>
+<text x="62" y="454">Madrid</text><text x="150" y="454">31.0</text><text x="230" y="454">0</text>
+<text x="62" y="480">Oslo</text><text x="150" y="480" fill="#9AA0A6">NULL</text><text x="230" y="480">3</text>
+<text x="62" y="506">Lima</text><text x="150" y="506">18.5</text><text x="230" y="506">0</text>
+</g>
+
+<g fill="none" stroke-width="1.2" stroke-opacity="0.8">
+<g stroke="#6FAEE8"><path d="M290,215 C345,215 335,228 390,228"/><path d="M290,267 C345,267 335,238 390,238"/><path d="M290,345 C345,345 335,248 390,248"/><path d="M290,397 C345,397 335,258 390,258"/><path d="M290,449 C345,449 335,268 390,268"/></g>
+<g stroke="#6CC69A"><path d="M290,241 C345,241 335,338 390,338"/><path d="M290,293 C345,293 335,348 390,348"/><path d="M290,371 C345,371 335,358 390,358"/><path d="M290,423 C345,423 335,368 390,368"/><path d="M290,475 C345,475 335,378 390,378"/></g>
+<g stroke="#D98E5F"><path d="M290,319 C345,319 335,463 390,463"/><path d="M290,501 C345,501 335,473 390,473"/></g>
+</g>
+
+<g fill="#1E1E1E" stroke-width="1.2">
+<rect x="390" y="202" width="330" height="92" rx="8" stroke="#6FAEE8"/><rect x="390" y="312" width="330" height="92" rx="8" stroke="#6CC69A"/><rect x="390" y="422" width="330" height="92" rx="8" stroke="#D98E5F"/>
+</g>
+<g font-size="13" letter-spacing="2">
+<text x="406" y="226" fill="#6FAEE8">MADRID · 5 ROWS</text><text x="406" y="336" fill="#6CC69A">OSLO · 5 ROWS</text><text x="406" y="446" fill="#D98E5F">LIMA · 2 ROWS</text>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#9AA0A6">
+<text x="406" y="254">temp</text><text x="406" y="278">rain</text><text x="406" y="364">temp</text><text x="406" y="388">rain</text><text x="406" y="474">temp</text><text x="406" y="498">rain</text>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="456" y="254">18.0</text><text x="508" y="254">29.5</text><text x="560" y="254">27.0</text><text x="612" y="254">19.5</text><text x="664" y="254">31.0</text>
+<text x="456" y="278">0</text><text x="508" y="278">0</text><text x="560" y="278">0</text><text x="612" y="278">0</text><text x="664" y="278">0</text>
+<text x="456" y="364">9.5</text><text x="508" y="364">14.0</text><text x="560" y="364">12.5</text><text x="612" y="364">8.0</text><text x="664" y="364" fill="#9AA0A6">NULL</text>
+<text x="456" y="388">2</text><text x="508" y="388">5</text><text x="560" y="388">1</text><text x="612" y="388">0</text><text x="664" y="388">3</text>
+<text x="456" y="474">19.0</text><text x="508" y="474">18.5</text>
+<text x="456" y="498">0</text><text x="508" y="498">0</text>
+</g>
+
+<g fill="#9AA0A6"><path d="M748,242 L762,248 L748,254 Z"/><path d="M748,352 L762,358 L748,364 Z"/><path d="M748,462 L762,468 L748,474 Z"/></g>
+<g stroke="#9AA0A6" stroke-width="1.2"><path d="M722,248 H748"/><path d="M722,358 H748"/><path d="M722,468 H748"/></g>
+
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#9AA0A6">
+<text x="810" y="194">city</text><text x="876" y="194">readings</text><text x="950" y="194">avg_temp</text><text x="1022" y="194">rain</text>
+</g>
+<g fill="#E7C55A" fill-opacity="0.13" stroke="#E7C55A" stroke-width="1.2">
+<rect x="796" y="228" width="264" height="40" rx="6"/><rect x="796" y="338" width="264" height="40" rx="6"/><rect x="796" y="448" width="264" height="40" rx="6"/>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="810" y="253">Madrid</text><text x="876" y="253">5</text><text x="950" y="253">25.0</text><text x="1022" y="253">0</text>
+<text x="810" y="363">Oslo</text><text x="876" y="363">5</text><text x="950" y="363">11.0</text><text x="1022" y="363">11</text>
+<text x="810" y="473">Lima</text><text x="876" y="473">2</text><text x="950" y="473">18.75</text><text x="1022" y="473">0</text>
+</g>
+
+<text x="40" y="548" font-size="14" fill="#E8E8E8">count(*) counts rows. avg(temp) skips the NULL: Oslo is (9.5 + 14.0 + 12.5 + 8.0) / 4 = 11.0. sum(rain) adds 2 + 5 + 1 + 0 + 3 = 11.</text>
+<g font-size="13" fill="#9AA0A6">
+<rect x="40" y="568" width="16" height="12" fill="#6FAEE8"/><text x="64" y="579">Madrid</text>
+<rect x="130" y="568" width="16" height="12" fill="#6CC69A"/><text x="154" y="579">Oslo</text>
+<rect x="206" y="568" width="16" height="12" fill="#D98E5F"/><text x="230" y="579">Lima</text>
+<rect x="284" y="568" width="16" height="12" fill="#E7C55A" fill-opacity="0.13" stroke="#E7C55A"/><text x="308" y="579">a result row</text>
+</g>
+<text x="40" y="614" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/cdb-sql</text>
+</svg>

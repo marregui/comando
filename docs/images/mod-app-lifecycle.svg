@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The life of the parts: App builds ten parts in dependency order, from the Store to the Peers, and closes them in reverse; three are kept for the end: the fabric, the machine's cdb and, last of all, the window</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+  </defs>
+  <rect width="1000" height="600" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">MODULE APP · THE LIFE OF THE PARTS</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Built in order, closed in reverse, the window last</text>
+
+  <text x="40" y="118" font-size="13" letter-spacing="2" fill="#9AA0A6">BUILD ORDER</text>
+  <text x="600" y="118" font-size="13" letter-spacing="2" fill="#9AA0A6">CLOSE ORDER</text>
+  <line x1="40" y1="130" x2="400" y2="130" stroke="#3A3A3A" stroke-width="1"/>
+  <line x1="600" y1="130" x2="960" y2="130" stroke="#3A3A3A" stroke-width="1"/>
+
+  <!-- the reversal: left row i (y = 158 + 36 i) to its row on the right -->
+  <g stroke="#6FAEE8" stroke-width="1.2" opacity="0.75" fill="none">
+    <line x1="404" y1="154" x2="592" y2="370"/>
+    <line x1="404" y1="190" x2="592" y2="334"/>
+    <line x1="404" y1="262" x2="592" y2="298"/>
+    <line x1="404" y1="298" x2="592" y2="262"/>
+    <line x1="404" y1="334" x2="592" y2="226"/>
+    <line x1="404" y1="370" x2="592" y2="190"/>
+    <line x1="404" y1="478" x2="592" y2="154"/>
+  </g>
+  <g stroke="#E7C55A" stroke-width="1.6" fill="none">
+    <line x1="404" y1="226" x2="592" y2="442"/>
+    <line x1="404" y1="406" x2="592" y2="406"/>
+    <line x1="404" y1="442" x2="592" y2="478"/>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6" text-anchor="end">
+    <text x="58" y="159">1</text><text x="58" y="195">2</text><text x="58" y="231">3</text><text x="58" y="267">4</text><text x="58" y="303">5</text>
+    <text x="58" y="339">6</text><text x="58" y="375">7</text><text x="58" y="411">8</text><text x="58" y="447">9</text><text x="58" y="483">10</text>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="14">
+    <text x="72" y="159" fill="#6FAEE8">Store</text>
+    <text x="72" y="195" fill="#6FAEE8">StateLoop</text>
+    <text x="72" y="231" fill="#E7C55A">MachineCdb</text>
+    <text x="72" y="267" fill="#6FAEE8">DbRouter</text>
+    <text x="72" y="303" fill="#6FAEE8">McpServer</text>
+    <text x="72" y="339" fill="#6FAEE8">ClaudeAdapter</text>
+    <text x="72" y="375" fill="#6FAEE8">ToolsAdapter</text>
+    <text x="72" y="411" fill="#E7C55A">the fabric</text>
+    <text x="72" y="447" fill="#E7C55A">ComandoUi</text>
+    <text x="72" y="483" fill="#6FAEE8">Peers</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="200" y="159">reads the stored files</text>
+    <text x="200" y="195">the reducer and its thread</text>
+    <text x="200" y="231">the machine's database</text>
+    <text x="200" y="267">your connections</text>
+    <text x="200" y="303">the tools Claude calls</text>
+    <text x="200" y="339">the Claude Code sessions</text>
+    <text x="200" y="375">repositories, folders, runs</text>
+    <text x="200" y="411">comando Edge or frontear</text>
+    <text x="200" y="447">the window</text>
+    <text x="200" y="483">the other instances</text>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6" text-anchor="end">
+    <text x="618" y="159">1</text><text x="618" y="195">2</text><text x="618" y="231">3</text><text x="618" y="267">4</text><text x="618" y="303">5</text>
+    <text x="618" y="339">6</text><text x="618" y="375">7</text><text x="618" y="411">8</text><text x="618" y="447">9</text><text x="618" y="483">10</text>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="14">
+    <text x="632" y="159" fill="#6FAEE8">Peers</text>
+    <text x="632" y="195" fill="#6FAEE8">ToolsAdapter</text>
+    <text x="632" y="231" fill="#6FAEE8">ClaudeAdapter</text>
+    <text x="632" y="267" fill="#6FAEE8">McpServer</text>
+    <text x="632" y="303" fill="#6FAEE8">DbRouter</text>
+    <text x="632" y="339" fill="#6FAEE8">StateLoop</text>
+    <text x="632" y="375" fill="#6FAEE8">Store</text>
+    <text x="632" y="411" fill="#E7C55A">the fabric</text>
+    <text x="632" y="447" fill="#E7C55A">MachineCdb</text>
+    <text x="632" y="483" fill="#E7C55A">ComandoUi</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="760" y="411">only if this instance started it</text>
+    <text x="760" y="447">its errands; the server stays up</text>
+    <text x="760" y="483">greyed, titled "closing…"</text>
+  </g>
+
+  <!-- legend -->
+  <line x1="40" y1="524" x2="68" y2="524" stroke="#6FAEE8" stroke-width="1.6"/>
+  <text x="78" y="529" font-size="13" fill="#9AA0A6">closed in the reverse of the build order</text>
+  <line x1="400" y1="524" x2="428" y2="524" stroke="#E7C55A" stroke-width="1.6"/>
+  <text x="438" y="529" font-size="13" fill="#9AA0A6">kept for the end: what other parts and other instances still need</text>
+  <text x="40" y="556" font-size="13" fill="#9AA0A6">A part that throws while closing is logged, and the rest still close.</text>
+  <text x="40" y="582" font-size="13" fill="#9AA0A6">comando · docs/modules/app.md</text>
+</svg>

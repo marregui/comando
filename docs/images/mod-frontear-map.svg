@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="690" viewBox="0 0 1100 690" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The frontear module: one node holds a broker, links to peers with a log each, and a signed control plane</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
+<rect width="1100" height="690" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · FRONTEAR</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">One node: a broker, its links, its control plane</text>
+
+<text x="40" y="112" font-size="13" fill="#9AA0A6" letter-spacing="2">WHO CONNECTS</text>
+<rect x="60" y="124" width="340" height="64" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="76" y="150" font-size="15" fill="#AEB6C1">MQTT 5 clients</text>
+<text x="76" y="172" font-size="13" fill="#9AA0A6">publish and subscribe over TCP, on the loopback</text>
+<rect x="430" y="124" width="350" height="64" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="446" y="150" font-size="15" fill="#AEB6C1">an operator's client</text>
+<text x="446" y="172" font-size="13" fill="#9AA0A6">publishes signed requests, one topic per method</text>
+<line x1="230" y1="188" x2="230" y2="258" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M605,188 L605,214 L330,214 L330,258" fill="none" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="40" y="230" width="760" height="330" rx="10" fill="none" stroke="#6FAEE8" stroke-width="1" stroke-dasharray="6 5"/>
+<text x="560" y="250" font-size="13" fill="#6FAEE8" letter-spacing="2">ONE NODE · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">Frontear</tspan></text>
+
+<rect x="60" y="262" width="340" height="130" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="76" y="290" font-size="16" fill="#E7C55A" font-family="Menlo, Consolas, monospace">broker</text>
+<text x="76" y="314" font-size="13" fill="#E8E8E8">sessions, retained messages, presence</text>
+<text x="76" y="338" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Broker · Connection · Session</text>
+<text x="76" y="362" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">InternalSubscriber · Gate</text>
+<text x="76" y="382" font-size="13" fill="#9AA0A6">all in memory</text>
+
+<rect x="60" y="412" width="340" height="80" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="76" y="440" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">tree</text>
+<text x="124" y="440" font-size="13" fill="#E8E8E8">who subscribes to which filter</text>
+<text x="76" y="466" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">TopicTree · Entry · Match</text>
+<line x1="230" y1="392" x2="230" y2="408" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="430" y="262" width="350" height="80" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="446" y="290" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">control</text>
+<text x="518" y="290" font-size="13" fill="#E8E8E8">checks the signature, then acts</text>
+<text x="446" y="316" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">ControlPlane · Seal · Signer · Request</text>
+<line x1="400" y1="302" x2="426" y2="302" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="430" y="362" width="350" height="80" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="446" y="390" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">link</text>
+<text x="494" y="390" font-size="13" fill="#E8E8E8">one strand per peer, both directions</text>
+<text x="446" y="416" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Links · Link · Forwarding · LinkSpec</text>
+<line x1="605" y1="342" x2="605" y2="358" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M400,360 L415,360 L415,402 L426,402" fill="none" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="430" y="462" width="350" height="80" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="446" y="490" font-size="15" fill="#E7C55A" font-family="Menlo, Consolas, monospace">queue</text>
+<text x="502" y="490" font-size="13" fill="#E8E8E8">one log on disk per link</text>
+<text x="446" y="516" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">LinkLog · LogForcer · LogOptions</text>
+<line x1="605" y1="442" x2="605" y2="458" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="850" y="362" width="210" height="80" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="866" y="390" font-size="15" fill="#AEB6C1">a peer node</text>
+<text x="866" y="416" font-size="13" fill="#9AA0A6">its own broker, over TCP</text>
+<line x1="780" y1="392" x2="846" y2="392" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<line x1="850" y1="412" x2="784" y2="412" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="815" y="384" font-size="13" fill="#9AA0A6" text-anchor="middle">out</text>
+<text x="815" y="432" font-size="13" fill="#9AA0A6" text-anchor="middle">in</text>
+
+<rect x="40" y="580" width="1020" height="56" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="614" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">mqtt</text>
+<text x="104" y="614" font-size="13" fill="#E8E8E8">the wire format and the client, used by every box above</text>
+<text x="500" y="614" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Codec · Wire · Packet · MqttClient · Topics · PublishRecord</text>
+
+<rect x="560" y="660" width="14" height="14" rx="3" fill="#E7C55A"/><text x="580" y="672" font-size="13" fill="#9AA0A6">centre and disk</text>
+<rect x="720" y="660" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="740" y="672" font-size="13" fill="#9AA0A6">frontear's packages</text>
+<rect x="900" y="660" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="920" y="672" font-size="13" fill="#9AA0A6">other processes</text>
+<text x="40" y="672" font-size="13" fill="#9AA0A6">comando · docs/modules/frontear</text>
+</svg>

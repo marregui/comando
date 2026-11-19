@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>One session: ClaudeAdapter writes prompts to the claude -p process's standard input and reads its events from standard output, mapping them to transcript blocks and intents; the process calls comando's MCP server over HTTP for tools and approvals; both sides report to the reducer as intents</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="500" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">ARCHITECTURE · ONE SESSION</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">A session is a process, two pipes and a way back</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="130" width="280" height="110" rx="8" stroke="#6FAEE8"/>
+    <rect x="680" y="130" width="280" height="110" rx="8" stroke="#D98E5F"/>
+    <rect x="680" y="320" width="280" height="110" rx="8" stroke="#6FAEE8"/>
+    <rect x="40" y="320" width="280" height="110" rx="8" stroke="#E7C55A" stroke-width="2"/>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="15">
+    <text x="56" y="158" fill="#6FAEE8">ClaudeAdapter</text>
+    <text x="696" y="158" fill="#D98E5F">claude -p</text>
+    <text x="696" y="348" fill="#6FAEE8">McpServer</text>
+    <text x="56" y="348" fill="#E7C55A">StateLoop</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="56" y="182">one strand per session owns the</text>
+    <text x="56" y="200">process and writes the transcript;</text>
+    <text x="56" y="218">StreamMapper turns events to blocks</text>
+    <text x="696" y="182">Claude Code, headless: your login,</text>
+    <text x="696" y="200">your kit, your tools; it keeps the</text>
+    <text x="696" y="218">conversation on disk</text>
+    <text x="696" y="372">inside comando, on 127.0.0.1;</text>
+    <text x="696" y="390">a token per process names the</text>
+    <text x="696" y="408">calling session</text>
+    <text x="56" y="372">the reducer: every event of a</text>
+    <text x="56" y="390">session changes the state as an</text>
+    <text x="56" y="408">intent, like a key does</text>
+  </g>
+
+  <g stroke="#9AA0A6" stroke-width="1.1" fill="none">
+    <line x1="320" y1="162" x2="679" y2="162" marker-end="url(#ar)"/>
+    <line x1="680" y1="210" x2="321" y2="210" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+    <line x1="820" y1="240" x2="820" y2="319" marker-end="url(#ar)"/>
+    <line x1="180" y1="240" x2="180" y2="319" marker-end="url(#ar)"/>
+    <line x1="680" y1="375" x2="321" y2="375" marker-end="url(#ar)"/>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="500" y="154" text-anchor="middle">stdin: prompts, interrupts, as stream-JSON</text>
+    <text x="500" y="202" text-anchor="middle">stdout: events, read on claude-out-&lt;session&gt;</text>
+    <text x="832" y="276">POST /mcp: tool calls,</text>
+    <text x="832" y="294">permission prompts</text>
+    <text x="192" y="284">intents</text>
+    <text x="500" y="367" text-anchor="middle">intents: views, SQL, approval cards</text>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="456" width="14" height="14" rx="3" fill="#E7C55A"/><text x="62" y="468">core</text>
+    <rect x="112" y="456" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="134" y="468">comando's adapters</text>
+    <rect x="270" y="456" width="14" height="14" rx="3" fill="#D98E5F"/><text x="292" y="468">Claude Code</text>
+    <text x="400" y="468">Solid: a request. Dashed: what streams back.</text>
+    <text x="960" y="468" text-anchor="end">comando · docs/architecture</text>
+  </g>
+</svg>

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" viewBox="0 0 1000 640" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The app module as the composition root: Main reads AppConfig and builds App; App builds core's state loop and plugs one class into each of the six ports: DbRouter, ClaudeAdapter, McpServer, ComandoUi, Store and ToolsAdapter; it also builds the machine's cdb, the fabric, the peers and the search</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="640" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">MODULE APP · THE COMPOSITION ROOT</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One module sees all the others and plugs them together</text>
+
+  <!-- start -->
+  <rect x="40" y="106" width="270" height="70" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="58" y="134" font-family="Menlo, Consolas, monospace" font-size="16" fill="#6FAEE8">Main</text>
+  <text x="58" y="158" font-size="13" fill="#9AA0A6">takes the lock, starts the log file</text>
+  <rect x="350" y="106" width="270" height="70" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="368" y="134" font-family="Menlo, Consolas, monospace" font-size="16" fill="#6FAEE8">AppConfig</text>
+  <text x="368" y="158" font-size="13" fill="#9AA0A6">data root, claude, kit root, switches</text>
+  <rect x="660" y="106" width="300" height="70" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+  <text x="678" y="134" font-family="Menlo, Consolas, monospace" font-size="16" fill="#E7C55A">App</text>
+  <text x="678" y="158" font-size="13" fill="#9AA0A6">builds every part, closes them in reverse</text>
+  <line x1="310" y1="141" x2="348" y2="141" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="620" y1="141" x2="658" y2="141" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="810" y1="176" x2="810" y2="214" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <text x="824" y="201" font-size="13" fill="#9AA0A6">constructs</text>
+
+  <!-- core -->
+  <rect x="40" y="216" width="920" height="76" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="58" y="246" font-size="13" letter-spacing="2" fill="#9AA0A6">CORE</text>
+  <text x="130" y="246" font-family="Menlo, Consolas, monospace" font-size="15" fill="#E8E8E8">StateLoop   Reducer   EffectRouter</text>
+  <text x="58" y="272" font-size="13" fill="#9AA0A6">decides what happens, then asks six ports to make it happen; it never knows who answers</text>
+
+  <!-- ports -->
+  <text x="40" y="326" font-size="13" letter-spacing="2" fill="#9AA0A6">THE SIX PORTS OF CORE, AND THE CLASS APP PLUGS INTO EACH</text>
+  <g fill="#1E1E1E" stroke="#E7C55A" stroke-width="1">
+    <rect x="40" y="340" width="140" height="42" rx="6"/><rect x="196" y="340" width="140" height="42" rx="6"/><rect x="352" y="340" width="140" height="42" rx="6"/>
+    <rect x="508" y="340" width="140" height="42" rx="6"/><rect x="664" y="340" width="140" height="42" rx="6"/><rect x="820" y="340" width="140" height="42" rx="6"/>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E7C55A" text-anchor="middle">
+    <text x="110" y="366">DatabasePort</text><text x="266" y="366">ClaudePort</text><text x="422" y="366">ApprovalPort</text>
+    <text x="578" y="366">UiPort</text><text x="734" y="366">PersistencePort</text><text x="890" y="366">ToolPort</text>
+  </g>
+  <g stroke="#9AA0A6" stroke-width="1.3">
+    <line x1="110" y1="418" x2="110" y2="386" marker-end="url(#ar)"/><line x1="266" y1="418" x2="266" y2="386" marker-end="url(#ar)"/>
+    <line x1="422" y1="418" x2="422" y2="386" marker-end="url(#ar)"/><line x1="578" y1="418" x2="578" y2="386" marker-end="url(#ar)"/>
+    <line x1="734" y1="418" x2="734" y2="386" marker-end="url(#ar)"/><line x1="890" y1="418" x2="890" y2="386" marker-end="url(#ar)"/>
+  </g>
+  <g fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3">
+    <rect x="40" y="420" width="140" height="70" rx="8"/><rect x="196" y="420" width="140" height="70" rx="8"/><rect x="352" y="420" width="140" height="70" rx="8"/>
+    <rect x="508" y="420" width="140" height="70" rx="8"/><rect x="664" y="420" width="140" height="70" rx="8"/><rect x="820" y="420" width="140" height="70" rx="8"/>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#6FAEE8" text-anchor="middle">
+    <text x="110" y="448">DbRouter</text><text x="266" y="448">ClaudeAdapter</text><text x="422" y="448">McpServer</text>
+    <text x="578" y="448">ComandoUi</text><text x="734" y="448">Store</text><text x="890" y="448">ToolsAdapter</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6" text-anchor="middle">
+    <text x="110" y="472">module db</text><text x="266" y="472">module claude</text><text x="422" y="472">module mcp</text>
+    <text x="578" y="472">module ui</text><text x="734" y="472">module app</text><text x="890" y="472">module tools</text>
+  </g>
+
+  <!-- also built -->
+  <text x="40" y="530" font-size="13" letter-spacing="2" fill="#9AA0A6">ALSO BUILT AND OWNED HERE</text>
+  <line x1="40" y1="542" x2="960" y2="542" stroke="#3A3A3A" stroke-width="1"/>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="40" y="570">MachineCdb</text>
+    <text x="270" y="570">EmbeddedEdge | FrontearFabric</text>
+    <text x="570" y="570">MqttPeerBroker</text>
+    <text x="800" y="570">Searcher</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="40" y="590">the machine's database</text>
+    <text x="270" y="590">the fabric the instances meet on</text>
+    <text x="570" y="590">this instance on the fabric</text>
+    <text x="800" y="590">find in files</text>
+  </g>
+  <text x="40" y="622" font-size="13" fill="#9AA0A6">comando · docs/modules/app.md</text>
+</svg>

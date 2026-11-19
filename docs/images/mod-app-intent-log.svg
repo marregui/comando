@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="580" viewBox="0 0 1000 580" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The intent log, recorded and replayed: while you work, IntentLog writes the first state and then each intent as one JSON line; UiReplayTest reads such a file back, feeds every intent to a real state loop and a real window with recording fakes behind them, and checks the window against the final state</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="580" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">MODULE APP · THE INTENT LOG</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Write down what was asked; play it back as a test</text>
+
+  <!-- record -->
+  <rect x="40" y="106" width="920" height="196" rx="10" fill="none" stroke="#3A3A3A" stroke-width="1"/>
+  <text x="58" y="132" font-size="13" letter-spacing="2" fill="#6FAEE8">RECORD · -Dcomando.recordIntents=true</text>
+  <rect x="58" y="158" width="170" height="70" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="74" y="186" font-size="14" fill="#E8E8E8">you, Claude, a timer</text>
+  <text x="74" y="208" font-size="13" fill="#9AA0A6">each sends intents</text>
+  <rect x="296" y="158" width="190" height="70" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+  <text x="312" y="186" font-family="Menlo, Consolas, monospace" font-size="14" fill="#E7C55A">StateLoop</text>
+  <text x="312" y="208" font-size="13" fill="#9AA0A6">reduces them, in order</text>
+  <line x1="228" y1="193" x2="294" y2="193" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="486" y1="193" x2="546" y2="193" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <text x="296" y="258" font-family="Menlo, Consolas, monospace" font-size="13" fill="#6FAEE8">IntentLog</text>
+  <text x="296" y="278" font-size="13" fill="#9AA0A6">watches on the reducer thread</text>
+
+  <rect x="550" y="146" width="394" height="140" rx="8" fill="#161616" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="566" y="172" font-family="Menlo, Consolas, monospace" font-size="13" fill="#6FAEE8">logs/intents-&lt;millis&gt;.jsonl</text>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="566" y="200">{"at":…,"type":"@state","state":{…}}</text>
+    <text x="566" y="222">{"at":…,"type":"SaveSession","intent":{…}}</text>
+    <text x="566" y="244">{"at":…,"type":"Notify","intent":{…}}</text>
+  </g>
+  <text x="566" y="270" font-size="13" fill="#9AA0A6">the first state, then one line per intent; passwords blanked</text>
+
+  <!-- replay -->
+  <rect x="40" y="322" width="920" height="186" rx="10" fill="none" stroke="#3A3A3A" stroke-width="1"/>
+  <text x="58" y="348" font-size="13" letter-spacing="2" fill="#6FAEE8">REPLAY · UiReplayTest</text>
+  <rect x="58" y="374" width="190" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="72" y="402" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">IntentLog.read(file)</text>
+  <text x="72" y="424" font-size="13" fill="#9AA0A6">gives a Replay: the first</text>
+  <text x="72" y="442" font-size="13" fill="#9AA0A6">state and every intent</text>
+  <rect x="290" y="374" width="200" height="84" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+  <text x="304" y="402" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E7C55A">StateLoop + ComandoUi</text>
+  <text x="304" y="424" font-size="13" fill="#9AA0A6">both real: the reducer</text>
+  <text x="304" y="442" font-size="13" fill="#9AA0A6">and the window</text>
+  <rect x="532" y="374" width="190" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="546" y="402" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">RecordingPorts</text>
+  <text x="546" y="424" font-size="13" fill="#9AA0A6">fakes for the database,</text>
+  <text x="546" y="442" font-size="13" fill="#9AA0A6">Claude, tools and files</text>
+  <rect x="764" y="374" width="180" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="778" y="402" font-size="14" fill="#E8E8E8">the check</text>
+  <text x="778" y="424" font-size="13" fill="#9AA0A6">the window's tabs match</text>
+  <text x="778" y="442" font-size="13" fill="#9AA0A6">the final state</text>
+  <line x1="248" y1="416" x2="288" y2="416" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="490" y1="416" x2="530" y2="416" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="722" y1="416" x2="762" y2="416" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <text x="58" y="490" font-size="13" fill="#9AA0A6">Same intents, same reducer, same window: the same picture every run, with no database and no Claude.</text>
+
+  <text x="40" y="540" font-size="13" fill="#9AA0A6">A recording is a file you can attach to a bug: the steps that led to it, replayable.</text>
+  <text x="40" y="562" font-size="13" fill="#9AA0A6">comando · docs/modules/app.md</text>
+</svg>

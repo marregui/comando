@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="450" viewBox="0 0 1200 450" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Scheduled jobs: comando asks the kit's installer, the installer writes the operating system's scheduler, the scheduler runs the job</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="48%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#121212"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/>
+    </marker>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:3px}
+      .h{font-size:26px;font-weight:300;fill:#E8E8E8}
+      .t{font-size:17px;fill:#E8E8E8}
+      .l{font-size:14px;fill:#E8E8E8}
+      .d{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:14px;fill:#E8E8E8}
+      .foot{font-size:13px;fill:#9AA0A6}
+      .box{fill:#1E1E1E;stroke-width:1.5}
+      .flow{fill:none;stroke:#9AA0A6;stroke-width:1.4}
+    </style>
+  </defs>
+  <rect width="1200" height="450" fill="url(#bg)"/>
+
+  <text x="40" y="50" class="cap" fill="#6CC69A">SCHEDULED JOBS</text>
+  <text x="40" y="84" class="h">Who starts a job that runs with no window open</text>
+  <text x="40" y="110" class="d">comando shows and edits the list. The kit installs it. The operating system keeps the clock.</text>
+
+  <!-- comando -->
+  <rect class="box" stroke="#6FAEE8" x="40" y="160" width="220" height="150" rx="12"/>
+  <text x="64" y="192" class="cap" fill="#6FAEE8">COMANDO</text>
+  <text x="64" y="226" class="t">The Kit jobs window</text>
+  <text x="64" y="254" class="d">You switch a job on,</text>
+  <text x="64" y="274" class="d">change its time,</text>
+  <text x="64" y="294" class="d">or run it now.</text>
+
+  <!-- the three calls -->
+  <path class="flow" marker-start="url(#arrow)" marker-end="url(#arrow)" d="M264 235 L456 235"/>
+  <text x="360" y="184" text-anchor="middle" class="m">jobs --json</text>
+  <text x="360" y="204" text-anchor="middle" class="m">jobs set</text>
+  <text x="360" y="224" text-anchor="middle" class="m">job run &lt;name&gt;</text>
+  <text x="360" y="262" text-anchor="middle" class="d">each call waits</text>
+  <text x="360" y="282" text-anchor="middle" class="d">60 seconds at most</text>
+
+  <!-- the installer -->
+  <rect class="box" stroke="#6CC69A" x="460" y="160" width="220" height="150" rx="12"/>
+  <text x="484" y="192" class="cap" fill="#6CC69A">THE KIT</text>
+  <text x="484" y="226" class="m" style="font-size:16px">install/kit.py</text>
+  <text x="484" y="254" class="d">The only writer of</text>
+  <text x="484" y="274" class="d">the scheduler's files</text>
+  <text x="484" y="294" class="d">and of the manifest's jobs.</text>
+
+  <path class="flow" marker-end="url(#arrow)" d="M680 235 L716 235"/>
+
+  <!-- the scheduler -->
+  <rect class="box" stroke="#AEB6C1" x="720" y="160" width="200" height="150" rx="12"/>
+  <text x="744" y="192" class="cap" fill="#AEB6C1">THE SYSTEM</text>
+  <text x="744" y="226" class="t">Its scheduler</text>
+  <text x="744" y="254" class="d">Keeps the clock:</text>
+  <text x="744" y="274" class="d">daily, weekly,</text>
+  <text x="744" y="294" class="d">or always running.</text>
+
+  <path class="flow" marker-end="url(#arrow)" d="M920 235 L956 235"/>
+
+  <!-- the job -->
+  <rect class="box" stroke="#6CC69A" x="960" y="160" width="200" height="150" rx="12"/>
+  <text x="984" y="192" class="cap" fill="#6CC69A">THE JOB</text>
+  <text x="984" y="226" class="t">A program of the kit</text>
+  <text x="984" y="254" class="d">Runs by itself and</text>
+  <text x="984" y="274" class="d">writes to its log:</text>
+  <text x="984" y="294" class="m" style="font-size:13px">.kit-jobs/&lt;name&gt;.log</text>
+
+  <text x="40" y="350" class="d">comando is not in the path between the clock and the job: a job runs whether comando is open or not.</text>
+
+  <!-- legend -->
+  <line x1="40" y1="408" x2="1160" y2="408" stroke="#2A2A2A"/>
+  <g class="foot">
+    <circle cx="46" cy="428" r="5" fill="#6FAEE8"/><text x="58" y="433">comando</text>
+    <circle cx="146" cy="428" r="5" fill="#6CC69A"/><text x="158" y="433">kit</text>
+    <circle cx="206" cy="428" r="5" fill="#AEB6C1"/><text x="218" y="433">operating system</text>
+    <text x="1160" y="433" text-anchor="end">comando · docs/kit</text>
+  </g>
+</svg>

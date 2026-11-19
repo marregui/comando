@@ -18,7 +18,7 @@ Miguel decided, on the default proposed in the review of the design plan.
 
 ## 3. Consequences
 
-The grid is `GridTable`, the plot `PlotCanvas` ([Widgets](../architecture.md#144-widgets),
+The grid is `GridTable`, the plot `PlotCanvas` ([Widgets](../modules/ui.md#4-layers-and-the-kit-of-widgets),
 [The database](../workbench.md#3-the-database)). Diffs use java-diff-utils behind the kit's `Diffs`.
 
 ## 4. Alternatives

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="400" viewBox="0 0 1000 400" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Three reading paths through the documents: a newcomer goes from INSTALL to the tutorial, the workbench and Claude Code; a learner from kit and brain to the kit, the brain, cdb SQL, cdb and frontear; a developer from the architecture to the modules, development and the decision records</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="400" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">READING PATHS</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Three ways through the documents</text>
+
+  <!-- lane hairlines -->
+  <g stroke="#2E2E2E" stroke-width="1">
+    <line x1="40" y1="188" x2="960" y2="188"/><line x1="40" y1="268" x2="960" y2="268"/>
+  </g>
+
+  <!-- lane labels -->
+  <g font-size="13" letter-spacing="2.5" fill="#E7C55A">
+    <text x="40" y="136">NEWCOMER</text>
+    <text x="40" y="216">LEARNER</text>
+    <text x="40" y="296">DEVELOPER</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="40" y="156">use it today</text>
+    <text x="40" y="236">grasp the ideas</text>
+    <text x="40" y="316">change the code</text>
+  </g>
+
+  <!-- chips -->
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <g stroke="#6FAEE8">
+      <rect x="190" y="118" width="110" height="46" rx="8"/><rect x="320" y="118" width="110" height="46" rx="8"/><rect x="450" y="118" width="110" height="46" rx="8"/>
+      <rect x="580" y="198" width="110" height="46" rx="8"/><rect x="710" y="198" width="110" height="46" rx="8"/><rect x="840" y="198" width="110" height="46" rx="8"/>
+      <rect x="190" y="278" width="110" height="46" rx="8"/><rect x="320" y="278" width="110" height="46" rx="8"/><rect x="450" y="278" width="110" height="46" rx="8"/><rect x="580" y="278" width="110" height="46" rx="8"/>
+    </g>
+    <rect x="580" y="118" width="110" height="46" rx="8" stroke="#D98E5F"/>
+    <g stroke="#6CC69A">
+      <rect x="190" y="198" width="110" height="46" rx="8"/><rect x="320" y="198" width="110" height="46" rx="8"/><rect x="450" y="198" width="110" height="46" rx="8"/>
+    </g>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" text-anchor="middle">
+    <g fill="#6FAEE8">
+      <text x="245" y="146">INSTALL</text><text x="375" y="146">tutorial</text><text x="505" y="146">workbench</text>
+      <text x="635" y="226">cdb-sql</text><text x="765" y="226">cdb</text><text x="895" y="226">frontear</text>
+      <text x="245" y="306">architecture</text><text x="375" y="306">modules/</text><text x="505" y="306">development</text><text x="635" y="306">adr/</text>
+    </g>
+    <text x="635" y="146" fill="#D98E5F">claude-code</text>
+    <g fill="#6CC69A">
+      <text x="245" y="226">kit-and-brain</text><text x="375" y="226">kit</text><text x="505" y="226">brain</text>
+    </g>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#ar)">
+    <line x1="300" y1="141" x2="319" y2="141"/><line x1="430" y1="141" x2="449" y2="141"/><line x1="560" y1="141" x2="579" y2="141"/>
+    <line x1="300" y1="221" x2="319" y2="221"/><line x1="430" y1="221" x2="449" y2="221"/><line x1="560" y1="221" x2="579" y2="221"/><line x1="690" y1="221" x2="709" y2="221"/><line x1="820" y1="221" x2="839" y2="221"/>
+    <line x1="300" y1="301" x2="319" y2="301"/><line x1="430" y1="301" x2="449" y2="301"/><line x1="560" y1="301" x2="579" y2="301"/>
+  </g>
+
+  <!-- legend -->
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="346" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="62" y="358">comando</text>
+    <rect x="152" y="346" width="14" height="14" rx="3" fill="#D98E5F"/><text x="174" y="358">Claude Code</text>
+    <rect x="286" y="346" width="14" height="14" rx="3" fill="#6CC69A"/><text x="308" y="358">kit and brain</text>
+    <text x="40" y="386">comando · docs/README</text>
+  </g>
+</svg>

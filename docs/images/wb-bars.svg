@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="470" viewBox="0 0 1100 470" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The session bar and the status bar, part by part</title>
+<rect width="1100" height="470" fill="#161616"/>
+<text x="40" y="42" font-size="13" font-weight="600" fill="#E7C55A" letter-spacing="3">WORKBENCH · THE TWO BARS</text>
+<text x="40" y="74" font-size="22" font-weight="300" fill="#E8E8E8">The session bar tells one session's story; the status bar, the window's</text>
+
+<!-- session bar -->
+<text x="40" y="112" font-size="13" fill="#D98E5F" letter-spacing="2">THE SESSION BAR · THE FOCUSED PANEL'S SESSION</text>
+<rect x="40" y="124" width="1020" height="40" rx="6" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<circle cx="62" cy="144" r="6" fill="none" stroke="#D98E5F" stroke-width="1.6"/>
+<text x="76" y="149" font-size="13" fill="#E8E8E8">tutor ⎇ main ▾</text>
+<text x="186" y="149" font-size="14" fill="#6CC69A">⏻</text>
+<text x="212" y="149" font-size="14" fill="#9AA0A6">↺</text>
+<text x="246" y="149" font-size="13" fill="#C8C8C8">16:02 UTC ▸ 12 min 05 s ▸ due 16:30 UTC ▸ 60% (4 min ago)</text>
+<text x="700" y="149" font-size="13" fill="#C8C8C8">haiku ▾</text>
+<text x="766" y="149" font-size="13" fill="#C8C8C8">medium ▾</text>
+<text x="846" y="149" font-size="13" fill="#C8C8C8">ctx 41k (4%)</text>
+<g font-size="13" text-anchor="middle" fill="#9AA0A6">
+<rect x="944" y="133" width="24" height="22" rx="4" fill="none" stroke="#B49AE8"/><text x="956" y="149" fill="#B49AE8">R</text>
+<rect x="976" y="133" width="24" height="22" rx="4" fill="none" stroke="#5A5A5A"/><text x="988" y="149">C</text>
+<rect x="1008" y="133" width="24" height="22" rx="4" fill="none" stroke="#5A5A5A"/><text x="1020" y="149">✕</text>
+</g>
+<g stroke="#4A4A4A"><line x1="110" y1="164" x2="110" y2="184"/><line x1="200" y1="164" x2="200" y2="184"/><line x1="440" y1="164" x2="440" y2="184"/><line x1="760" y1="164" x2="760" y2="184"/><line x1="884" y1="164" x2="884" y2="184"/><line x1="988" y1="164" x2="988" y2="184"/></g>
+<g font-size="13">
+<text x="40" y="202" font-weight="600" fill="#E8E8E8">Chip</text>
+<text x="40" y="220" fill="#9AA0A6">State, name,</text>
+<text x="40" y="238" fill="#9AA0A6">branch; a menu.</text>
+<text x="160" y="202" font-weight="600" fill="#E8E8E8">Plug, fresh start</text>
+<text x="160" y="220" fill="#9AA0A6">Start or stop.</text>
+<text x="160" y="238" fill="#9AA0A6">A new conversation.</text>
+<text x="320" y="202" font-weight="600" fill="#E8E8E8">ETA</text>
+<text x="320" y="220" fill="#9AA0A6">Started ▸ ran for ▸ deadline ▸ progress.</text>
+<text x="320" y="238" fill="#9AA0A6">Gold once late. Hover for the card.</text>
+<text x="680" y="202" font-weight="600" fill="#E8E8E8">Model, effort</text>
+<text x="680" y="220" fill="#9AA0A6">Menus: change</text>
+<text x="680" y="238" fill="#9AA0A6">now, and keep.</text>
+<text x="820" y="202" font-weight="600" fill="#E8E8E8">Context</text>
+<text x="820" y="220" fill="#9AA0A6">Tokens in use,</text>
+<text x="820" y="238" fill="#9AA0A6">and their share.</text>
+<text x="940" y="202" font-weight="600" fill="#E8E8E8">Three buttons</text>
+<text x="940" y="220" fill="#9AA0A6">Reflect, Compact,</text>
+<text x="940" y="238" fill="#9AA0A6">Clear.</text>
+</g>
+
+<!-- status bar -->
+<text x="40" y="290" font-size="13" fill="#6FAEE8" letter-spacing="2">THE STATUS BAR · THE WHOLE WINDOW</text>
+<rect x="40" y="302" width="1020" height="36" rx="6" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="325" font-size="13" fill="#C8C8C8">Copied the view's content</text>
+<text x="300" y="325" font-size="13" fill="#C8C8C8">Claude Session 12% (resets 17:19 UTC) · Week 30%</text>
+<text x="660" y="325" font-size="13" fill="#C8C8C8">2 sessions working<tspan dx="14" fill="#E7C55A">1 waiting for approval</tspan></text>
+<text x="1044" y="325" text-anchor="end" font-size="13" fill="#C8C8C8">11:24:05 UTC</text>
+<g stroke="#4A4A4A"><line x1="130" y1="338" x2="130" y2="358"/><line x1="460" y1="338" x2="460" y2="358"/><line x1="780" y1="338" x2="780" y2="358"/><line x1="1004" y1="338" x2="1004" y2="358"/></g>
+<g font-size="13">
+<text x="40" y="376" font-weight="600" fill="#E8E8E8">The notice</text>
+<text x="40" y="394" fill="#9AA0A6">A click goes to what it is about.</text>
+<text x="40" y="412" fill="#9AA0A6">A right click lists recent notices.</text>
+<text x="300" y="376" font-weight="600" fill="#E8E8E8">Plan usage</text>
+<text x="300" y="394" fill="#9AA0A6">Claude's and Codex's windows,</text>
+<text x="300" y="412" fill="#9AA0A6">each with its reset time.</text>
+<text x="660" y="376" font-weight="600" fill="#E8E8E8">Work running</text>
+<text x="660" y="394" fill="#9AA0A6">A click lists who needs you,</text>
+<text x="660" y="412" fill="#9AA0A6">who works and what waits.</text>
+<text x="944" y="376" font-weight="600" fill="#E8E8E8">The clock</text>
+<text x="944" y="394" fill="#9AA0A6">UTC. Local time</text>
+<text x="944" y="412" fill="#9AA0A6">in its tooltip.</text>
+</g>
+
+<g font-size="13" fill="#9AA0A6">
+<rect x="40" y="439" width="12" height="12" fill="#D98E5F"/><text x="58" y="450">Claude Code session</text>
+<rect x="210" y="439" width="12" height="12" fill="#6FAEE8"/><text x="228" y="450">comando</text>
+<rect x="310" y="439" width="12" height="12" fill="#B49AE8"/><text x="328" y="450">checkpoint</text>
+<rect x="420" y="439" width="12" height="12" fill="#E7C55A"/><text x="438" y="450">waits for you</text>
+<text x="1060" y="450" text-anchor="end">comando · docs/workbench</text>
+</g>
+</svg>

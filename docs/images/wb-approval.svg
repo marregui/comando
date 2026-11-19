@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>An approval card in the Approvals tab, its buttons and its keys</title>
+<rect width="1000" height="500" fill="#161616"/>
+<text x="40" y="42" font-size="13" font-weight="600" fill="#E7C55A" letter-spacing="3">WORKBENCH · APPROVALS</text>
+<text x="40" y="74" font-size="22" font-weight="300" fill="#E8E8E8">A session asks, the card waits, one key answers</text>
+
+<!-- the card -->
+<text x="40" y="112" font-size="13" fill="#9AA0A6" letter-spacing="2">THIS SESSION</text>
+<rect x="40" y="124" width="540" height="250" rx="10" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.4"/>
+<circle cx="64" cy="152" r="7" fill="none" stroke="#D98E5F" stroke-width="1.6"/>
+<text x="80" y="157" font-size="14" fill="#E8E8E8">tutor</text>
+<text x="124" y="157" font-size="13" fill="#9AA0A6">wants to run a tool</text>
+<text x="60" y="190" font-size="14" font-weight="600" fill="#E8E8E8">Bash</text>
+<rect x="60" y="202" width="500" height="44" rx="6" fill="#161616" stroke="#2E2E2E"/>
+<text x="74" y="229" font-family="Menlo, Consolas, monospace" font-size="13" fill="#C8C8C8">./gradlew :cdb:test --tests '*Wal*'</text>
+<g font-size="13" text-anchor="middle">
+<rect x="60" y="264" width="124" height="32" rx="6" fill="#22382d" stroke="#6CC69A" stroke-width="1.4"/><text x="122" y="285" fill="#6CC69A">Allow once ⏎</text>
+<rect x="194" y="264" width="116" height="32" rx="6" fill="#1E1E1E" stroke="#5A5A5A"/><text x="252" y="285" fill="#E8E8E8">For session S</text>
+<rect x="320" y="264" width="90" height="32" rx="6" fill="#1E1E1E" stroke="#5A5A5A"/><text x="365" y="285" fill="#E8E8E8">Always L</text>
+<rect x="420" y="264" width="84" height="32" rx="6" fill="#1E1E1E" stroke="#C96A6A"/><text x="462" y="285" fill="#E08A8A">Deny D</text>
+</g>
+<rect x="60" y="314" width="500" height="36" rx="6" fill="#161616" stroke="#2E2E2E"/>
+<text x="74" y="337" font-size="13" fill="#7A7A7A">Note for Claude: ⏎ denies with it</text>
+<text x="40" y="402" font-size="13" fill="#9AA0A6" letter-spacing="2">OTHER SESSIONS</text>
+<text x="40" y="426" font-size="13" fill="#9AA0A6">Cards of every other session wait below, in the same tab. ↑ and ↓ move between cards.</text>
+
+<!-- the keys -->
+<text x="620" y="112" font-size="13" fill="#9AA0A6" letter-spacing="2">KEYS ON A CARD</text>
+<g font-size="13">
+<g transform="translate(620,124)"><rect width="74" height="26" rx="5" fill="#1E1E1E" stroke="#6CC69A"/><text x="37" y="18" text-anchor="middle" fill="#6CC69A">⏎ or A</text><text x="88" y="18" fill="#E8E8E8">the green answer</text></g>
+<g transform="translate(620,160)"><rect width="74" height="26" rx="5" fill="#1E1E1E" stroke="#C96A6A"/><text x="37" y="18" text-anchor="middle" fill="#E08A8A">D or Esc</text><text x="88" y="18" fill="#E8E8E8">deny</text></g>
+<g transform="translate(620,196)"><rect width="74" height="26" rx="5" fill="#1E1E1E" stroke="#5A5A5A"/><text x="37" y="18" text-anchor="middle" fill="#E8E8E8">S</text><text x="88" y="18" fill="#E8E8E8">allow for the session</text></g>
+<g transform="translate(620,232)"><rect width="74" height="26" rx="5" fill="#1E1E1E" stroke="#5A5A5A"/><text x="37" y="18" text-anchor="middle" fill="#E8E8E8">L, then L</text><text x="88" y="18" fill="#E8E8E8">allow always, within 3 s</text></g>
+<g transform="translate(620,268)"><rect width="74" height="26" rx="5" fill="#1E1E1E" stroke="#5A5A5A"/><text x="37" y="18" text-anchor="middle" fill="#E8E8E8">↑  ↓</text><text x="88" y="18" fill="#E8E8E8">the card above, below</text></g>
+</g>
+<text x="620" y="330" font-size="13" fill="#9AA0A6" letter-spacing="2">THE GREEN ANSWER BY KIND</text>
+<g font-size="13">
+<text x="620" y="356" fill="#9AA0A6">Tool</text><text x="740" y="356" fill="#6CC69A">Allow once</text>
+<text x="620" y="378" fill="#9AA0A6">Question</text><text x="740" y="378" fill="#6CC69A">Answer</text>
+<text x="620" y="400" fill="#9AA0A6">Plan</text><text x="740" y="400" fill="#6CC69A">Approve plan</text>
+<text x="620" y="422" fill="#9AA0A6">SQL write</text><text x="740" y="422" fill="#6CC69A">Run</text>
+<text x="620" y="444" fill="#9AA0A6">Connection, terminal</text><text x="770" y="444" fill="#6CC69A">Allow</text>
+</g>
+
+<g font-size="13" fill="#9AA0A6">
+<rect x="40" y="469" width="12" height="12" fill="#6CC69A"/><text x="58" y="480">lets the work go on</text>
+<rect x="200" y="469" width="12" height="12" fill="#C96A6A"/><text x="218" y="480">denies</text>
+<rect x="290" y="469" width="12" height="12" fill="#D98E5F"/><text x="308" y="480">the asking session</text>
+<text x="960" y="480" text-anchor="end">comando · docs/workbench</text>
+</g>
+</svg>

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="500" viewBox="0 0 1100 500" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t">
+  <title id="t">A context window filling turn by turn until comando's checkpoint threshold, where the session reflects into the brain and the conversation is compacted</title>
+  <defs>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,1 L10,5 L0,9 Z" fill="#E7C55A"/></marker>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:2.5px}
+      .t{font-size:15px;fill:#E8E8E8}
+      .s{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:13px;fill:#E8E8E8}
+      .foot{font-size:13px;fill:#9AA0A6;letter-spacing:.5px}
+    </style>
+  </defs>
+  <rect width="1100" height="500" fill="#161616"/>
+
+  <text x="40" y="44" class="cap" fill="#E7C55A">THE CONTEXT WINDOW · FILL, REFLECT, COMPACT</text>
+  <text x="40" y="68" class="s">The conversation is working memory. The checkpoint saves what matters before it is summarised.</text>
+
+  <!-- axes -->
+  <line x1="120" y1="110" x2="120" y2="360" stroke="#3A3A3A"/>
+  <line x1="120" y1="360" x2="1040" y2="360" stroke="#3A3A3A"/>
+  <line x1="120" y1="110" x2="1040" y2="110" stroke="#9AA0A6" stroke-dasharray="2 6"/>
+  <text x="108" y="115" text-anchor="end" class="s">100 %</text>
+  <text x="108" y="265" text-anchor="end" class="s" fill="#6FAEE8">40 %</text>
+  <text x="108" y="365" text-anchor="end" class="s">0 %</text>
+  <text x="40" y="200" class="cap" fill="#9AA0A6" transform="rotate(-90 52 236)">CONTEXT USED</text>
+  <text x="1040" y="384" text-anchor="end" class="s">turns →</text>
+
+  <!-- threshold -->
+  <line x1="120" y1="260" x2="1040" y2="260" stroke="#6FAEE8" stroke-dasharray="6 5"/>
+  <text x="136" y="250" class="s" fill="#6FAEE8">comando's checkpoint threshold: 40 % of the window by default</text>
+  <text x="136" y="134" class="s">the window is full: nothing more fits</text>
+
+  <!-- checkpoint band -->
+  <rect x="520" y="110" width="60" height="250" fill="#6FAEE8" fill-opacity=".10"/>
+  <text x="550" y="100" text-anchor="middle" class="cap" fill="#6FAEE8">CHECKPOINT</text>
+  <text x="600" y="160" class="m">1  /reflect --auto</text>
+  <text x="764" y="160" class="s">the session writes memory</text>
+  <text x="600" y="184" class="m">2  /compact</text>
+  <text x="764" y="184" class="s">a summary replaces the conversation</text>
+  <text x="600" y="208" class="m">3  continue</text>
+  <text x="764" y="208" class="s">the work goes on from the summary</text>
+
+  <!-- the context curve -->
+  <path d="M120,335 L180,335 L180,322 L250,322 L250,305 L330,305 L330,288 L420,288 L420,272 L520,272 L520,256 L580,256 L580,330 L660,330 L660,316 L760,316 L760,300 L860,300 L860,284 L960,284 L960,270 L1040,270" fill="none" stroke="#D98E5F" stroke-width="2.5" stroke-linejoin="round"/>
+  <circle cx="120" cy="335" r="4" fill="#D98E5F"/>
+  <text x="120" y="384" class="s">at start: instructions and the memory index</text>
+
+  <!-- into the brain -->
+  <line x1="550" y1="360" x2="550" y2="398" stroke="#E7C55A" stroke-width="1.5" marker-end="url(#g)"/>
+  <rect x="460" y="404" width="180" height="36" rx="6" fill="#1E1E1E" stroke="#E7C55A" stroke-opacity=".7"/>
+  <text x="550" y="427" text-anchor="middle" class="cap" fill="#E7C55A">THE BRAIN</text>
+  <text x="656" y="427" class="s">kept on disk: what the next session needs</text>
+
+  <line x1="40" y1="456" x2="1060" y2="456" stroke="#2A2A2A"/>
+  <circle cx="46" cy="476" r="5" fill="#D98E5F"/><text x="60" y="481" class="foot">the session's context</text>
+  <circle cx="226" cy="476" r="5" fill="#6FAEE8"/><text x="240" y="481" class="foot">comando</text>
+  <circle cx="326" cy="476" r="5" fill="#E7C55A"/><text x="340" y="481" class="foot">brain</text>
+  <text x="1060" y="481" text-anchor="end" class="foot">comando · docs/brain</text>
+</svg>

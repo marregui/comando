@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>What runs on your machine: comando is one JVM holding the window, the reducer, the adapters, the MCP server and an in-process cdb; each running session is a claude -p process; beside them run the machine's cdb server, your own database servers, the comando Edge and the other comando instances</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="600" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">ARCHITECTURE · THE WHOLE PICTURE</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">What runs on your machine</text>
+
+  <!-- the JVM -->
+  <rect x="40" y="108" width="570" height="300" rx="10" fill="#161616" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="60" y="136" font-size="13" letter-spacing="2.5" fill="#6FAEE8">COMANDO · ONE JVM · JDK 25</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="60" y="154" width="170" height="78" rx="8" stroke="#6FAEE8"/>
+    <rect x="240" y="154" width="170" height="78" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="420" y="154" width="170" height="78" rx="8" stroke="#6FAEE8"/>
+    <rect x="60" y="254" width="170" height="78" rx="8" stroke="#6FAEE8"/>
+    <rect x="240" y="254" width="170" height="78" rx="8" stroke="#6FAEE8"/>
+    <rect x="420" y="254" width="170" height="78" rx="8" stroke="#6FAEE8"/>
+  </g>
+  <g font-size="16">
+    <text x="76" y="182" fill="#6FAEE8">the window</text>
+    <text x="256" y="182" fill="#E7C55A">the reducer</text>
+    <text x="436" y="182" fill="#6FAEE8">the adapters</text>
+    <text x="76" y="282" fill="#6FAEE8">cdb, in-process</text>
+    <text x="256" y="282" fill="#6FAEE8">the store</text>
+    <text x="436" y="282" fill="#6FAEE8">the MCP server</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="76" y="202">Swing, on the EDT</text>
+    <text x="76" y="220">module ui</text>
+    <text x="256" y="202">one state, one thread</text>
+    <text x="256" y="220">module core</text>
+    <text x="436" y="202">db · claude · tools</text>
+    <text x="436" y="220">each on its own threads</text>
+    <text x="76" y="302">the connection local cdb</text>
+    <text x="76" y="320">data in the data root</text>
+    <text x="256" y="302">specs, panels, settings</text>
+    <text x="256" y="320">as files, module app</text>
+    <text x="436" y="302">HTTP on 127.0.0.1,</text>
+    <text x="436" y="320">a token per process</text>
+    <text x="60" y="362">Intents go into the reducer; effects come out to the adapters; the window renders the state.</text>
+  </g>
+  <text x="60" y="390" font-family="Menlo, Consolas, monospace" font-size="13" fill="#6FAEE8">~/.comando</text>
+  <text x="148" y="390" font-size="13" fill="#9AA0A6">is the data root: every file comando keeps.</text>
+
+  <!-- sessions -->
+  <g fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.3">
+    <rect x="700" y="124" width="260" height="84" rx="8"/><rect x="700" y="228" width="260" height="84" rx="8"/>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="15" fill="#D98E5F">
+    <text x="716" y="152">claude -p</text><text x="716" y="256">claude -p</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="716" y="174">session one: its own process,</text>
+    <text x="716" y="192">stream-JSON on stdin and stdout</text>
+    <text x="716" y="278">session two: one process for</text>
+    <text x="716" y="296">each session that runs</text>
+    <text x="700" y="338">Solid: prompts and events on the pipes.</text>
+    <text x="700" y="356">Dashed: tool calls and approvals,</text>
+    <text x="700" y="374">Claude Code calling the MCP server.</text>
+  </g>
+  <g stroke="#9AA0A6" stroke-width="1.1" fill="none">
+    <path d="M590 180 L699 160" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <path d="M590 206 L699 262" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <path d="M700 196 L592 278" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+    <path d="M700 300 L592 306" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+  </g>
+
+  <!-- neighbours -->
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="452" width="215" height="88" rx="8" stroke="#6FAEE8"/>
+    <rect x="275" y="452" width="215" height="88" rx="8" stroke="#9AA0A6"/>
+    <rect x="510" y="452" width="215" height="88" rx="8" stroke="#AEB6C1"/>
+    <rect x="745" y="452" width="215" height="88" rx="8" stroke="#AEB6C1"/>
+  </g>
+  <g font-size="16">
+    <text x="56" y="480" fill="#6FAEE8">the machine's cdb</text>
+    <text x="291" y="480" fill="#E8E8E8">your databases</text>
+    <text x="526" y="480" fill="#AEB6C1">the comando Edge</text>
+    <text x="761" y="480" fill="#AEB6C1">other instances</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="56" y="502">a server of its own, it</text>
+    <text x="56" y="520">outlives comando</text>
+    <text x="291" y="502">PostgreSQL or QuestDB,</text>
+    <text x="291" y="520">over the PG wire protocol</text>
+    <text x="526" y="502">a local MQTT broker,</text>
+    <text x="526" y="520">127.0.0.1:18883</text>
+    <text x="761" y="502">each its own JVM and its</text>
+    <text x="761" y="520">own data root</text>
+  </g>
+  <g stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#ar)">
+    <line x1="147" y1="408" x2="147" y2="451"/><line x1="382" y1="408" x2="382" y2="451"/><line x1="560" y1="408" x2="590" y2="451" marker-start="url(#ar)"/>
+  </g>
+  <line x1="726" y1="496" x2="744" y2="496" stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#ar)" marker-start="url(#ar)"/>
+
+  <!-- legend -->
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="562" width="14" height="14" rx="3" fill="#E7C55A"/><text x="62" y="574">the centre</text>
+    <rect x="150" y="562" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="172" y="574">comando</text>
+    <rect x="262" y="562" width="14" height="14" rx="3" fill="#D98E5F"/><text x="284" y="574">Claude Code</text>
+    <rect x="396" y="562" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="418" y="574">instances</text>
+    <text x="960" y="574" text-anchor="end">comando · docs/architecture</text>
+  </g>
+</svg>

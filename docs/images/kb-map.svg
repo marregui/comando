@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="950" viewBox="0 0 1200 950" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>A mind map: comando at the centre, with its branches kit, brain, sessions, agents and gates</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="48%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#121212"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#E7C55A" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#E7C55A" stop-opacity="0"/>
+    </radialGradient>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:3px}
+      .h{font-size:26px;font-weight:300;fill:#E8E8E8}
+      .c{font-size:28px;font-weight:300;fill:#E8E8E8}
+      .s{font-size:15px;fill:#E8E8E8}
+      .d{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:14px;fill:#E8E8E8}
+      .foot{font-size:13px;fill:#9AA0A6}
+      .hub{fill:#1E1E1E;stroke-width:1.5}
+      .limb{fill:none;stroke-width:2.5;stroke-linecap:round}
+      .twig{fill:none;stroke-width:1;stroke-opacity:.55}
+    </style>
+  </defs>
+  <rect width="1200" height="950" fill="url(#bg)"/>
+
+  <text x="40" y="50" class="cap" fill="#E7C55A">THE KIT AND THE BRAIN</text>
+  <text x="40" y="84" class="h">One window, five branches</text>
+  <text x="40" y="110" class="d">comando is the window. Each branch answers one question about the work done in it.</text>
+
+  <!-- limbs: the centre to each branch -->
+  <path class="limb" stroke="#6CC69A" d="M541 419 Q480 380 430 292"/>
+  <path class="limb" stroke="#E7C55A" d="M659 419 Q720 380 770 292"/>
+  <path class="limb" stroke="#D98E5F" d="M541 521 Q480 560 430 628"/>
+  <path class="limb" stroke="#D98E5F" d="M659 521 Q720 560 770 628"/>
+  <path class="limb" stroke="#E8E8E8" stroke-opacity=".7" d="M600 548 L600 740"/>
+
+  <!-- the centre -->
+  <circle cx="600" cy="470" r="130" fill="url(#glow)"/>
+  <circle cx="600" cy="470" r="92" fill="none" stroke="#E7C55A" stroke-opacity=".25"/>
+  <circle cx="600" cy="470" r="78" fill="#1E1E1E" stroke="#E7C55A" stroke-width="2"/>
+  <text x="600" y="468" text-anchor="middle" class="c">comando</text>
+  <text x="601" y="496" text-anchor="middle" class="cap" fill="#6FAEE8">THE WINDOW</text>
+
+  <!-- kit -->
+  <g>
+    <path class="twig" stroke="#6CC69A" d="M285 260 C272 260 280 164 266 164"/>
+    <path class="twig" stroke="#6CC69A" d="M285 260 C272 260 280 190 266 190"/>
+    <path class="twig" stroke="#6CC69A" d="M285 260 C274 260 278 216 266 216"/>
+    <path class="twig" stroke="#6CC69A" d="M285 260 C276 260 276 242 266 242"/>
+    <path class="twig" stroke="#6CC69A" d="M285 260 C276 260 276 268 266 268"/>
+    <path class="twig" stroke="#6CC69A" d="M285 260 C274 260 278 294 266 294"/>
+    <path class="twig" stroke="#6CC69A" d="M285 260 C272 260 280 320 266 320"/>
+    <path class="twig" stroke="#6CC69A" d="M285 260 C272 260 280 346 266 346"/>
+    <rect class="hub" stroke="#6CC69A" x="285" y="228" width="190" height="64" rx="12"/>
+    <text x="381" y="254" text-anchor="middle" class="cap" fill="#6CC69A">KIT</text>
+    <text x="380" y="277" text-anchor="middle" class="d">how sessions behave</text>
+    <g fill="#6CC69A">
+      <circle cx="260" cy="164" r="4"/><circle cx="260" cy="190" r="4"/><circle cx="260" cy="216" r="4"/><circle cx="260" cy="242" r="4"/>
+      <circle cx="260" cy="268" r="4"/><circle cx="260" cy="294" r="4"/><circle cx="260" cy="320" r="4"/><circle cx="260" cy="346" r="4"/>
+    </g>
+    <g text-anchor="end">
+      <text x="246" y="169"><tspan class="d">instructions</tspan><tspan class="m" dx="10">CLAUDE.md</tspan></text>
+      <text x="246" y="195"><tspan class="d">rules</tspan><tspan class="m" dx="10">settings.json</tspan></text>
+      <text x="246" y="221"><tspan class="d">act at events</tspan><tspan class="m" dx="10">hooks/</tspan></text>
+      <text x="246" y="247"><tspan class="d">procedures</tspan><tspan class="m" dx="10">skills/</tspan></text>
+      <text x="246" y="273"><tspan class="d">helper types</tspan><tspan class="m" dx="10">agents/</tspan></text>
+      <text x="246" y="299"><tspan class="d">shortcuts</tspan><tspan class="m" dx="10">commands/</tspan></text>
+      <text x="246" y="325"><tspan class="d">its programs</tspan><tspan class="m" dx="10">tools/</tspan></text>
+      <text x="246" y="351"><tspan class="d">manifest</tspan><tspan class="m" dx="10">comando-kit.json</tspan></text>
+    </g>
+  </g>
+
+  <!-- brain -->
+  <g>
+    <path class="twig" stroke="#E7C55A" d="M915 260 C928 260 920 216 934 216"/>
+    <path class="twig" stroke="#E7C55A" d="M915 260 C926 260 924 242 934 242"/>
+    <path class="twig" stroke="#E7C55A" d="M915 260 C926 260 924 268 934 268"/>
+    <path class="twig" stroke="#E7C55A" d="M915 260 C928 260 920 294 934 294"/>
+    <rect class="hub" stroke="#E7C55A" x="725" y="228" width="190" height="64" rx="12"/>
+    <text x="821" y="254" text-anchor="middle" class="cap" fill="#E7C55A">BRAIN</text>
+    <text x="820" y="277" text-anchor="middle" class="d">what sessions remember</text>
+    <g fill="#E7C55A">
+      <circle cx="940" cy="216" r="4"/><circle cx="940" cy="242" r="4"/><circle cx="940" cy="268" r="4"/><circle cx="940" cy="294" r="4"/>
+    </g>
+    <text x="954" y="221"><tspan class="s">memory</tspan><tspan class="d" dx="10">lessons and state</tspan></text>
+    <text x="954" y="247"><tspan class="s">knowledge base</tspan><tspan class="d" dx="10">checked facts</tspan></text>
+    <text x="954" y="273"><tspan class="s">scratchpad</tspan><tspan class="d" dx="10">work in progress</tspan></text>
+    <text x="954" y="299"><tspan class="s">reflect</tspan><tspan class="d" dx="10">tidies all three</tspan></text>
+  </g>
+
+  <!-- agents -->
+  <g>
+    <path class="twig" stroke="#D98E5F" d="M285 660 C272 660 280 616 266 616"/>
+    <path class="twig" stroke="#D98E5F" d="M285 660 C274 660 276 642 266 642"/>
+    <path class="twig" stroke="#D98E5F" d="M285 660 C274 660 276 668 266 668"/>
+    <path class="twig" stroke="#D98E5F" d="M285 660 C272 660 280 694 266 694"/>
+    <rect class="hub" stroke="#D98E5F" x="285" y="628" width="190" height="64" rx="12"/>
+    <text x="381" y="654" text-anchor="middle" class="cap" fill="#D98E5F">AGENTS</text>
+    <text x="380" y="677" text-anchor="middle" class="d">helpers a session sends</text>
+    <circle cx="260" cy="616" r="4" fill="#D98E5F"/><circle cx="260" cy="642" r="4" fill="#6FAEE8"/>
+    <circle cx="260" cy="668" r="4" fill="#6FAEE8"/><circle cx="260" cy="694" r="4" fill="#AEB6C1"/>
+    <g text-anchor="end">
+      <text x="246" y="621"><tspan class="d">a spec each</tspan><tspan class="s" dx="10">sub-agents</tspan></text>
+      <text x="246" y="647"><tspan class="d">you watch them work</tspan><tspan class="s" dx="10">tabs</tspan></text>
+      <text x="246" y="673"><tspan class="d">prompt each other</tspan><tspan class="s" dx="10">sessions</tspan></text>
+      <text x="246" y="699"><tspan class="d">consult each other</tspan><tspan class="s" dx="10">instances</tspan></text>
+    </g>
+  </g>
+
+  <!-- sessions -->
+  <g>
+    <path class="twig" stroke="#D98E5F" d="M915 660 C928 660 920 616 934 616"/>
+    <path class="twig" stroke="#D98E5F" d="M915 660 C926 660 924 642 934 642"/>
+    <path class="twig" stroke="#D98E5F" d="M915 660 C926 660 924 668 934 668"/>
+    <path class="twig" stroke="#D98E5F" d="M915 660 C928 660 920 694 934 694"/>
+    <rect class="hub" stroke="#D98E5F" x="725" y="628" width="190" height="64" rx="12"/>
+    <text x="821" y="654" text-anchor="middle" class="cap" fill="#D98E5F">SESSIONS</text>
+    <text x="820" y="677" text-anchor="middle" class="d">who does the work</text>
+    <circle cx="940" cy="616" r="4" fill="#D98E5F"/><circle cx="940" cy="642" r="4" fill="#D98E5F"/>
+    <circle cx="940" cy="668" r="4" fill="#D98E5F"/><circle cx="940" cy="694" r="4" fill="#6FAEE8"/>
+    <text x="954" y="621"><tspan class="m">claude -p</tspan><tspan class="d" dx="10">one process each</tspan></text>
+    <text x="954" y="647"><tspan class="s">transcript</tspan><tspan class="d" dx="10">the talk, on disk</tspan></text>
+    <text x="954" y="673"><tspan class="s">context window</tspan><tspan class="d" dx="10">what it sees</tspan></text>
+    <text x="954" y="699"><tspan class="s">checkpoint</tspan><tspan class="d" dx="10">reflect, compact</tspan></text>
+  </g>
+
+  <!-- gates -->
+  <g>
+    <path class="twig" stroke="#E8E8E8" d="M600 804 C600 826 160 812 160 836"/>
+    <path class="twig" stroke="#E8E8E8" d="M600 804 C600 824 380 814 380 836"/>
+    <path class="twig" stroke="#E8E8E8" d="M600 804 L600 836"/>
+    <path class="twig" stroke="#E8E8E8" d="M600 804 C600 824 820 814 820 836"/>
+    <path class="twig" stroke="#E8E8E8" d="M600 804 C600 826 1040 812 1040 836"/>
+    <rect class="hub" stroke="#E8E8E8" stroke-opacity=".8" x="505" y="740" width="190" height="64" rx="12"/>
+    <text x="601" y="766" text-anchor="middle" class="cap" fill="#E8E8E8">GATES</text>
+    <text x="600" y="789" text-anchor="middle" class="d">what must pass first</text>
+    <circle cx="160" cy="842" r="4" fill="#6CC69A"/><circle cx="380" cy="842" r="4" fill="#6CC69A"/>
+    <circle cx="600" cy="842" r="4" fill="#6FAEE8"/><circle cx="820" cy="842" r="4" fill="#6CC69A"/>
+    <circle cx="1040" cy="842" r="4" fill="#6FAEE8"/>
+    <g text-anchor="middle">
+      <text x="160" y="866" class="s">permission rules</text><text x="160" y="886" class="d">allow, ask, deny</text>
+      <text x="380" y="866" class="s">guard hooks</text><text x="380" y="886" class="d">refuse a risky call</text>
+      <text x="600" y="866" class="s">approval cards</text><text x="600" y="886" class="d">you answer in comando</text>
+      <text x="820" y="866" class="s">acceptance checks</text><text x="820" y="886" class="d">a task proves it is done</text>
+      <text x="1040" y="866" class="s">audit log</text><text x="1040" y="886" class="d">every tool call, kept</text>
+    </g>
+  </g>
+
+  <!-- legend -->
+  <line x1="40" y1="908" x2="1160" y2="908" stroke="#2A2A2A"/>
+  <g class="foot">
+    <circle cx="46" cy="928" r="5" fill="#6FAEE8"/><text x="58" y="933">comando</text>
+    <circle cx="146" cy="928" r="5" fill="#D98E5F"/><text x="158" y="933">Claude Code</text>
+    <circle cx="266" cy="928" r="5" fill="#6CC69A"/><text x="278" y="933">kit</text>
+    <circle cx="326" cy="928" r="5" fill="#E7C55A"/><text x="338" y="933">brain</text>
+    <circle cx="402" cy="928" r="5" fill="#AEB6C1"/><text x="414" y="933">instances</text>
+    <text x="1160" y="933" text-anchor="end">comando · docs/kit-and-brain</text>
+  </g>
+</svg>

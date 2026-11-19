@@ -44,7 +44,7 @@ the list until that folder is fixed or removed.
 
 2026-11-01, Miguel's decision D10 of the first-release review: the kit and the brain are folders of their own, anywhere,
 so the window takes a folder inside the folder comando's sessions run on (the kit, else Claude Code's own `~/.claude`)
-and, with a kit, inside the brain's folder ([Kit and brain §3.1](../kit-and-brain.md#31-the-root)). The chooser starts
+and, with a kit, inside the brain's folder ([Kit and brain §3.1](../kit.md#how-comando-finds-a-kit)). The chooser starts
 in the first; + and … refuse a folder outside both, and the message line says so. Its title is "Files tab folders" and
 the command Configure Files tab folders, naming what the window holds rather than one of its roots. Tested in
 `FoldersEditorTest`.

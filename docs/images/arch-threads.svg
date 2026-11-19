@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="520" viewBox="0 0 1000 520" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>comando's six kinds of thread: three use operating-system threads, the event loops, the watchdog and one reader per running session; three are virtual threads, strands, errands and forks, of which there may be any number</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+  </defs>
+  <rect width="1000" height="520" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">ARCHITECTURE · THREADS</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Six kinds: three are counted, three are free</text>
+
+  <g font-size="13" letter-spacing="2.5">
+    <text x="40" y="126" fill="#E7C55A">PLATFORM THREADS · THE WINDOW'S BUDGET</text>
+    <text x="520" y="126" fill="#6FAEE8">VIRTUAL THREADS · ANY NUMBER</text>
+  </g>
+  <line x1="500" y1="110" x2="500" y2="440" stroke="#2E2E2E" stroke-width="1"/>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <g stroke="#E7C55A">
+      <rect x="40" y="144" width="440" height="88" rx="8"/><rect x="40" y="248" width="440" height="88" rx="8"/><rect x="40" y="352" width="440" height="88" rx="8"/>
+    </g>
+    <g stroke="#6FAEE8">
+      <rect x="520" y="144" width="440" height="88" rx="8"/><rect x="520" y="248" width="440" height="88" rx="8"/><rect x="520" y="352" width="440" height="88" rx="8"/>
+    </g>
+  </g>
+
+  <g font-size="13" letter-spacing="2" fill="#9AA0A6">
+    <text x="56" y="170">K1</text><text x="56" y="274">K2</text><text x="56" y="378">K3</text>
+    <text x="536" y="170">K4</text><text x="536" y="274">K5</text><text x="536" y="378">K6</text>
+  </g>
+  <g font-size="16">
+    <g fill="#E7C55A"><text x="90" y="171">Event loop</text><text x="90" y="275">Watchdog</text><text x="90" y="379">Session reader</text></g>
+    <g fill="#6FAEE8"><text x="570" y="171">Strand</text><text x="570" y="275">Errand</text><text x="570" y="379">Fork</text></g>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="56" y="194">owns the state or the toolkit; never blocks</text>
+    <text x="56" y="298">must run while what it watches is stuck</text>
+    <text x="56" y="402">reads a session's pipe, which holds a real thread</text>
+    <text x="536" y="194">work in order on one resource; its waits cost nothing</text>
+    <text x="536" y="298">one blocking call for a gesture or an event, then gone</text>
+    <text x="536" y="402">a helper its caller collects in the same call</text>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13">
+    <g fill="#E7C55A">
+      <text x="56" y="218">the EDT · comando-reducer</text>
+      <text x="56" y="322">watchdog</text>
+      <text x="56" y="426">claude-out-&lt;session&gt;</text>
+    </g>
+    <g fill="#6FAEE8">
+      <text x="536" y="218">Threads.strand · Threads.timedStrand</text>
+      <text x="536" y="322">Errands</text>
+      <text x="536" y="426">Threads.fork</text>
+    </g>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="466" width="14" height="14" rx="3" fill="#E7C55A"/><text x="62" y="478">platform threads: 2 + one per running session</text>
+    <rect x="400" y="466" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="422" y="478">virtual threads, from the thread kit</text>
+    <text x="960" y="478" text-anchor="end">comando · docs/architecture</text>
+    <text x="40" y="504">Outside the budget, by name: cdb, frontear, the MCP dispatcher and quitting. A build fails when other code starts a platform thread.</text>
+  </g>
+</svg>

@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>A result is kept column by column in chunks of 16 384 values; readers stop at the published row count</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="560" fill="url(#bg)"/>
+<text x="48" y="48" font-size="13" fill="#E7C55A" letter-spacing="3">MODULE · DB · COLUMNAR RESULT</text>
+<text x="48" y="82" font-size="24" font-weight="300" fill="#E8E8E8">You see rows; comando keeps columns</text>
+
+<text x="48" y="130" font-size="13" fill="#9AA0A6" letter-spacing="2">WHAT YOU SEE</text>
+<g fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1">
+<rect x="48" y="146" width="330" height="34"/>
+<rect x="48" y="180" width="330" height="34"/>
+<rect x="48" y="214" width="330" height="34"/>
+<rect x="48" y="248" width="330" height="34"/>
+<line x1="158" y1="146" x2="158" y2="282"/>
+<line x1="268" y1="146" x2="268" y2="282"/>
+</g>
+<g font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">
+<text x="60" y="168">ts</text><text x="170" y="168">symbol</text><text x="280" y="168">price</text>
+</g>
+<g font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">
+<text x="60" y="202">10:00:01</text><text x="170" y="202">AAA</text><text x="280" y="202">10.50</text>
+<text x="60" y="236">10:00:02</text><text x="170" y="236">BBB</text><text x="280" y="236">7.25</text>
+<text x="60" y="270">10:00:03</text><text x="170" y="270">AAA</text><text x="280" y="270">10.75</text>
+</g>
+<text x="48" y="312" font-size="14" fill="#9AA0A6">A row is one thing that happened.</text>
+
+<text x="470" y="130" font-size="13" fill="#9AA0A6" letter-spacing="2">HOW IT IS KEPT · ColumnarResult</text>
+<g font-size="13" font-family="Menlo, Consolas, monospace">
+<text x="470" y="162" fill="#6FAEE8">ts</text><text x="500" y="162" fill="#9AA0A6">long[]</text>
+<text x="700" y="162" fill="#6FAEE8">symbol</text><text x="762" y="162" fill="#9AA0A6">String[]</text>
+<text x="930" y="162" fill="#6FAEE8">price</text><text x="984" y="162" fill="#9AA0A6">double[]</text>
+</g>
+<g fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1">
+<rect x="470" y="176" width="200" height="56" rx="5"/>
+<rect x="700" y="176" width="200" height="56" rx="5"/>
+<rect x="930" y="176" width="200" height="56" rx="5"/>
+<rect x="470" y="242" width="200" height="56" rx="5"/>
+<rect x="700" y="242" width="200" height="56" rx="5"/>
+<rect x="930" y="242" width="200" height="56" rx="5"/>
+</g>
+<g fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1">
+<rect x="470" y="308" width="200" height="56" rx="5"/>
+<rect x="700" y="308" width="200" height="56" rx="5"/>
+<rect x="930" y="308" width="200" height="56" rx="5"/>
+</g>
+<g fill="#6FAEE8" fill-opacity="0.28">
+<rect x="471" y="309" width="198" height="26"/>
+<rect x="701" y="309" width="198" height="26"/>
+<rect x="931" y="309" width="198" height="26"/>
+</g>
+<g font-size="13" fill="#E8E8E8" text-anchor="middle">
+<text x="570" y="209">chunk 0 · 16 384 values</text>
+<text x="800" y="209">chunk 0 · 16 384 values</text>
+<text x="1030" y="209">chunk 0 · 16 384 values</text>
+<text x="570" y="275">chunk 1 · 16 384 values</text>
+<text x="800" y="275">chunk 1 · 16 384 values</text>
+<text x="1030" y="275">chunk 1 · 16 384 values</text>
+<text x="570" y="356" fill="#9AA0A6">chunk 2 · filling</text>
+<text x="800" y="356" fill="#9AA0A6">chunk 2 · filling</text>
+<text x="1030" y="356" fill="#9AA0A6">chunk 2 · filling</text>
+</g>
+<line x1="456" y1="335" x2="1144" y2="335" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="384" y="339" font-size="13" fill="#E7C55A" font-family="Menlo, Consolas, monospace">rowCount</text>
+
+<path d="M400,214 L452,214" fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)"/>
+
+<g font-size="14">
+<text x="470" y="404" fill="#E8E8E8">The writer, one lane, fills cells below the gold line. Then it moves the line.</text>
+<text x="470" y="430" fill="#E8E8E8">Readers, the grid and an agent's tools, only look above the line.</text>
+<text x="470" y="456" fill="#9AA0A6">A null is one bit in a bitmap beside its chunk. A timestamp is a long: microseconds, UTC.</text>
+</g>
+
+<g font-size="13" fill="#9AA0A6">
+<rect x="48" y="494" width="14" height="14" rx="3" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/>
+<text x="70" y="506">published: safe to read</text>
+<rect x="250" y="494" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1"/>
+<text x="272" y="506">not yet published: only the writer touches it</text>
+</g>
+<text x="48" y="540" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/modules/db.md</text>
+</svg>

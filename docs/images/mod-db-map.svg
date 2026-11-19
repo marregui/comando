@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="690" viewBox="0 0 1200 690" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>db: the router sends each connection to a JDBC lane or to an in-process cdb strand</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="690" fill="url(#bg)"/>
+<text x="48" y="48" font-size="13" fill="#E7C55A" letter-spacing="3">MODULE · DB</text>
+<text x="48" y="82" font-size="24" font-weight="300" fill="#E8E8E8">One door for SQL, two kinds of database behind it</text>
+
+<rect x="48" y="270" width="170" height="130" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="64" y="302" font-size="20" font-weight="300" fill="#E7C55A">core</text>
+<text x="64" y="336" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">DatabasePort</text>
+<text x="64" y="360" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">QueryPort</text>
+
+<rect x="262" y="270" width="200" height="130" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="278" y="302" font-size="16" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">DbRouter</text>
+<text x="278" y="336" font-size="14" fill="#E8E8E8">asks one question:</text>
+<text x="278" y="360" font-size="14" fill="#E8E8E8">is the host cdb?</text>
+
+<rect x="520" y="124" width="400" height="230" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="540" y="154" font-size="16" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">DbAdapter</text>
+<text x="668" y="154" font-size="13" fill="#9AA0A6">a lane per connection name</text>
+<g fill="#2A2A2A" stroke="#6FAEE8" stroke-width="1">
+<rect x="540" y="172" width="360" height="34" rx="5"/>
+<rect x="540" y="214" width="360" height="34" rx="5"/>
+<rect x="540" y="256" width="360" height="34" rx="5"/>
+</g>
+<g font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">
+<text x="554" y="194">db-local</text>
+<text x="554" y="236">db-staging</text>
+<text x="554" y="278">db-reports</text>
+</g>
+<g font-size="13" fill="#9AA0A6">
+<text x="690" y="194">1 strand · 1 JDBC connection</text>
+<text x="690" y="236">1 strand · 1 JDBC connection</text>
+<text x="690" y="278">1 strand · 1 JDBC connection</text>
+</g>
+<text x="540" y="320" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">db-timer</text>
+<text x="620" y="320" font-size="13" fill="#9AA0A6">health checks, cancel escalation</text>
+
+<rect x="980" y="124" width="172" height="230" rx="8" fill="#1E1E1E" stroke="#9AA0A6" stroke-width="1.2"/>
+<text x="996" y="152" font-size="13" fill="#9AA0A6" letter-spacing="2">SERVERS</text>
+<text x="996" y="186" font-size="14" fill="#E8E8E8">QuestDB</text>
+<text x="996" y="210" font-size="14" fill="#E8E8E8">PostgreSQL</text>
+<text x="996" y="246" font-size="13" fill="#9AA0A6">reached through</text>
+<text x="996" y="266" font-size="13" fill="#9AA0A6">the PostgreSQL</text>
+<text x="996" y="286" font-size="13" fill="#9AA0A6">JDBC driver</text>
+
+<rect x="520" y="400" width="400" height="180" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="540" y="430" font-size="16" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">CdbAdapter</text>
+<text x="676" y="430" font-size="13" fill="#9AA0A6">a strand per connection name</text>
+<g fill="#2A2A2A" stroke="#6FAEE8" stroke-width="1">
+<rect x="540" y="448" width="360" height="34" rx="5"/>
+<rect x="540" y="490" width="360" height="34" rx="5"/>
+</g>
+<g font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">
+<text x="554" y="470">cdb-notes</text>
+<text x="554" y="512">cdb-metrics</text>
+</g>
+<g font-size="13" fill="#9AA0A6">
+<text x="690" y="470">runs one statement at a time</text>
+<text x="690" y="512">runs one statement at a time</text>
+</g>
+<text x="540" y="556" font-size="13" fill="#9AA0A6">Two connections on one folder share one open database.</text>
+
+<rect x="980" y="400" width="172" height="180" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="996" y="430" font-size="16" fill="#6FAEE8">cdb</text>
+<text x="996" y="462" font-size="14" fill="#E8E8E8">comando's own</text>
+<text x="996" y="484" font-size="14" fill="#E8E8E8">database</text>
+<text x="996" y="518" font-size="13" fill="#9AA0A6">inside this process,</text>
+<text x="996" y="538" font-size="13" fill="#9AA0A6">a folder on disk</text>
+
+<g fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)">
+<path d="M218,335 L258,335"/>
+<path d="M462,310 L516,246"/>
+<path d="M462,360 L516,480"/>
+<path d="M900,189 L976,189"/>
+<path d="M900,231 L976,231"/>
+<path d="M900,273 L976,273"/>
+<path d="M900,465 L976,465"/>
+<path d="M900,507 L976,507"/>
+<path d="M720,580 L720,618 L133,618 L133,404"/>
+</g>
+<text x="476" y="262" font-size="13" fill="#9AA0A6">no</text>
+<text x="468" y="430" font-size="13" fill="#9AA0A6">yes</text>
+<text x="426" y="642" font-size="14" fill="#E8E8E8" text-anchor="middle">Answers return as intents: SqlStarted, SqlRows, SqlCompleted, SqlFailed, SqlCancelled.</text>
+
+<g font-size="13" fill="#9AA0A6">
+<rect x="820" y="630" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="842" y="642">comando</text>
+<rect x="930" y="630" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#9AA0A6" stroke-width="1.2"/>
+<text x="952" y="642">outside comando</text>
+</g>
+<text x="48" y="672" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/modules/db.md</text>
+</svg>

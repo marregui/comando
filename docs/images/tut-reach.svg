@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="610" viewBox="0 0 1000 610" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>How comando reaches the machine's cdb: a panel is bound to the connection local cdb, which speaks the PostgreSQL wire protocol to port 8812 of one server process on this machine; scripts and other instances reach the same server, also over HTTP on port 9000</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#E7C55A"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#AEB6C1"/></marker>
+  </defs>
+  <rect width="1000" height="610" fill="url(#bg)"/>
+  <text x="32" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">THE MACHINE'S CDB</text>
+  <text x="32" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One database server, reached over the loopback</text>
+
+  <!-- the machine -->
+  <rect x="16" y="100" width="968" height="436" rx="10" fill="none" stroke="#9AA0A6" stroke-width="1" stroke-dasharray="5 5"/>
+  <text x="32" y="524" font-size="13" letter-spacing="2.5" fill="#9AA0A6">THIS MACHINE ONLY · 127.0.0.1</text>
+
+  <!-- comando -->
+  <rect x="40" y="124" width="300" height="236" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="60" y="152" font-size="13" letter-spacing="2.5" fill="#6FAEE8">COMANDO</text>
+  <g fill="#161616" stroke="#6FAEE8" stroke-width="1" opacity="0.95">
+    <rect x="60" y="168" width="260" height="48" rx="6"/>
+    <rect x="60" y="230" width="260" height="48" rx="6"/>
+    <rect x="60" y="292" width="260" height="48" rx="6"/>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="76" y="197">panel</text>
+    <text x="76" y="259">connection</text>
+    <text x="76" y="321">lane</text>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="170" y="197" font-family="Menlo, Consolas, monospace">scratch</text>
+    <text x="170" y="259" font-family="Menlo, Consolas, monospace">local cdb</text>
+    <text x="170" y="321">one thread, one link</text>
+  </g>
+  <g stroke="#6FAEE8" stroke-width="1"><line x1="190" y1="216" x2="190" y2="230"/><line x1="190" y1="278" x2="190" y2="292"/></g>
+
+  <!-- the wire -->
+  <line x1="340" y1="246" x2="616" y2="246" stroke="#E7C55A" stroke-width="1.5" marker-end="url(#a)"/>
+  <g font-size="13" text-anchor="middle">
+    <text x="478" y="212" fill="#E8E8E8">SQL over the PostgreSQL wire</text>
+    <text x="478" y="234" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">localhost:8812</text>
+    <text x="478" y="270" fill="#9AA0A6">the owner secret travels</text>
+    <text x="478" y="290" fill="#9AA0A6">as the password</text>
+  </g>
+
+  <!-- cdb -->
+  <rect x="620" y="124" width="340" height="236" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="2"/>
+  <text x="640" y="152" font-size="13" letter-spacing="2.5" fill="#E7C55A">CDB · ONE PROCESS PER MACHINE</text>
+  <g font-size="13">
+    <rect x="640" y="168" width="64" height="26" rx="5" fill="#161616" stroke="#E7C55A"/>
+    <text x="672" y="186" text-anchor="middle" fill="#E7C55A" font-family="Menlo, Consolas, monospace">8812</text>
+    <text x="716" y="186" fill="#E8E8E8">PostgreSQL wire</text>
+    <rect x="640" y="204" width="64" height="26" rx="5" fill="#161616" stroke="#E7C55A"/>
+    <text x="672" y="222" text-anchor="middle" fill="#E7C55A" font-family="Menlo, Consolas, monospace">9000</text>
+    <text x="716" y="222" fill="#E8E8E8">HTTP:</text>
+    <text x="760" y="222" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">/exec  /write</text>
+  </g>
+  <line x1="640" y1="246" x2="940" y2="246" stroke="#9AA0A6" stroke-width="0.6"/>
+  <g font-size="13" font-family="Menlo, Consolas, monospace" fill="#E8E8E8">
+    <text x="640" y="272">~/.comando-cdb/</text>
+    <text x="660" y="294">cdb/</text>
+    <text x="660" y="316">secret</text>
+    <text x="660" y="338">stdout.log</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="770" y="294">the tables</text>
+    <text x="770" y="316">the owner's key</text>
+    <text x="770" y="338">the server's log</text>
+  </g>
+
+  <!-- other clients -->
+  <rect x="40" y="384" width="300" height="52" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.3"/>
+  <text x="60" y="406" font-size="13" letter-spacing="2.5" fill="#AEB6C1">OTHER COMANDO INSTANCES</text>
+  <text x="60" y="426" font-size="13" fill="#9AA0A6">the same server, never a second one</text>
+  <rect x="40" y="448" width="300" height="52" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.3"/>
+  <text x="60" y="470" font-size="13" letter-spacing="2.5" fill="#AEB6C1">CURL · YOUR SCRIPTS</text>
+  <text x="60" y="490" font-size="13" fill="#9AA0A6">HTTP with the secret in a header</text>
+  <g stroke="#AEB6C1" stroke-width="1.2" fill="none">
+    <path d="M340 410 H700 V362" marker-end="url(#g)"/>
+    <path d="M340 474 H880 V362" marker-end="url(#g)"/>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="360" y="402">port 8812 or 9000</text>
+    <text x="360" y="466" font-family="Menlo, Consolas, monospace">Authorization: Bearer &lt;secret&gt;</text>
+  </g>
+
+  <!-- legend -->
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="32" y="556" width="14" height="14" rx="3" fill="#E7C55A"/><text x="54" y="568">cdb</text>
+    <rect x="104" y="556" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="126" y="568">comando</text>
+    <rect x="212" y="556" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="234" y="568">other clients on this machine</text>
+    <text x="32" y="596">comando · docs/tutorial</text>
+  </g>
+</svg>

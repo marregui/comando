@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>comando starts each Claude Code process with variables that point it at the kit, the brain and comando's data</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="48%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#121212"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/>
+    </marker>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:3px}
+      .h{font-size:26px;font-weight:300;fill:#E8E8E8}
+      .t{font-size:17px;fill:#E8E8E8}
+      .l{font-size:14px;fill:#E8E8E8}
+      .d{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:14px;fill:#E8E8E8}
+      .foot{font-size:13px;fill:#9AA0A6}
+      .box{fill:#1E1E1E;stroke-width:1.5}
+      .flow{fill:none;stroke:#9AA0A6;stroke-width:1.4}
+      .wire{fill:none;stroke-width:1.6}
+    </style>
+  </defs>
+  <rect width="1200" height="620" fill="url(#bg)"/>
+
+  <text x="40" y="50" class="cap" fill="#6FAEE8">HOSTING</text>
+  <text x="40" y="84" class="h">comando points every session at the kit</text>
+  <text x="40" y="110" class="d">Each session is one Claude Code process. comando sets its environment before it starts.</text>
+
+  <!-- comando -->
+  <rect class="box" stroke="#6FAEE8" x="40" y="250" width="200" height="120" rx="12"/>
+  <text x="140" y="290" text-anchor="middle" class="cap" fill="#6FAEE8">COMANDO</text>
+  <text x="140" y="320" text-anchor="middle" class="t">starts the</text>
+  <text x="140" y="344" text-anchor="middle" class="t">process</text>
+  <path class="flow" marker-end="url(#arrow)" d="M240 310 L296 310"/>
+
+  <!-- the process -->
+  <rect class="box" stroke="#D98E5F" x="300" y="150" width="470" height="320" rx="12"/>
+  <text x="324" y="182" class="cap" fill="#D98E5F">ONE SESSION</text>
+  <text x="746" y="182" text-anchor="end" class="m" style="fill:#D98E5F">claude -p</text>
+  <line x1="324" y1="196" x2="746" y2="196" stroke="#2A2A2A"/>
+
+  <circle cx="332" cy="223" r="5" fill="#6CC69A"/>
+  <text x="348" y="228" class="m">CLAUDE_CONFIG_DIR</text>
+  <text x="746" y="228" text-anchor="end" class="d">the kit's folder</text>
+
+  <circle cx="332" cy="263" r="5" fill="#E7C55A"/>
+  <text x="348" y="268" class="m">COMANDO_BRAIN</text>
+  <text x="746" y="268" text-anchor="end" class="d">the brain's folder</text>
+
+  <circle cx="332" cy="303" r="5" fill="#E7C55A"/>
+  <text x="348" y="308" class="m">--settings autoMemoryDirectory</text>
+  <text x="746" y="308" text-anchor="end" class="d">the brain's memory</text>
+
+  <circle cx="332" cy="343" r="5" fill="#6FAEE8"/>
+  <text x="348" y="348" class="m">COMANDO_HOME</text>
+  <text x="746" y="348" text-anchor="end" class="d">comando's data root</text>
+
+  <circle cx="332" cy="383" r="5" fill="#6FAEE8"/>
+  <text x="348" y="388" class="m">CONTEXT_CHECKPOINT_BY</text>
+  <text x="746" y="388" text-anchor="end" class="d">comando runs the checkpoint</text>
+
+  <circle cx="332" cy="423" r="5" fill="#6FAEE8"/>
+  <text x="348" y="428" class="m">COMANDO_CREATED_BY</text>
+  <text x="746" y="428" text-anchor="end" class="d">the agent that made the session</text>
+
+  <!-- wires to the three folders -->
+  <path class="wire" stroke="#6CC69A" marker-end="url(#arrow)" d="M770 223 C830 223 820 200 876 200"/>
+  <path class="wire" stroke="#E7C55A" marker-end="url(#arrow)" d="M770 268 C830 268 820 322 876 322"/>
+  <path class="wire" stroke="#E7C55A" marker-end="url(#arrow)" d="M770 303 C820 303 820 340 876 340"/>
+  <path class="wire" stroke="#6FAEE8" marker-end="url(#arrow)" d="M770 343 C830 343 820 452 876 452"/>
+
+  <!-- kit folder -->
+  <rect class="box" stroke="#6CC69A" x="880" y="150" width="280" height="100" rx="12"/>
+  <text x="904" y="182" class="cap" fill="#6CC69A">THE KIT</text>
+  <text x="904" y="208" class="l">instructions, hooks, skills,</text>
+  <text x="904" y="230" class="l">agents, tools, settings</text>
+
+  <!-- brain folder -->
+  <rect class="box" stroke="#E7C55A" x="880" y="280" width="280" height="100" rx="12"/>
+  <text x="904" y="312" class="cap" fill="#E7C55A">THE BRAIN</text>
+  <text x="904" y="338" class="l">memory, knowledge base,</text>
+  <text x="904" y="360" class="l">scratchpad</text>
+
+  <!-- data root -->
+  <rect class="box" stroke="#6FAEE8" x="880" y="410" width="280" height="100" rx="12"/>
+  <text x="904" y="442" class="cap" fill="#6FAEE8">THE DATA ROOT</text>
+  <text x="904" y="468" class="l">comando's own state:</text>
+  <text x="904" y="490" class="l">sessions, panels, audit log</text>
+
+  <!-- note -->
+  <text x="40" y="520" class="d">With no kit, comando sets neither the kit's folder</text>
+  <text x="40" y="542" class="d">nor the brain: the session runs on your own Claude Code setup.</text>
+
+  <!-- legend -->
+  <line x1="40" y1="578" x2="1160" y2="578" stroke="#2A2A2A"/>
+  <g class="foot">
+    <circle cx="46" cy="598" r="5" fill="#6FAEE8"/><text x="58" y="603">comando</text>
+    <circle cx="146" cy="598" r="5" fill="#D98E5F"/><text x="158" y="603">Claude Code</text>
+    <circle cx="266" cy="598" r="5" fill="#6CC69A"/><text x="278" y="603">kit</text>
+    <circle cx="326" cy="598" r="5" fill="#E7C55A"/><text x="338" y="603">brain</text>
+    <text x="1160" y="603" text-anchor="end">comando · docs/kit</text>
+  </g>
+</svg>

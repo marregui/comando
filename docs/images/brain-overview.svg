@@ -1,110 +1,94 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="720" viewBox="0 0 1100 720" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t">
+  <title id="t">The brain as a mind map: memory, knowledge base and scratchpad on the left; recall, reflect and budgets on the right; comando, the host, below</title>
   <defs>
-    <radialGradient id="bg" cx="50%" cy="48%" r="70%">
-      <stop offset="0" stop-color="#1B1B1B"/>
-      <stop offset="1" stop-color="#101010"/>
-    </radialGradient>
-    <radialGradient id="core" cx="50%" cy="40%" r="60%">
-      <stop offset="0" stop-color="#22201A"/>
-      <stop offset="1" stop-color="#151515"/>
-    </radialGradient>
-    <linearGradient id="gUL" x1="1" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#E7C55A" stop-opacity=".55"/><stop offset="1" stop-color="#6FAEE8"/></linearGradient>
-    <linearGradient id="gLL" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E7C55A" stop-opacity=".55"/><stop offset="1" stop-color="#D98E5F"/></linearGradient>
-    <linearGradient id="gUR" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#E7C55A" stop-opacity=".55"/><stop offset="1" stop-color="#6CC69A"/></linearGradient>
-    <linearGradient id="gLR" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E7C55A" stop-opacity=".55"/><stop offset="1" stop-color="#AEB6C1"/></linearGradient>
-    <linearGradient id="gT" gradientUnits="userSpaceOnUse" x1="800" y1="358" x2="800" y2="222"><stop offset="0" stop-color="#E7C55A" stop-opacity=".55"/><stop offset="1" stop-color="#E7C55A"/></linearGradient>
     <style>
-      .cap{font-size:13px;font-weight:500;letter-spacing:3px}
-      .ttl{font-size:24px;font-weight:300;fill:#F2F2F2}
-      .txt{font-size:15px;font-weight:300;fill:#BDBDBD}
-      .mono{font-family:Menlo, monospace;font-size:13px;fill:#9A9A9A}
-      .foot{font-size:12px;font-weight:300;fill:#8A8A8A;letter-spacing:.5px}
+      .cap{font-size:13px;font-weight:600;letter-spacing:2.5px}
+      .h{font-size:21px;font-weight:300;fill:#E8E8E8}
+      .s{font-size:14px;fill:#9AA0A6}
+      .foot{font-size:13px;fill:#9AA0A6;letter-spacing:.5px}
     </style>
   </defs>
-  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1100" height="720" fill="#161616"/>
 
-  <!-- title -->
-  <text x="60" y="64" class="cap" fill="#E7C55A">BRAIN · OVERVIEW</text>
-  <text x="60" y="92" class="txt">One session at the centre. Five parts around it.</text>
+  <text x="40" y="44" class="cap" fill="#E7C55A">THE BRAIN · MIND MAP</text>
+  <text x="40" y="68" class="s">What an AI assistant keeps between sessions, and what keeps it true.</text>
 
   <!-- branches -->
-  <line x1="800" y1="358" x2="800" y2="222" stroke="url(#gT)" stroke-width="1.2"/>
-  <line x1="725" y1="412" x2="492" y2="338" stroke="url(#gUL)" stroke-width="1.2"/>
-  <line x1="875" y1="412" x2="1108" y2="338" stroke="url(#gUR)" stroke-width="1.2"/>
-  <line x1="742" y1="500" x2="560" y2="640" stroke="url(#gLL)" stroke-width="1.2"/>
-  <line x1="858" y1="500" x2="1040" y2="640" stroke="url(#gLR)" stroke-width="1.2"/>
-
-  <!-- nodes -->
+  <g fill="none" stroke-width="1.5">
+    <path d="M484,316 C440,250 430,150 392,144" stroke="#E7C55A"/>
+    <path d="M476,350 L392,344" stroke="#E7C55A"/>
+    <path d="M484,384 C440,450 430,540 392,544" stroke="#E7C55A"/>
+    <path d="M616,316 C660,250 670,150 708,144" stroke="#D98E5F"/>
+    <path d="M624,350 L708,344" stroke="#6CC69A"/>
+    <path d="M616,384 C660,450 670,540 708,544" stroke="#6CC69A"/>
+    <path d="M550,424 L550,548" stroke="#6FAEE8"/>
+  </g>
   <g>
-    <circle cx="800" cy="216" r="10" fill="none" stroke="#E7C55A" stroke-opacity=".35"/><circle cx="800" cy="216" r="4" fill="#E7C55A"/>
-    <circle cx="486" cy="336" r="10" fill="none" stroke="#6FAEE8" stroke-opacity=".35"/><circle cx="486" cy="336" r="4" fill="#6FAEE8"/>
-    <circle cx="1114" cy="336" r="10" fill="none" stroke="#6CC69A" stroke-opacity=".35"/><circle cx="1114" cy="336" r="4" fill="#6CC69A"/>
-    <circle cx="555" cy="644" r="10" fill="none" stroke="#D98E5F" stroke-opacity=".35"/><circle cx="555" cy="644" r="4" fill="#D98E5F"/>
-    <circle cx="1045" cy="644" r="10" fill="none" stroke="#AEB6C1" stroke-opacity=".35"/><circle cx="1045" cy="644" r="4" fill="#AEB6C1"/>
+    <circle cx="392" cy="144" r="5" fill="#E7C55A"/>
+    <circle cx="392" cy="344" r="5" fill="#E7C55A"/>
+    <circle cx="392" cy="544" r="5" fill="#E7C55A"/>
+    <circle cx="708" cy="144" r="5" fill="#D98E5F"/>
+    <circle cx="708" cy="344" r="5" fill="#6CC69A"/>
+    <circle cx="708" cy="544" r="5" fill="#6CC69A"/>
+    <circle cx="550" cy="548" r="5" fill="#6FAEE8"/>
   </g>
 
   <!-- centre -->
-  <circle cx="800" cy="440" r="112" fill="none" stroke="#E7C55A" stroke-opacity=".12"/>
-  <circle cx="800" cy="440" r="84" fill="url(#core)" stroke="#E7C55A" stroke-width="1.3"/>
-  <text x="800" y="420" text-anchor="middle" class="cap" fill="#9E8230">THE CENTRE</text>
-  <text x="800" y="452" text-anchor="middle" font-size="26" font-weight="400" fill="#E7C55A">comando</text>
-  <text x="800" y="478" text-anchor="middle" font-size="17" font-weight="300" fill="#E6E6E6">session</text>
+  <circle cx="550" cy="350" r="88" fill="none" stroke="#E7C55A" stroke-opacity=".25"/>
+  <circle cx="550" cy="350" r="74" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+  <text x="550" y="338" text-anchor="middle" class="cap" fill="#E7C55A">THE BRAIN</text>
+  <text x="550" y="362" text-anchor="middle" class="s" fill="#E8E8E8">a folder of</text>
+  <text x="550" y="382" text-anchor="middle" class="s" fill="#E8E8E8">plain files</text>
 
-  <!-- top: brain -->
+  <!-- left: the three stores -->
+  <g text-anchor="end">
+    <text x="372" y="118" class="cap" fill="#E7C55A">MEMORY</text>
+    <text x="372" y="146" class="h">working context</text>
+    <text x="372" y="170" class="s">an index, plus one fact per file</text>
+    <text x="372" y="190" class="s">four types of fact</text>
+
+    <text x="372" y="318" class="cap" fill="#E7C55A">KNOWLEDGE BASE</text>
+    <text x="372" y="346" class="h">checked knowledge</text>
+    <text x="372" y="370" class="s">documents kept true against sources</text>
+    <text x="372" y="390" class="s">every statement passes a gate</text>
+
+    <text x="372" y="518" class="cap" fill="#E7C55A">SCRATCHPAD</text>
+    <text x="372" y="546" class="h">today's work</text>
+    <text x="372" y="570" class="s">one day folder, a task index</text>
+    <text x="372" y="590" class="s">provisional until checked</text>
+  </g>
+
+  <!-- right: what happens to it -->
+  <g>
+    <text x="728" y="118" class="cap" fill="#D98E5F">RECALL</text>
+    <text x="728" y="146" class="h">how it comes back</text>
+    <text x="728" y="170" class="s">the index loads at every start</text>
+    <text x="728" y="190" class="s">a cue matches, its file opens</text>
+
+    <text x="728" y="318" class="cap" fill="#6CC69A">REFLECT</text>
+    <text x="728" y="346" class="h">how it is written</text>
+    <text x="728" y="370" class="s">a session becomes memory and</text>
+    <text x="728" y="390" class="s">checked knowledge, in six steps</text>
+
+    <text x="728" y="518" class="cap" fill="#6CC69A">BUDGETS</text>
+    <text x="728" y="546" class="h">how it stays small</text>
+    <text x="728" y="570" class="s">caps on the index and each file</text>
+    <text x="728" y="590" class="s">merge or shorten, never drop</text>
+  </g>
+
+  <!-- below: the host -->
   <g text-anchor="middle">
-    <text x="800" y="70" class="cap" fill="#E7C55A">BRAIN</text>
-    <text x="800" y="104" class="ttl">what it remembers and knows</text>
-    <text x="800" y="134" class="txt">MEMORY · working context, its index loaded at start</text>
-    <text x="800" y="158" class="txt">SCRATCHPAD · today's work, provisional</text>
-    <text x="800" y="182" class="txt">KB · checked fact, changed by /reflect only</text>
+    <text x="550" y="578" class="cap" fill="#6FAEE8">COMANDO</text>
+    <text x="550" y="606" class="h">the host</text>
+    <text x="550" y="630" class="s">finds it, hands it to sessions,</text>
+    <text x="550" y="650" class="s">shows it, checkpoints, backs it up</text>
   </g>
 
-  <!-- upper left: process -->
-  <g text-anchor="end">
-    <text x="456" y="262" class="cap" fill="#6FAEE8">PROCESS</text>
-    <text x="456" y="296" class="ttl">how it runs</text>
-    <text x="456" y="326" class="mono">claude -p, a child of comando</text>
-    <text x="456" y="350" class="txt">prompts in, events out, line by line</text>
-    <text x="456" y="374" class="txt">comando starts, stops and ends it</text>
-    <text x="456" y="398" class="txt">MCP server: views, approvals, peers</text>
-  </g>
-
-  <!-- upper right: kit -->
-  <g text-anchor="start">
-    <text x="1144" y="262" class="cap" fill="#6CC69A">KIT</text>
-    <text x="1144" y="296" class="ttl">how it behaves</text>
-    <text x="1144" y="326" class="mono">CLAUDE.md · settings.json</text>
-    <text x="1144" y="350" class="txt">hooks at every event</text>
-    <text x="1144" y="374" class="txt">skills, agents, tools</text>
-    <text x="1144" y="398" class="txt">scheduled jobs, headless</text>
-  </g>
-
-  <!-- lower left: persistence -->
-  <g text-anchor="end">
-    <text x="525" y="616" class="cap" fill="#D98E5F">PERSISTENCE</text>
-    <text x="525" y="650" class="ttl">what outlives it</text>
-    <text x="525" y="680" class="txt">the transcript: the conversation itself</text>
-    <text x="525" y="704" class="mono">sessions.json · metrics · audit</text>
-    <text x="525" y="728" class="txt">run tokens, deleted at exit</text>
-  </g>
-
-  <!-- lower right: instances -->
-  <g text-anchor="start">
-    <text x="1075" y="616" class="cap" fill="#AEB6C1">INSTANCES</text>
-    <text x="1075" y="650" class="ttl">who it talks to</text>
-    <text x="1075" y="680" class="txt">each with its own kit, brain, data root</text>
-    <text x="1075" y="704" class="txt">ask and reply through the comando Edge</text>
-    <text x="1075" y="728" class="txt">only chosen text travels; never the brain</text>
-  </g>
-
-  <!-- legend -->
-  <line x1="60" y1="812" x2="1540" y2="812" stroke="#2A2A2A"/>
-  <g class="foot">
-    <circle cx="66" cy="846" r="5" fill="#6FAEE8"/><text x="80" y="850">comando</text>
-    <circle cx="186" cy="846" r="5" fill="#D98E5F"/><text x="200" y="850">Claude Code</text>
-    <circle cx="326" cy="846" r="5" fill="#6CC69A"/><text x="340" y="850">kit</text>
-    <circle cx="406" cy="846" r="5" fill="#E7C55A"/><text x="420" y="850">brain</text>
-    <circle cx="496" cy="846" r="5" fill="#AEB6C1"/><text x="510" y="850">instances</text>
-    <text x="1540" y="850" text-anchor="end">comando · docs/kit-and-brain</text>
-  </g>
+  <!-- legend and footer -->
+  <line x1="40" y1="676" x2="1060" y2="676" stroke="#2A2A2A"/>
+  <circle cx="46" cy="696" r="5" fill="#E7C55A"/><text x="60" y="701" class="foot">brain</text>
+  <circle cx="126" cy="696" r="5" fill="#D98E5F"/><text x="140" y="701" class="foot">Claude Code session</text>
+  <circle cx="300" cy="696" r="5" fill="#6CC69A"/><text x="314" y="701" class="foot">kit: its rules and skills</text>
+  <circle cx="490" cy="696" r="5" fill="#6FAEE8"/><text x="504" y="701" class="foot">comando</text>
+  <text x="1060" y="701" text-anchor="end" class="foot">comando · docs/brain</text>
 </svg>

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="520" viewBox="0 0 1000 520" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The life of a row in cdb: a small INSERT is appended to the table's log and forced to disk, then answered; the applier moves it into the column files of its day's folder; a TTL drops folders that grow too old; BACKUP TO copies every table into a new folder</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#E7C55A"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#9AA0A6"/></marker>
+  </defs>
+  <rect width="1000" height="520" fill="url(#bg)"/>
+  <text x="32" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">THE LIFE OF A ROW</text>
+  <text x="32" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Logged first, filed by day, dropped when old</text>
+
+  <!-- stages -->
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="32" y="120" width="200" height="130" rx="8" stroke="#6FAEE8"/>
+    <rect x="284" y="120" width="200" height="130" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="536" y="120" width="200" height="130" rx="8" stroke="#E7C55A"/>
+    <rect x="788" y="120" width="180" height="130" rx="8" stroke="#9AA0A6"/>
+  </g>
+  <g font-size="13" letter-spacing="2.5">
+    <text x="50" y="148" fill="#6FAEE8">1 · YOU INSERT</text>
+    <text x="302" y="148" fill="#E7C55A">2 · THE LOG</text>
+    <text x="554" y="148" fill="#E7C55A">3 · COLUMN FILES</text>
+    <text x="806" y="148" fill="#9AA0A6">4 · EXPIRY</text>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="50" y="178">a few rows arrive</text>
+    <text x="302" y="178">appended to the log,</text>
+    <text x="302" y="198">forced to the disk</text>
+    <text x="554" y="178">the applier files rows</text>
+    <text x="554" y="198">into their day's folder</text>
+    <text x="806" y="178">a folder older than</text>
+    <text x="806" y="198">the TTL is dropped</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="50" y="228">over SQL or /write</text>
+    <text x="302" y="228">then cdb answers you</text>
+    <text x="554" y="228">sorted, deduplicated</text>
+    <text x="806" y="228">whole, at once</text>
+  </g>
+  <g stroke="#E7C55A" stroke-width="1.5">
+    <line x1="232" y1="185" x2="280" y2="185" marker-end="url(#a)"/>
+    <line x1="484" y1="185" x2="532" y2="185" marker-end="url(#a)"/>
+  </g>
+  <line x1="736" y1="185" x2="784" y2="185" stroke="#9AA0A6" stroke-width="1.5" marker-end="url(#g)"/>
+
+  <!-- notes -->
+  <text x="284" y="278" font-size="13" fill="#9AA0A6">A crash after step 2 loses nothing:</text>
+  <text x="284" y="298" font-size="13" fill="#9AA0A6">the next start replays the log.</text>
+  <text x="562" y="278" font-size="13" fill="#9AA0A6">100,000 rows or more skip the log</text>
+  <text x="562" y="298" font-size="13" fill="#9AA0A6">and go straight to the files.</text>
+
+  <!-- backup -->
+  <rect x="32" y="340" width="936" height="96" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.3"/>
+  <text x="50" y="368" font-size="13" letter-spacing="2.5" fill="#AEB6C1">BACKUP TO 'folder'</text>
+  <text x="50" y="396" font-size="13" fill="#E8E8E8">copies every table, each at one committed moment, into a new folder; writes go on meanwhile.</text>
+  <text x="50" y="418" font-size="13" fill="#9AA0A6">The folder holds a whole backup or nothing. A restore reads it back into an empty data root.</text>
+  <line x1="546" y1="250" x2="546" y2="336" stroke="#AEB6C1" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- legend -->
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="32" y="462" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="54" y="474">your statement</text>
+    <rect x="172" y="462" width="14" height="14" rx="3" fill="#E7C55A"/><text x="194" y="474">where the data lives</text>
+    <rect x="348" y="462" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="370" y="474">a copy for safety</text>
+    <text x="32" y="504">comando · docs/tutorial</text>
+  </g>
+</svg>

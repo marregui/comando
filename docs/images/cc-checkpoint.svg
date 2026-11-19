@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="460" viewBox="0 0 1000 460" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The automatic checkpoint as a timeline: the context grows turn by turn; when a turn ends at or above the threshold, 40 percent of the context window by default, comando sends the checkpoint command with --auto, then /compact once that turn has finished, then one prompt to continue; the session is locked during the first two steps and the context falls after the compaction</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="460" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">THE CHECKPOINT</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Save what matters, shrink the context, carry on</text>
+
+  <path d="M60 110 V262 H960" fill="none" stroke="#9AA0A6" stroke-width="1"/>
+  <path d="M60 176 H960" stroke="#E7C55A" stroke-width="1.2" stroke-dasharray="6 5"/>
+  <text x="68" y="168" font-size="13" fill="#E7C55A">threshold · 40 % of the context window</text>
+  <text x="68" y="128" font-size="13" fill="#9AA0A6">context size</text>
+  <text x="960" y="282" font-size="13" text-anchor="end" fill="#9AA0A6">time</text>
+
+  <path d="M60 250 L170 238 L280 220 L390 198 L480 170 L600 164 L740 160 L780 236 L870 226 L940 214" fill="none" stroke="#D98E5F" stroke-width="2"/>
+  <g fill="#D98E5F">
+    <circle cx="170" cy="238" r="4"/>
+    <circle cx="280" cy="220" r="4"/>
+    <circle cx="390" cy="198" r="4"/>
+    <circle cx="870" cy="226" r="4"/>
+  </g>
+  <circle cx="480" cy="170" r="6" fill="#E7C55A"/>
+  <text x="225" y="254" font-size="13" text-anchor="middle" fill="#9AA0A6">each dot is a turn's end</text>
+  <text x="472" y="150" font-size="13" text-anchor="end" fill="#E8E8E8">a turn ends above it</text>
+
+  <g stroke="#9AA0A6" stroke-width="0.8" stroke-opacity="0.5" stroke-dasharray="3 4">
+    <path d="M480 176 V318"/>
+    <path d="M740 160 V318"/>
+  </g>
+
+  <path d="M480 306 V298 H740 V306" fill="none" stroke="#9AA0A6" stroke-width="1.2"/>
+  <text x="610" y="292" font-size="13" text-anchor="middle" fill="#9AA0A6">the session is locked</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="440" y="320" width="170" height="84" rx="8" stroke="#6FAEE8"/>
+    <rect x="628" y="320" width="150" height="84" rx="8" stroke="#6FAEE8"/>
+    <rect x="796" y="320" width="164" height="84" rx="8" stroke="#6FAEE8"/>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#6FAEE8">
+    <text x="454" y="346">1 /reflect --auto</text>
+    <text x="642" y="346">2 /compact</text>
+  </g>
+  <text x="810" y="346" font-size="13" fill="#6FAEE8">3 the continue prompt</text>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="454" y="370">the session writes its</text>
+    <text x="454" y="388">memory; asks nothing</text>
+    <text x="642" y="370">Claude Code keeps</text>
+    <text x="642" y="388">a summary instead</text>
+    <text x="810" y="370">the paused work</text>
+    <text x="810" y="388">goes on, unlocked</text>
+  </g>
+  <g stroke="#9AA0A6" stroke-width="1.3" fill="none" marker-end="url(#a)">
+    <path d="M610 362 H626"/>
+    <path d="M778 362 H794"/>
+  </g>
+
+  <g font-size="13" fill="#E8E8E8">
+    <text x="40" y="336">comando sends three prompts</text>
+    <text x="40" y="356">by itself, one after the other.</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="40" y="382">Each waits until the turn before it</text>
+    <text x="40" y="400">has finished.</text>
+    <text x="960" y="440" text-anchor="end">comando · docs/claude-code.md</text>
+    <path d="M40 435 H68" stroke="#D98E5F" stroke-width="2"/>
+    <text x="76" y="440">the context of one session</text>
+    <rect x="260" y="428" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.5"/>
+    <text x="282" y="440">sent by comando</text>
+  </g>
+</svg>

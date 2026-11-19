@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Time partitions and columns: the trades table is 70 folders, one per day, in time order; a query for 14 February opens one folder and skips 69; inside the folder each column is its own file, and count() reads only the ts file</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#E7C55A"/></marker>
+  </defs>
+  <rect width="1000" height="600" fill="url(#bg)"/>
+  <text x="32" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">TIME PARTITIONS · COLUMN FILES</text>
+  <text x="32" y="78" font-size="24" font-weight="300" fill="#E8E8E8">A table is folders by day, and files by column</text>
+
+  <!-- the timeline -->
+  <text x="32" y="114" font-size="13" letter-spacing="2.5" fill="#9AA0A6">TRADES · 70 DAY PARTITIONS, IN TIME ORDER</text>
+  <g fill="#1E1E1E" stroke="#9AA0A6" stroke-width="0.9">
+    <rect x="32" y="128" width="104" height="62" rx="6"/>
+    <rect x="148" y="128" width="104" height="62" rx="6"/>
+    <rect x="322" y="128" width="104" height="62" rx="6"/>
+    <rect x="554" y="128" width="104" height="62" rx="6"/>
+    <rect x="748" y="128" width="104" height="62" rx="6"/>
+    <rect x="864" y="128" width="104" height="62" rx="6"/>
+  </g>
+  <rect x="438" y="128" width="104" height="62" rx="6" fill="#1E1E1E" stroke="#E7C55A" stroke-width="2"/>
+  <g font-size="13" font-family="Menlo, Consolas, monospace" text-anchor="middle" fill="#9AA0A6">
+    <text x="84" y="154">2026-01-01</text>
+    <text x="200" y="154">2026-01-02</text>
+    <text x="374" y="154">2026-02-13</text>
+    <text x="490" y="154" fill="#E7C55A">2026-02-14</text>
+    <text x="606" y="154">2026-02-15</text>
+    <text x="800" y="154">2026-03-10</text>
+    <text x="916" y="154">2026-03-11</text>
+  </g>
+  <g font-size="13" text-anchor="middle" fill="#9AA0A6">
+    <text x="84" y="176">1,440 rows</text>
+    <text x="200" y="176">1,440 rows</text>
+    <text x="374" y="176">1,440 rows</text>
+    <text x="490" y="176" fill="#E8E8E8">1,440 rows</text>
+    <text x="606" y="176">1,440 rows</text>
+    <text x="800" y="176">1,440 rows</text>
+    <text x="916" y="176">640 rows</text>
+    <text x="287" y="164" font-size="18">· · ·</text>
+    <text x="703" y="164" font-size="18">· · ·</text>
+  </g>
+  <line x1="32" y1="204" x2="968" y2="204" stroke="#9AA0A6" stroke-width="0.6"/>
+  <text x="32" y="224" font-size="13" fill="#9AA0A6">older</text>
+  <text x="968" y="224" font-size="13" fill="#9AA0A6" text-anchor="end">newer</text>
+
+  <!-- the query -->
+  <rect x="210" y="252" width="560" height="38" rx="6" fill="#161616" stroke="#E7C55A" stroke-width="0.8"/>
+  <text x="490" y="276" font-size="13" font-family="Menlo, Consolas, monospace" text-anchor="middle" fill="#E8E8E8">select count() from trades where ts in '2026-02-14';</text>
+  <line x1="490" y1="252" x2="490" y2="194" stroke="#E7C55A" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="506" y="232" font-size="13" fill="#E7C55A">opens 1 folder</text>
+  <text x="474" y="232" font-size="13" fill="#9AA0A6" text-anchor="end">skips 69 folders</text>
+
+  <!-- inside the folder -->
+  <rect x="150" y="318" width="700" height="200" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.3"/>
+  <text x="170" y="346" font-size="13" letter-spacing="2.5" fill="#E7C55A">INSIDE THE FOLDER · ONE FILE PER COLUMN</text>
+
+  <g fill="#161616" stroke="#9AA0A6" stroke-width="0.8">
+    <rect x="170" y="362" width="200" height="140" rx="6"/>
+    <rect x="400" y="362" width="200" height="140" rx="6"/>
+  </g>
+  <rect x="630" y="362" width="200" height="140" rx="6" fill="#161616" stroke="#E7C55A" stroke-width="1.6"/>
+  <g font-size="13" font-family="Menlo, Consolas, monospace">
+    <text x="186" y="386" fill="#E8E8E8">sym</text>
+    <text x="416" y="386" fill="#E8E8E8">price</text>
+    <text x="646" y="386" fill="#E7C55A">ts</text>
+    <g fill="#9AA0A6">
+      <text x="186" y="412">2</text><text x="186" y="432">0</text><text x="186" y="452">1</text><text x="186" y="472">2</text>
+      <text x="416" y="412">124.61</text><text x="416" y="432">101.07</text><text x="416" y="452">139.92</text><text x="416" y="472">117.30</text>
+      <text x="646" y="412">00:00</text><text x="646" y="432">00:01</text><text x="646" y="452">00:02</text><text x="646" y="472">00:03</text>
+    </g>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="230" y="412">a small key per row;</text>
+    <text x="230" y="432">the names are kept</text>
+    <text x="230" y="452">once, in a dictionary</text>
+    <text x="490" y="412">8 bytes a row</text>
+    <text x="712" y="412">8 bytes a row,</text>
+    <text x="712" y="432">sorted</text>
+    <text x="186" y="492">· · ·</text><text x="416" y="492">· · ·</text><text x="646" y="492">· · ·</text>
+  </g>
+  <text x="712" y="472" font-size="13" fill="#E7C55A">count() reads</text>
+  <text x="712" y="492" font-size="13" fill="#E7C55A">only this file</text>
+
+  <!-- legend -->
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="32" y="542" width="14" height="14" rx="3" fill="#E7C55A"/><text x="54" y="554">what the query reads</text>
+    <rect x="216" y="542" width="14" height="14" rx="3" fill="none" stroke="#9AA0A6"/><text x="238" y="554">what it never opens</text>
+    <text x="32" y="584">comando · docs/tutorial</text>
+  </g>
+</svg>

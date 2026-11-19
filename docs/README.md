@@ -1,21 +1,97 @@
 # comando's documentation
 
-These documents are comando's manual and its specification. If you want to use comando, start with the tutorial; if you
-want to change it, start with the architecture. Each concept is described in one document, its canonical place, and
-the others link to it.
+![The comando universe: you and the window in the centre; around it the workbench, Claude Code, the kit, the database cdb, the brain, messaging with frontear, the code and the instances, each with the pages that explain it](images/arch-universe.svg)
 
-| To | Read |
+## In one paragraph
+
+This is the map of comando's documentation. comando is a desktop workbench: one editor that sends SQL to your databases
+and prompts to Claude Code. Around it sit a database, a message broker, and a kit and a brain that give an agent tools
+and memory. Every page here starts with a picture and one paragraph, so you can stop early and still know the idea.
+Boxes marked **Learn** explain the computer science behind a design, in plain words. Pick a path below, or jump
+to any page from the table.
+
+## Three reading paths
+
+![Three reading paths: a newcomer goes from INSTALL to the tutorial, the workbench and Claude Code; a learner goes from kit and brain to the kit, the brain, cdb's SQL, cdb and frontear; a developer goes from the architecture to the module pages, development and the decision records](images/arch-paths.svg)
+
+| You are | You want | Read, in this order |
+|---|---|---|
+| **A newcomer** | to use comando today | [INSTALL](../INSTALL.md) → [Tutorial](tutorial.md) → [Workbench](workbench.md) → [Claude Code in comando](claude-code.md) |
+| **A learner** | to understand how agents, databases and brokers work | [Kit and brain](kit-and-brain.md) → [The kit](kit.md) → [The brain](brain.md) → [cdb's SQL](cdb-sql.md) → [cdb](cdb.md) → [frontear](frontear.md) |
+| **A developer** | to read or change the code | [Architecture](architecture.md) → [the module pages](#the-code) → [Development](development.md) → [the decision records](adr/README.md) |
+
+## Every page
+
+### Use comando
+
+| Page | What it explains |
 |---|---|
-| install it | [Install](../INSTALL.md): the recipe Claude Code follows to install, upgrade and uninstall comando, and to offer a kit |
-| use it for the first time | [Tutorial](tutorial.md): comando in ten minutes, step by step; also Help ▸ Tutorial in the app |
-| know what every gesture does | [Workbench](workbench.md): the window, panels, themes, the sidebar, running text, the database, instances and the comando Edge, the terminal and Gradle, the Kit, Brain and Scratchpad tabs and git changes, what is kept on disk |
-| know what a session can do and what it must ask | [Claude Code](claude-code.md): the `claude -p` bridge, the checkpoint, the MCP tools, approvals and safety |
-| understand the other two parts of the flow | [Kit and brain](kit-and-brain.md): the kit's parts and what each does in a session, what comando does with a kit, the brain's stores, its flows, `/reflect` and the learning loop, and how an agent creates a default kit and brain or checks one the user brings |
-| know how cdb runs a query and a write, and what each costs | [cdb](cdb.md): the query path, storage and the commit protocol, concurrency, measurements |
-| write SQL for cdb: every statement, the grammar, the functions, the secrets and the limits | [cdb SQL](cdb-sql.md) |
-| change the code | [Architecture](architecture.md): modules, state and intents, ports, threads, ownership, then each module's classes, interface, threads and tests |
-| build, test and release it | [Development](development.md): prerequisites, Gradle tasks, CI, configuration, the code rules, quality gates, how these documents and their pictures are kept |
-| know why something is the way it is | [Decisions](adr/README.md): one record per decision, dated, with who decided |
+| [INSTALL](../INSTALL.md) | how Claude Code installs comando for you |
+| [Tutorial](tutorial.md) | a guided first session: a query, a prompt, an answer |
+| [Workbench](workbench.md) | the window: panels, running text, databases, instances, tools |
+| [Claude Code in comando](claude-code.md) | sessions, the tools Claude has in comando, approvals |
 
-Every picture is in [images/](images/), drawn by hand as SVG in comando's graphite and gold;
-[Development](development.md) lists them and the rules they follow.
+### Give an agent tools and a memory
+
+| Page | What it explains |
+|---|---|
+| [Kit and brain](kit-and-brain.md) | the two ideas together, and how comando shows them |
+| [The kit](kit.md) | the tools, rules and checks an agent works with |
+| [The brain](brain.md) | what an agent remembers between sessions, and how it stays true |
+
+### The engines comando wrote for itself
+
+| Page | What it explains |
+|---|---|
+| [cdb](cdb.md) | a database for time series: how it stores, writes and queries |
+| [cdb's SQL](cdb-sql.md) | the SQL cdb speaks |
+| [frontear](frontear.md) | an MQTT broker and client: how messages travel between programs |
+
+### The code
+
+| Page | What it explains |
+|---|---|
+| [Architecture](architecture.md) | how the pieces fit: modules, one command's path, threads, sessions, instances, files |
+| [core](modules/core.md) | the state, the reducer, the ports, the thread kit |
+| [testkit](modules/testkit.md) | the fakes the tests share |
+| [db](modules/db.md) | connections, lanes, results |
+| [cdb](modules/cdb.md) | the database's code |
+| [frontear](modules/frontear.md) | the broker's code |
+| [claude](modules/claude.md) | the `claude -p` process and its stream |
+| [mcp](modules/mcp.md) | the MCP server and its tools |
+| [tools](modules/tools.md) | Gradle, folders, git |
+| [ui](modules/ui.md) | the Swing window and its widgets |
+| [app](modules/app.md) | the wiring, the store, start and exit |
+| [Development](development.md) | build, test, release, and the rules for code |
+| [The decision records](adr/README.md) | why each choice is the way it is, one record per decision |
+
+## How to read a page
+
+Every page has the same shape, so you always know where you are.
+
+1. **A picture.** The whole idea, before any words.
+2. **In one paragraph.** What it is, who it is for, why it exists.
+3. **Numbered sections.** The idea, how it works, what it offers. A picture where structure matters.
+4. **Learn boxes.** The general idea behind the design: an event loop, a reducer, publish and subscribe.
+5. **Where next.** Two to five pages that follow from this one.
+
+Colours mean the same in every picture.
+
+| Colour | Means |
+|---|---|
+| Gold | the centre of the picture: you, or the part the page is about |
+| Blue | comando |
+| Copper | Claude Code |
+| Green | the kit and the brain |
+| Grey | other instances, and what travels between them |
+
+> **Learn: abstraction.** Nobody can hold a whole system in their head at once. So engineers draw it at several
+> levels, like maps: a country map shows cities, a city map shows streets. Each level hides the detail of the one
+> below and keeps only what you need to decide where to go. These pages work the same way. The hub shows the universe,
+> the architecture page shows the modules, a module page shows the classes. When you feel lost, go up one level.
+
+## Where next
+
+- [Tutorial](tutorial.md): start using comando.
+- [Kit and brain](kit-and-brain.md): start learning how an agent works.
+- [Architecture](architecture.md): start reading the code.

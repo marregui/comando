@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="610" viewBox="0 0 1100 610" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>How StreamMapper turns Claude Code's stream of JSON events into transcript blocks and intents</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
+<rect width="1100" height="610" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · CLAUDE · THE STREAM</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">One JSON event per line becomes a block or an intent</text>
+
+<text x="40" y="116" font-size="13" fill="#D98E5F" letter-spacing="2">CLAUDE CODE WRITES</text>
+<text x="440" y="116" font-size="13" fill="#E7C55A" letter-spacing="2">STREAMMAPPER</text>
+<text x="640" y="116" font-size="13" fill="#6FAEE8" letter-spacing="2">COMANDO GETS</text>
+
+<rect x="440" y="128" width="140" height="412" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="510" y="326" font-size="13" fill="#9AA0A6" text-anchor="middle">one event</text>
+<text x="510" y="346" font-size="13" fill="#9AA0A6" text-anchor="middle">at a time</text>
+
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<rect x="40" y="128" width="340" height="52" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="56" y="159">system · init</text>
+<rect x="40" y="200" width="340" height="52" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="56" y="231">stream_event · message_start</text>
+<rect x="40" y="272" width="340" height="52" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="56" y="303">stream_event · content_block_delta</text>
+<rect x="40" y="344" width="340" height="52" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="56" y="375">assistant</text>
+<rect x="40" y="416" width="340" height="52" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="56" y="447">user · tool_result</text>
+<rect x="40" y="488" width="340" height="52" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="56" y="519">result</text>
+</g>
+
+<g font-size="13">
+<rect x="640" y="128" width="420" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="656" y="150" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">SessionInit</text>
+<text x="656" y="170" fill="#E8E8E8">the session's facts reach the state</text>
+<rect x="640" y="200" width="420" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="656" y="222" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">SessionTurnRunning</text>
+<text x="656" y="242" fill="#E8E8E8">the session shows as working</text>
+<rect x="640" y="272" width="420" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="656" y="294" fill="#6FAEE8">a streaming block grows in place</text>
+<text x="656" y="314" fill="#E8E8E8">you read the answer as it is written</text>
+<rect x="640" y="344" width="420" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="656" y="366" fill="#6FAEE8">the whole message replaces the streamed blocks</text>
+<text x="656" y="386" fill="#E8E8E8">text, thinking and tool calls, final</text>
+<rect x="640" y="416" width="420" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="656" y="438" fill="#6FAEE8">the result joins its tool call, by id</text>
+<text x="656" y="458" fill="#E8E8E8">one block shows the call and what came back</text>
+<rect x="640" y="488" width="420" height="52" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="656" y="510" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">SessionTurnEnded</text>
+<text x="656" y="530" fill="#E8E8E8">the turn is over, with its cost</text>
+</g>
+
+<g stroke="#9AA0A6" stroke-width="1.2">
+<line x1="380" y1="154" x2="436" y2="154" marker-end="url(#a)"/><line x1="580" y1="154" x2="636" y2="154" marker-end="url(#a)"/>
+<line x1="380" y1="226" x2="436" y2="226" marker-end="url(#a)"/><line x1="580" y1="226" x2="636" y2="226" marker-end="url(#a)"/>
+<line x1="380" y1="298" x2="436" y2="298" marker-end="url(#a)"/><line x1="580" y1="298" x2="636" y2="298" marker-end="url(#a)"/>
+<line x1="380" y1="370" x2="436" y2="370" marker-end="url(#a)"/><line x1="580" y1="370" x2="636" y2="370" marker-end="url(#a)"/>
+<line x1="380" y1="442" x2="436" y2="442" marker-end="url(#a)"/><line x1="580" y1="442" x2="636" y2="442" marker-end="url(#a)"/>
+<line x1="380" y1="514" x2="436" y2="514" marker-end="url(#a)"/><line x1="580" y1="514" x2="636" y2="514" marker-end="url(#a)"/>
+</g>
+
+<rect x="560" y="574" width="14" height="14" rx="3" fill="#D98E5F"/><text x="580" y="586" font-size="13" fill="#9AA0A6">Claude Code's events</text>
+<rect x="740" y="574" width="14" height="14" rx="3" fill="#E7C55A"/><text x="760" y="586" font-size="13" fill="#9AA0A6">the mapper</text>
+<rect x="860" y="574" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="880" y="586" font-size="13" fill="#9AA0A6">blocks and intents</text>
+<text x="40" y="586" font-size="13" fill="#9AA0A6">comando · docs/modules/claude</text>
+</svg>

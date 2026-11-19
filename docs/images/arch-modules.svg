@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="580" viewBox="0 0 1000 580" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>comando's ten modules and their dependencies: app on top depends on ui, claude, mcp, tools, frontear and db; each of those depends on core; db also depends on cdb; core and cdb depend on the JDK alone; testkit holds the fakes the tests share</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="580" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">ARCHITECTURE · MODULES</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Ten modules: an arrow points at what a module depends on</text>
+
+  <!-- app -->
+  <rect x="40" y="110" width="920" height="70" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="60" y="140" font-family="Menlo, Consolas, monospace" font-size="16" fill="#6FAEE8">app</text>
+  <text x="60" y="162" font-size="13" fill="#9AA0A6">wiring, the store files, the keychain, the machine's cdb, the comando Edge, main: the one module that sees the others</text>
+
+  <!-- adapters -->
+  <g fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3">
+    <rect x="40" y="240" width="140" height="100" rx="8"/><rect x="196" y="240" width="140" height="100" rx="8"/><rect x="352" y="240" width="140" height="100" rx="8"/>
+    <rect x="508" y="240" width="140" height="100" rx="8"/><rect x="664" y="240" width="140" height="100" rx="8"/><rect x="820" y="240" width="140" height="100" rx="8"/>
+    <rect x="820" y="400" width="140" height="80" rx="8"/>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="16" fill="#6FAEE8">
+    <text x="54" y="268">ui</text><text x="210" y="268">claude</text><text x="366" y="268">mcp</text>
+    <text x="522" y="268">tools</text><text x="678" y="268">frontear</text><text x="834" y="268">db</text><text x="834" y="428">cdb</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="54" y="290">the Swing window,</text><text x="54" y="308">panels, widgets,</text><text x="54" y="326">themes</text>
+    <text x="210" y="290">one claude -p</text><text x="210" y="308">per session, its</text><text x="210" y="326">stream to blocks</text>
+    <text x="366" y="290">the tools Claude</text><text x="366" y="308">calls, approvals,</text><text x="366" y="326">other instances</text>
+    <text x="522" y="290">Gradle runs,</text><text x="522" y="308">folder reads,</text><text x="522" y="326">git</text>
+    <text x="678" y="290">MQTT 5 client,</text><text x="678" y="308">broker, links</text><text x="678" y="326">between brokers</text>
+    <text x="834" y="290">a lane per</text><text x="834" y="308">connection,</text><text x="834" y="326">results, schema</text>
+    <text x="834" y="448">comando's own</text><text x="834" y="466">database</text>
+  </g>
+
+  <!-- core -->
+  <rect x="40" y="400" width="764" height="80" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="2"/>
+  <text x="60" y="430" font-family="Menlo, Consolas, monospace" font-size="16" fill="#E7C55A">core</text>
+  <text x="60" y="452" font-size="13" fill="#9AA0A6">the state, the intents, the reducer, the effects, the ports, the stores, the thread kit, JSON</text>
+  <text x="60" y="470" font-size="13" fill="#9AA0A6">depends on the JDK alone, as cdb does</text>
+
+  <!-- testkit -->
+  <rect x="40" y="510" width="330" height="44" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3" stroke-dasharray="6 5"/>
+  <text x="54" y="537" font-family="Menlo, Consolas, monospace" font-size="16" fill="#6FAEE8">testkit</text>
+  <text x="130" y="537" font-size="13" fill="#9AA0A6">fakes for every port; tests only</text>
+
+  <!-- arrows -->
+  <g stroke="#9AA0A6" stroke-width="1.1" marker-end="url(#ar)">
+    <line x1="110" y1="180" x2="110" y2="239"/><line x1="266" y1="180" x2="266" y2="239"/><line x1="422" y1="180" x2="422" y2="239"/>
+    <line x1="578" y1="180" x2="578" y2="239"/><line x1="734" y1="180" x2="734" y2="239"/><line x1="890" y1="180" x2="890" y2="239"/>
+    <line x1="110" y1="340" x2="110" y2="399"/><line x1="266" y1="340" x2="266" y2="399"/><line x1="422" y1="340" x2="422" y2="399"/>
+    <line x1="578" y1="340" x2="578" y2="399"/><line x1="734" y1="340" x2="734" y2="399"/><line x1="890" y1="340" x2="890" y2="399"/>
+    <line x1="836" y1="340" x2="796" y2="399"/>
+    <line x1="205" y1="510" x2="205" y2="481"/>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="420" y="524" width="14" height="14" rx="3" fill="#E7C55A"/><text x="442" y="536">the centre</text>
+    <rect x="530" y="524" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="552" y="536">comando's other modules</text>
+    <text x="960" y="560" text-anchor="end">comando · docs/architecture</text>
+  </g>
+</svg>

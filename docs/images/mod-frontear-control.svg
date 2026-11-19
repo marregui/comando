@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="600" viewBox="0 0 1100 600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>A signed frontear control request and the checks the node makes before it acts</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
+<rect width="1100" height="600" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · FRONTEAR · THE CONTROL PLANE</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">A request is an MQTT message with a signature on it</text>
+
+<text x="40" y="116" font-size="13" fill="#9AA0A6" letter-spacing="2">THE REQUEST</text>
+<rect x="40" y="128" width="480" height="408" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="60" y="158" font-size="13" fill="#9AA0A6">topic</text>
+<text x="60" y="180" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">$frontear/control/&lt;node&gt;/PutLink</text>
+<text x="60" y="214" font-size="13" fill="#9AA0A6">payload, JSON</text>
+<text x="60" y="236" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">{"id":"b","host":"127.0.0.1","port":1884,</text>
+<text x="60" y="256" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace"> "out":["plant/#"],"in":[],"hopLimit":4}</text>
+<text x="60" y="290" font-size="13" fill="#9AA0A6">response topic and correlation data</text>
+<text x="60" y="312" font-size="13" fill="#E8E8E8">where the reply goes, and which request it answers</text>
+<line x1="60" y1="334" x2="500" y2="334" stroke="#3A3A3A" stroke-width="1"/>
+<text x="60" y="360" font-size="13" fill="#9AA0A6">four user properties: the seal</text>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E7C55A">
+<text x="60" y="388">frontear-key</text>
+<text x="60" y="412">frontear-ts</text>
+<text x="60" y="436">frontear-nonce</text>
+<text x="60" y="460">frontear-sig</text>
+</g>
+<g font-size="13" fill="#E8E8E8">
+<text x="200" y="388">which key signed</text>
+<text x="200" y="412">when, in epoch milliseconds</text>
+<text x="200" y="436">16 random bytes, used once</text>
+<text x="200" y="460">Ed25519 over topic, time, nonce,</text>
+<text x="200" y="478">content type, response topic,</text>
+<text x="200" y="496">correlation data, payload</text>
+</g>
+<text x="60" y="522" font-size="13" fill="#9AA0A6">Change one byte anywhere and the signature fails.</text>
+
+<text x="580" y="116" font-size="13" fill="#9AA0A6" letter-spacing="2">THE CHECKS, IN ORDER</text>
+<g font-size="14">
+<rect x="580" y="128" width="300" height="48" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="596" y="158" fill="#E8E8E8">1 · Does it carry a whole seal?</text>
+<rect x="580" y="192" width="300" height="48" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="596" y="222" fill="#E8E8E8">2 · Is the key one the node trusts?</text>
+<rect x="580" y="256" width="300" height="48" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="596" y="286" fill="#E8E8E8">3 · Is the time within 30 seconds?</text>
+<rect x="580" y="320" width="300" height="48" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="596" y="350" fill="#E8E8E8">4 · Does the signature verify?</text>
+<rect x="580" y="384" width="300" height="48" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="596" y="414" fill="#E8E8E8">5 · Is the nonce new?</text>
+<rect x="580" y="462" width="300" height="74" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="596" y="492" fill="#E7C55A">Run the method</text>
+<text x="596" y="518" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">reply {"ok":true}</text>
+</g>
+<g stroke="#9AA0A6" stroke-width="1.2">
+<line x1="730" y1="176" x2="730" y2="188" marker-end="url(#a)"/>
+<line x1="730" y1="240" x2="730" y2="252" marker-end="url(#a)"/>
+<line x1="730" y1="304" x2="730" y2="316" marker-end="url(#a)"/>
+<line x1="730" y1="368" x2="730" y2="380" marker-end="url(#a)"/>
+<line x1="730" y1="432" x2="730" y2="458" marker-end="url(#a)"/>
+<line x1="880" y1="152" x2="916" y2="152" marker-end="url(#a)"/>
+<line x1="880" y1="216" x2="916" y2="216" marker-end="url(#a)"/>
+<line x1="880" y1="280" x2="916" y2="280" marker-end="url(#a)"/>
+<line x1="880" y1="344" x2="916" y2="344" marker-end="url(#a)"/>
+<line x1="880" y1="408" x2="916" y2="408" marker-end="url(#a)"/>
+</g>
+<text x="924" y="116" font-size="13" fill="#9AA0A6" letter-spacing="2">NO: REFUSED AS</text>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#D98E5F">
+<text x="924" y="148">unsigned</text>
+<text x="924" y="166">malformed</text>
+<text x="924" y="221">unknown-key</text>
+<text x="924" y="285">stale</text>
+<text x="924" y="349">bad-signature</text>
+<text x="924" y="413">replayed</text>
+</g>
+<line x1="520" y1="152" x2="576" y2="152" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="640" y="564" width="14" height="14" rx="3" fill="#E7C55A"/><text x="660" y="576" font-size="13" fill="#9AA0A6">the seal and the accepted path</text>
+<rect x="900" y="564" width="14" height="14" rx="3" fill="#D98E5F"/><text x="920" y="576" font-size="13" fill="#9AA0A6">a refusal's reason</text>
+<text x="40" y="576" font-size="13" fill="#9AA0A6">comando · docs/modules/frontear</text>
+</svg>

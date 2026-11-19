@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>A kit upgrade in five steps: comando checks for a release, shows it, you ask, a session upgrades, comando rereads the version</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="48%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#121212"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/>
+    </marker>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:3px}
+      .h{font-size:26px;font-weight:300;fill:#E8E8E8}
+      .t{font-size:17px;fill:#E8E8E8}
+      .d{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:14px;fill:#E8E8E8}
+      .n{font-size:15px;font-weight:600;fill:#E7C55A}
+      .s{font-family:-apple-system, Segoe UI, Helvetica, Arial, sans-serif}
+      .foot{font-size:13px;fill:#9AA0A6}
+      .box{fill:#1E1E1E;stroke-width:1.5}
+      .flow{fill:none;stroke:#9AA0A6;stroke-width:1.4}
+    </style>
+  </defs>
+  <rect width="1200" height="430" fill="url(#bg)"/>
+
+  <text x="40" y="50" class="cap" fill="#6CC69A">A KIT UPGRADE</text>
+  <text x="40" y="84" class="h">The kit upgrades itself, and comando checks the result</text>
+  <text x="40" y="110" class="d">comando never edits the kit's files. A session does the work, by the kit's own instructions.</text>
+
+  <path class="flow" marker-end="url(#arrow)" d="M244 230 L266 230"/>
+  <path class="flow" marker-end="url(#arrow)" d="M474 230 L496 230"/>
+  <path class="flow" marker-end="url(#arrow)" d="M704 230 L726 230"/>
+  <path class="flow" marker-end="url(#arrow)" d="M934 230 L956 230"/>
+
+  <!-- 1 -->
+  <rect class="box" stroke="#6FAEE8" x="40" y="150" width="204" height="170" rx="12"/>
+  <circle cx="68" cy="180" r="14" fill="none" stroke="#E7C55A"/><text x="68" y="185" text-anchor="middle" class="n">1</text>
+  <text x="92" y="185" class="cap" fill="#6FAEE8">COMANDO</text>
+  <text x="60" y="224" class="t">Looks for a release</text>
+  <text x="60" y="252" class="d">At start and every</text>
+  <text x="60" y="272" class="d">6 hours, it reads the</text>
+  <text x="60" y="292" class="d">tags of the kit's remote.</text>
+
+  <!-- 2 -->
+  <rect class="box" stroke="#6FAEE8" x="270" y="150" width="204" height="170" rx="12"/>
+  <circle cx="298" cy="180" r="14" fill="none" stroke="#E7C55A"/><text x="298" y="185" text-anchor="middle" class="n">2</text>
+  <text x="322" y="185" class="cap" fill="#6FAEE8">COMANDO</text>
+  <text x="290" y="224" class="t">Shows what it found</text>
+  <text x="290" y="252" class="d">The KIT row reads</text>
+  <text x="290" y="272" class="m">v1.5.0<tspan class="d s" dx="8">available.</tspan></text>
+
+  <!-- 3 -->
+  <rect class="box" stroke="#E8E8E8" stroke-opacity=".8" x="500" y="150" width="204" height="170" rx="12"/>
+  <circle cx="528" cy="180" r="14" fill="none" stroke="#E7C55A"/><text x="528" y="185" text-anchor="middle" class="n">3</text>
+  <text x="552" y="185" class="cap" fill="#E8E8E8">YOU</text>
+  <text x="520" y="224" class="t">Ask for the upgrade</text>
+  <text x="520" y="252" class="d">Upgrade the kit…</text>
+  <text x="520" y="272" class="d">and pick the release.</text>
+
+  <!-- 4 -->
+  <rect class="box" stroke="#D98E5F" x="730" y="150" width="204" height="170" rx="12"/>
+  <circle cx="758" cy="180" r="14" fill="none" stroke="#E7C55A"/><text x="758" y="185" text-anchor="middle" class="n">4</text>
+  <text x="782" y="185" class="cap" fill="#D98E5F">SESSION</text>
+  <text x="750" y="224" class="t">Does the upgrade</text>
+  <text x="750" y="252" class="d">The session named<tspan class="m" dx="8">kit</tspan></text>
+  <text x="750" y="272" class="d">follows the kit's</text>
+  <text x="750" y="292" class="m">INSTALL.md</text>
+
+  <!-- 5 -->
+  <rect class="box" stroke="#6FAEE8" x="960" y="150" width="204" height="170" rx="12"/>
+  <circle cx="988" cy="180" r="14" fill="none" stroke="#E7C55A"/><text x="988" y="185" text-anchor="middle" class="n">5</text>
+  <text x="1012" y="185" class="cap" fill="#6FAEE8">COMANDO</text>
+  <text x="980" y="224" class="t">Rereads the version</text>
+  <text x="980" y="252" class="d">It reads the new tag?</text>
+  <text x="980" y="272" class="d">Then it offers to restart</text>
+  <text x="980" y="292" class="d">sessions on the old kit.</text>
+
+  <text x="40" y="354" class="d">The check is the measured version, not the session's word: no match, no restart offer.</text>
+
+  <!-- legend -->
+  <line x1="40" y1="388" x2="1160" y2="388" stroke="#2A2A2A"/>
+  <g class="foot">
+    <circle cx="46" cy="408" r="5" fill="#6FAEE8"/><text x="58" y="413">comando</text>
+    <circle cx="146" cy="408" r="5" fill="#D98E5F"/><text x="158" y="413">Claude Code</text>
+    <circle cx="266" cy="408" r="5" fill="#E8E8E8"/><text x="278" y="413">you</text>
+    <text x="1160" y="413" text-anchor="end">comando · docs/kit</text>
+  </g>
+</svg>

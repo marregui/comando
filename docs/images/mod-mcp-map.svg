@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="680" viewBox="0 0 1100 680" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The mcp module: Claude Code calls comando's tools over HTTP on localhost; three tool families reach four ports of comando</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
+<rect width="1100" height="680" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · MCP</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">The door Claude Code uses to act inside comando</text>
+
+<rect x="40" y="110" width="300" height="104" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="56" y="138" font-size="15" fill="#D98E5F">a Claude Code session</text>
+<text x="56" y="164" font-size="13" fill="#E8E8E8">calls a tool by name</text>
+<text x="56" y="190" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">mcp__comando__ui_plot</text>
+<line x1="340" y1="162" x2="416" y2="162" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="378" y="152" font-size="13" fill="#9AA0A6" text-anchor="middle">HTTP</text>
+
+<rect x="420" y="110" width="640" height="104" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="436" y="138" font-size="16" fill="#E7C55A" font-family="Menlo, Consolas, monospace">McpServer</text>
+<text x="436" y="164" font-size="13" fill="#E8E8E8">JSON-RPC on <tspan font-family="Menlo, Consolas, monospace">POST /mcp</tspan>, bound to 127.0.0.1; a bearer token names the calling session</text>
+<text x="436" y="190" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">initialize · tools/list · tools/call · ping</text>
+
+<text x="40" y="262" font-size="13" fill="#9AA0A6" letter-spacing="2">THREE FAMILIES OF TOOLS</text>
+<path d="M740,214 L740,236 L280,236 L280,270" fill="none" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<line x1="740" y1="214" x2="740" y2="270" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M740,236 L935,236 L935,270" fill="none" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="40" y="274" width="560" height="140" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="302" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">McpTools</text>
+<text x="56" y="328" font-size="13" fill="#E8E8E8">ask you, show you, query, talk to sessions and instances</text>
+<text x="56" y="354" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">approve · ui_show_table · ui_plot · ui_show_view · ui_notify</text>
+<text x="56" y="376" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">db_run_sql · db_describe · result_read · result_stats</text>
+<text x="56" y="398" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">session_send · session_read · instance_ask · instance_reply</text>
+
+<rect x="620" y="274" width="210" height="140" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="636" y="302" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">ActionTools</text>
+<text x="636" y="328" font-size="13" fill="#E8E8E8">what you do by hand</text>
+<text x="636" y="354" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">panel_*</text>
+<text x="636" y="376" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">session_*</text>
+<text x="636" y="398" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">server_start · stop</text>
+
+<rect x="850" y="274" width="210" height="140" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="866" y="302" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">TerminalTools</text>
+<text x="866" y="328" font-size="13" fill="#E8E8E8">read and type in a terminal</text>
+<text x="866" y="354" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">terminal_list · read</text>
+<text x="866" y="376" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">terminal_send</text>
+<text x="866" y="398" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">terminal_start · stop</text>
+
+<text x="748" y="448" font-size="13" fill="#9AA0A6" letter-spacing="2">WHAT THEY REACH</text>
+<rect x="40" y="474" width="170" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="502" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">QueryPort</text>
+<text x="56" y="526" font-size="13" fill="#E8E8E8">your databases,</text>
+<text x="56" y="546" font-size="13" fill="#E8E8E8">read-only SQL</text>
+<rect x="225" y="474" width="170" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="241" y="502" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">Peers</text>
+<text x="241" y="526" font-size="13" fill="#E8E8E8">other instances,</text>
+<text x="241" y="546" font-size="13" fill="#E8E8E8">over a broker</text>
+<rect x="410" y="474" width="420" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="426" y="502" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">IntentSink</text>
+<text x="426" y="526" font-size="13" fill="#E8E8E8">the event loop: a view to show, a card for you to answer,</text>
+<text x="426" y="546" font-size="13" fill="#E8E8E8">an action to run</text>
+<rect x="850" y="474" width="210" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="866" y="502" font-size="14" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">TerminalPort</text>
+<text x="866" y="526" font-size="13" fill="#E8E8E8">the terminals of</text>
+<text x="866" y="546" font-size="13" fill="#E8E8E8">the workbench</text>
+
+<g stroke="#9AA0A6" stroke-width="1.2">
+<line x1="125" y1="414" x2="125" y2="470" marker-end="url(#a)"/>
+<line x1="310" y1="414" x2="310" y2="470" marker-end="url(#a)"/>
+<line x1="505" y1="414" x2="505" y2="470" marker-end="url(#a)"/>
+<line x1="725" y1="414" x2="725" y2="470" marker-end="url(#a)"/>
+<line x1="955" y1="414" x2="955" y2="470" marker-end="url(#a)"/>
+</g>
+
+<rect x="40" y="584" width="1020" height="46" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="612" font-size="14" fill="#E7C55A" font-family="Menlo, Consolas, monospace">AuditLog</text>
+<text x="140" y="612" font-size="13" fill="#E8E8E8">every tool call leaves one line in <tspan font-family="Menlo, Consolas, monospace">audit/audit-&lt;UTC date&gt;.jsonl</tspan>, credentials shown as ***</text>
+
+<rect x="620" y="650" width="14" height="14" rx="3" fill="#E7C55A"/><text x="640" y="662" font-size="13" fill="#9AA0A6">centre</text>
+<rect x="710" y="650" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="730" y="662" font-size="13" fill="#9AA0A6">comando's classes</text>
+<rect x="880" y="650" width="14" height="14" rx="3" fill="#D98E5F"/><text x="900" y="662" font-size="13" fill="#9AA0A6">Claude Code</text>
+<text x="40" y="662" font-size="13" fill="#9AA0A6">comando · docs/modules/mcp</text>
+</svg>

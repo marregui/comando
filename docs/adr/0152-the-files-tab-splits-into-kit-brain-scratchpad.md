@@ -35,5 +35,5 @@ status bar's reset times; Claude decided how the docs say it.
 The sidebar's tab row grows from five tabs to seven, and its remembered tab is read by name with `files` as `kit`. A
 folder of the brain that `folders.json` does not configure is no longer reachable from the sidebar; it is still on
 disk, and an entry for it in `folders.json` shows it. [Workbench §6](../workbench.md#6-the-kit-brain-and-scratchpad-tabs) and [Kit
-and brain §3.2](../kit-and-brain.md#32-the-kit-brain-and-scratchpad-tabs) describe the tabs, the tutorial's sidebar
+and brain §3.2](../kit.md#what-comando-shows-and-does) describe the tabs, the tutorial's sidebar
 table repeats them, and [Claude Code §3](../claude-code.md#3-mcp-tools) lists `ui_set_layout`'s `sidebar` names.

@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="540" viewBox="0 0 1000 540" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>A tool call's path through comando's MCP server: the claude -p process posts to /mcp on 127.0.0.1; four gates in turn check capacity (else 503), the bearer token (else 401), the Origin header (else 403) and the method (else method-not-found); the call then reaches one of five tool families, approve, ui, db and result, session and instance, and the window's actions; every call is written to the audit log and what changes the window goes to the reducer as an intent</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="540" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">THE MCP SERVER</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Four gates, then a tool</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="120" width="140" height="90" rx="8" stroke="#D98E5F"/>
+    <rect x="210" y="120" width="170" height="90" rx="8" stroke="#6FAEE8"/>
+    <rect x="395" y="120" width="170" height="90" rx="8" stroke="#6FAEE8"/>
+    <rect x="580" y="120" width="170" height="90" rx="8" stroke="#6FAEE8"/>
+    <rect x="765" y="120" width="170" height="90" rx="8" stroke="#6FAEE8"/>
+    <rect x="40" y="300" width="172" height="96" rx="8" stroke="#6FAEE8"/>
+    <rect x="227" y="300" width="172" height="96" rx="8" stroke="#6FAEE8"/>
+    <rect x="414" y="300" width="172" height="96" rx="8" stroke="#6FAEE8"/>
+    <rect x="601" y="300" width="172" height="96" rx="8" stroke="#6FAEE8"/>
+    <rect x="788" y="300" width="172" height="96" rx="8" stroke="#6FAEE8"/>
+    <rect x="227" y="446" width="359" height="50" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="601" y="446" width="359" height="50" rx="8" stroke="#6FAEE8" stroke-dasharray="5 4"/>
+  </g>
+
+  <g font-family="Menlo, Consolas, monospace" font-size="14">
+    <text x="54" y="148" fill="#D98E5F">claude -p</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="54" y="172">POST /mcp on</text>
+    <text x="54" y="190">127.0.0.1</text>
+  </g>
+
+  <g font-size="13" letter-spacing="2" fill="#6FAEE8">
+    <text x="224" y="146">1 CAPACITY</text>
+    <text x="409" y="146">2 TOKEN</text>
+    <text x="594" y="146">3 ORIGIN</text>
+    <text x="779" y="146">4 METHOD</text>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="224" y="172">256 requests at once,</text>
+    <text x="224" y="190">16 per session</text>
+    <text x="409" y="172">a bearer token names</text>
+    <text x="409" y="190">the calling session</text>
+    <text x="594" y="172">a web page on another</text>
+    <text x="594" y="190">host may not call</text>
+    <text x="779" y="172">initialize, ping,</text>
+    <text x="779" y="190">tools/list, tools/call</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6" text-anchor="middle">
+    <text x="295" y="232">else 503</text>
+    <text x="480" y="232">else 401</text>
+    <text x="665" y="232">else 403</text>
+    <text x="850" y="232">else method-not-found</text>
+  </g>
+
+  <g stroke="#9AA0A6" stroke-width="1.3" fill="none" marker-end="url(#a)">
+    <path d="M180 165 H208"/>
+    <path d="M380 165 H393"/>
+    <path d="M565 165 H578"/>
+    <path d="M750 165 H763"/>
+    <path d="M950 165 H972 V268 H126 V298"/>
+    <path d="M313 268 V298"/>
+    <path d="M500 268 V298"/>
+    <path d="M687 268 V298"/>
+    <path d="M874 268 V298"/>
+    <path d="M406 420 V444"/>
+    <path d="M780 420 V444"/>
+  </g>
+  <path d="M935 165 H950" stroke="#9AA0A6" stroke-width="1.3"/>
+  <path d="M126 396 V420 H874 V396 M313 396 V420 M500 396 V420 M687 396 V420" fill="none" stroke="#9AA0A6" stroke-width="1.3"/>
+
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#6FAEE8">
+    <text x="54" y="326">approve</text>
+    <text x="241" y="326">ui_*</text>
+    <text x="428" y="326">db_* result_*</text>
+    <text x="615" y="326">session_*</text>
+    <text x="802" y="326">&lt;area&gt;_&lt;verb&gt;</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="54" y="350">a permission prompt</text>
+    <text x="54" y="368">becomes a card and</text>
+    <text x="54" y="386">waits for the answer</text>
+    <text x="241" y="350">tables, plots, views,</text>
+    <text x="241" y="368">editor text, files,</text>
+    <text x="241" y="386">notices, the layout</text>
+    <text x="428" y="350">SQL under a policy;</text>
+    <text x="428" y="368">held results read</text>
+    <text x="428" y="386">a page at a time</text>
+    <text x="615" y="350">prompt and read</text>
+    <text x="615" y="368">other sessions and</text>
+    <text x="615" y="386">other instances</text>
+    <text x="802" y="350">every action the</text>
+    <text x="802" y="368">window has, built</text>
+    <text x="802" y="386">from one registry</text>
+  </g>
+
+  <g font-size="14" fill="#E8E8E8">
+    <text x="243" y="476">intents to the reducer, as the window sends</text>
+    <text x="617" y="476">the audit log · one line per call</text>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="510" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.5"/>
+    <text x="62" y="522">comando</text>
+    <rect x="136" y="510" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.5"/>
+    <text x="158" y="522">Claude Code</text>
+    <rect x="254" y="510" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+    <text x="276" y="522">the one writer of state</text>
+    <text x="960" y="522" text-anchor="end">comando · docs/claude-code.md</text>
+  </g>
+</svg>

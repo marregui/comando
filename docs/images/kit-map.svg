@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>A mind map of a kit: one folder in git with eight parts, each with what it does</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#121212"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#E7C55A" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#E7C55A" stop-opacity="0"/>
+    </radialGradient>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:3px}
+      .h{font-size:26px;font-weight:300;fill:#E8E8E8}
+      .c{font-size:28px;font-weight:300;fill:#E8E8E8}
+      .d{font-size:14px;fill:#9AA0A6}
+      .l{font-size:14px;fill:#E8E8E8}
+      .m{font-family:Menlo, Consolas, monospace;font-size:15px;fill:#6CC69A}
+      .foot{font-size:13px;fill:#9AA0A6}
+      .hub{fill:#1E1E1E;stroke:#6CC69A;stroke-width:1.5}
+      .limb{fill:none;stroke:#6CC69A;stroke-width:2.5;stroke-linecap:round}
+      .twig{fill:none;stroke:#6CC69A;stroke-width:1;stroke-opacity:.55}
+    </style>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+
+  <text x="40" y="50" class="cap" fill="#6CC69A">THE KIT</text>
+  <text x="40" y="84" class="h">One folder, eight parts</text>
+  <text x="40" y="110" class="d">Claude Code loads the parts from this folder. comando adds one file of its own: the manifest.</text>
+
+  <!-- limbs -->
+  <path class="limb" d="M536 386 C500 330 520 190 480 190"/>
+  <path class="limb" d="M530 400 C505 380 510 340 480 340"/>
+  <path class="limb" d="M530 440 C505 460 510 490 480 490"/>
+  <path class="limb" d="M536 454 C500 510 520 640 480 640"/>
+  <path class="limb" d="M664 386 C700 330 680 190 720 190"/>
+  <path class="limb" d="M670 400 C695 380 690 340 720 340"/>
+  <path class="limb" d="M670 440 C695 460 690 490 720 490"/>
+  <path class="limb" d="M664 454 C700 510 680 640 720 640"/>
+
+  <!-- the centre -->
+  <circle cx="600" cy="420" r="124" fill="url(#glow)"/>
+  <circle cx="600" cy="420" r="86" fill="none" stroke="#E7C55A" stroke-opacity=".25"/>
+  <circle cx="600" cy="420" r="72" fill="#1E1E1E" stroke="#E7C55A" stroke-width="2"/>
+  <text x="600" y="418" text-anchor="middle" class="c">a kit</text>
+  <text x="601" y="444" text-anchor="middle" class="cap" fill="#6CC69A">IN GIT</text>
+
+  <!-- left: CLAUDE.md -->
+  <path class="twig" d="M300 190 C288 190 294 164 280 164"/><path class="twig" d="M300 190 L280 190"/><path class="twig" d="M300 190 C288 190 294 216 280 216"/>
+  <rect class="hub" x="300" y="160" width="180" height="60" rx="12"/>
+  <text x="390" y="186" text-anchor="middle" class="m">CLAUDE.md</text>
+  <text x="390" y="207" text-anchor="middle" class="d">instructions</text>
+  <g fill="#6CC69A"><circle cx="274" cy="164" r="4"/><circle cx="274" cy="190" r="4"/><circle cx="274" cy="216" r="4"/></g>
+  <g text-anchor="end" class="l">
+    <text x="260" y="169">loaded at every start</text>
+    <text x="260" y="195">how to work, what to avoid</text>
+    <text x="260" y="221">where the brain is</text>
+  </g>
+
+  <!-- left: settings.json -->
+  <path class="twig" d="M300 340 C288 340 294 314 280 314"/><path class="twig" d="M300 340 L280 340"/><path class="twig" d="M300 340 C288 340 294 366 280 366"/>
+  <rect class="hub" x="300" y="310" width="180" height="60" rx="12"/>
+  <circle cx="469" cy="321" r="4.5" fill="#6FAEE8"/>
+  <text x="390" y="336" text-anchor="middle" class="m">settings.json</text>
+  <text x="390" y="357" text-anchor="middle" class="d">rules and wiring</text>
+  <g fill="#6CC69A"><circle cx="274" cy="314" r="4"/><circle cx="274" cy="340" r="4"/><circle cx="274" cy="366" r="4"/></g>
+  <g text-anchor="end" class="l">
+    <text x="260" y="319">permissions: allow, ask, deny</text>
+    <text x="260" y="345">which hook runs at which event</text>
+    <text x="260" y="371">default model and effort</text>
+  </g>
+
+  <!-- left: hooks -->
+  <path class="twig" d="M300 490 C288 490 294 464 280 464"/><path class="twig" d="M300 490 L280 490"/><path class="twig" d="M300 490 C288 490 294 516 280 516"/>
+  <rect class="hub" x="300" y="460" width="180" height="60" rx="12"/>
+  <text x="390" y="486" text-anchor="middle" class="m">hooks/</text>
+  <text x="390" y="507" text-anchor="middle" class="d">act at events</text>
+  <g fill="#6CC69A"><circle cx="274" cy="464" r="4"/><circle cx="274" cy="490" r="4"/><circle cx="274" cy="516" r="4"/></g>
+  <g text-anchor="end" class="l">
+    <text x="260" y="469">add context to a prompt</text>
+    <text x="260" y="495">refuse a risky tool call</text>
+    <text x="260" y="521">check after a write</text>
+  </g>
+
+  <!-- left: skills -->
+  <path class="twig" d="M300 640 C288 640 294 614 280 614"/><path class="twig" d="M300 640 L280 640"/><path class="twig" d="M300 640 C288 640 294 666 280 666"/>
+  <rect class="hub" x="300" y="610" width="180" height="60" rx="12"/>
+  <circle cx="469" cy="621" r="4.5" fill="#6FAEE8"/>
+  <text x="390" y="636" text-anchor="middle" class="m">skills/</text>
+  <text x="390" y="657" text-anchor="middle" class="d">named procedures</text>
+  <g fill="#6CC69A"><circle cx="274" cy="614" r="4"/><circle cx="274" cy="640" r="4"/><circle cx="274" cy="666" r="4"/></g>
+  <g text-anchor="end" class="l">
+    <text x="260" y="619">one SKILL.md each</text>
+    <text x="260" y="645">run by name: /reflect</text>
+    <text x="260" y="671">reflect answers the checkpoint</text>
+  </g>
+
+  <!-- right: agents -->
+  <path class="twig" d="M900 190 C912 190 906 164 920 164"/><path class="twig" d="M900 190 L920 190"/><path class="twig" d="M900 190 C912 190 906 216 920 216"/>
+  <rect class="hub" x="720" y="160" width="180" height="60" rx="12"/>
+  <text x="810" y="186" text-anchor="middle" class="m">agents/</text>
+  <text x="810" y="207" text-anchor="middle" class="d">helper types</text>
+  <g fill="#6CC69A"><circle cx="926" cy="164" r="4"/><circle cx="926" cy="190" r="4"/><circle cx="926" cy="216" r="4"/></g>
+  <g class="l">
+    <text x="940" y="169">a role, a model, its tools</text>
+    <text x="940" y="195">a reviewer reads and reports</text>
+    <text x="940" y="221">a writer edits listed files</text>
+  </g>
+
+  <!-- right: commands -->
+  <path class="twig" d="M900 340 C912 340 908 327 920 327"/><path class="twig" d="M900 340 C912 340 908 353 920 353"/>
+  <rect class="hub" x="720" y="310" width="180" height="60" rx="12"/>
+  <text x="810" y="336" text-anchor="middle" class="m">commands/</text>
+  <text x="810" y="357" text-anchor="middle" class="d">shortcuts</text>
+  <g fill="#6CC69A"><circle cx="926" cy="327" r="4"/><circle cx="926" cy="353" r="4"/></g>
+  <g class="l">
+    <text x="940" y="332">a prompt saved under a name</text>
+    <text x="940" y="358">run by typing /name</text>
+  </g>
+
+  <!-- right: tools -->
+  <path class="twig" d="M900 490 C912 490 906 464 920 464"/><path class="twig" d="M900 490 L920 490"/><path class="twig" d="M900 490 C912 490 906 516 920 516"/>
+  <rect class="hub" x="720" y="460" width="180" height="60" rx="12"/>
+  <text x="810" y="486" text-anchor="middle" class="m">tools/</text>
+  <text x="810" y="507" text-anchor="middle" class="d">its own programs</text>
+  <g fill="#6CC69A"><circle cx="926" cy="464" r="4"/><circle cx="926" cy="490" r="4"/><circle cx="926" cy="516" r="4"/></g>
+  <g class="l">
+    <text x="940" y="469">called by their path</text>
+    <text x="940" y="495">checks, counters, reports</text>
+    <text x="940" y="521">a test beside each</text>
+  </g>
+
+  <!-- right: manifest -->
+  <path class="twig" d="M900 640 C912 640 906 614 920 614"/><path class="twig" d="M900 640 L920 640"/><path class="twig" d="M900 640 C912 640 906 666 920 666"/>
+  <rect class="hub" x="720" y="610" width="180" height="60" rx="12"/>
+  <circle cx="889" cy="621" r="4.5" fill="#6FAEE8"/>
+  <text x="806" y="636" text-anchor="middle" class="m">comando-kit.json</text>
+  <text x="810" y="657" text-anchor="middle" class="d">the manifest</text>
+  <g fill="#6CC69A"><circle cx="926" cy="614" r="4"/><circle cx="926" cy="640" r="4"/><circle cx="926" cy="666" r="4"/></g>
+  <g class="l">
+    <text x="940" y="619">the kit's name, its brain's folder</text>
+    <text x="940" y="645">the folders comando's tabs show</text>
+    <text x="940" y="671">the scheduled jobs</text>
+  </g>
+
+  <!-- legend -->
+  <line x1="40" y1="758" x2="1160" y2="758" stroke="#2A2A2A"/>
+  <g class="foot">
+    <circle cx="46" cy="778" r="5" fill="#6CC69A"/><text x="58" y="783">a part of the kit</text>
+    <circle cx="186" cy="778" r="5" fill="#6FAEE8"/><text x="198" y="783">comando reads it</text>
+    <text x="1160" y="783" text-anchor="end">comando · docs/kit</text>
+  </g>
+</svg>

@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="664" viewBox="0 0 1000 664" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The files comando keeps: the data root holds what you made, what is running, what happened and what can be rebuilt; beside it three files serve every instance on the machine, passwords live in the macOS keychain, and every store file is written to a temporary file and moved into place</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="664" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">MODULE APP · THE FILES</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Everything one instance remembers lives in one folder</text>
+
+  <!-- the data root -->
+  <rect x="40" y="106" width="600" height="472" rx="10" fill="#161616" stroke="#E7C55A" stroke-width="1.5"/>
+  <text x="58" y="136" font-family="Menlo, Consolas, monospace" font-size="16" fill="#E7C55A">~/.comando/</text>
+  <text x="182" y="136" font-size="13" fill="#9AA0A6">the data root; -Dcomando.home or COMANDO_HOME moves it</text>
+
+  <g fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1">
+    <rect x="56" y="152" width="284" height="218" rx="8"/>
+    <rect x="356" y="152" width="268" height="218" rx="8"/>
+    <rect x="56" y="386" width="284" height="176" rx="8"/>
+    <rect x="356" y="386" width="268" height="176" rx="8"/>
+  </g>
+  <g font-size="13" letter-spacing="2" fill="#6FAEE8">
+    <text x="70" y="178">WHAT YOU MADE</text>
+    <text x="370" y="178">WHAT IS RUNNING</text>
+    <text x="70" y="412">WHAT HAPPENED</text>
+    <text x="370" y="412">WHAT CAN BE REBUILT</text>
+  </g>
+
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="70" y="208">connections.json</text>
+    <text x="70" y="232">sessions.json</text>
+    <text x="70" y="256">folders.json</text>
+    <text x="70" y="280">panels.json</text>
+    <text x="70" y="304">panels/*.md</text>
+    <text x="70" y="328">settings.json</text>
+    <text x="70" y="352">themes/*.json</text>
+    <text x="370" y="208">comando.lock</text>
+    <text x="370" y="232">instance.json</text>
+    <text x="370" y="256">run/</text>
+    <text x="370" y="280">edge/</text>
+    <text x="370" y="304">fabric/</text>
+    <text x="370" y="328">cdb/</text>
+    <text x="70" y="440">logs/comando-&lt;n&gt;.log</text>
+    <text x="70" y="484">logs/intents-&lt;millis&gt;.jsonl</text>
+    <text x="70" y="528">audit/</text>
+    <text x="370" y="440">cache/mermaid/</text>
+    <text x="370" y="484">cache/images/</text>
+    <text x="370" y="528">help/tutorial.md</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="216" y="208">databases</text>
+    <text x="216" y="232">sessions</text>
+    <text x="216" y="256">folders</text>
+    <text x="216" y="280">the panels</text>
+    <text x="216" y="304">each panel's text</text>
+    <text x="216" y="328">the window</text>
+    <text x="216" y="352">your themes</text>
+    <text x="492" y="208">one instance</text>
+    <text x="492" y="232">its name</text>
+    <text x="492" y="256">session configs</text>
+    <text x="492" y="280">comando Edge</text>
+    <text x="492" y="304">frontear</text>
+    <text x="492" y="328">local cdb data</text>
+    <text x="70" y="458">ten files of 1 MiB, in rotation</text>
+    <text x="70" y="502">the intent log, when recording</text>
+    <text x="70" y="546">each tool call and approval, a file a day</text>
+    <text x="370" y="458">Mermaid diagrams, drawn once</text>
+    <text x="370" y="502">SVG pictures, drawn once</text>
+    <text x="370" y="546">the page Help opens</text>
+  </g>
+
+  <!-- the machine -->
+  <rect x="664" y="106" width="296" height="182" rx="10" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.3"/>
+  <text x="680" y="134" font-size="13" letter-spacing="2" fill="#AEB6C1">FOR THE WHOLE MACHINE</text>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="680" y="164">~/.comando-cdb/</text>
+    <text x="680" y="208">~/.comando-edge.json</text>
+    <text x="680" y="252">~/.comando-fabric.json</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="680" y="182">the one cdb server and its data</text>
+    <text x="680" y="226">who started the comando Edge</text>
+    <text x="680" y="270">who hosts the frontear node</text>
+  </g>
+
+  <!-- the keychain -->
+  <rect x="664" y="304" width="296" height="118" rx="10" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="680" y="332" font-size="13" letter-spacing="2" fill="#6FAEE8">THE KEYCHAIN</text>
+  <text x="680" y="360" font-size="13" fill="#E8E8E8">On macOS a connection's password</text>
+  <text x="680" y="380" font-size="13" fill="#E8E8E8">lives in the keychain, under the</text>
+  <text x="680" y="400" font-size="13" fill="#E8E8E8">service comando, not in a file.</text>
+
+  <!-- a safe write -->
+  <rect x="664" y="438" width="296" height="140" rx="10" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="680" y="466" font-size="13" letter-spacing="2" fill="#6FAEE8">A SAFE WRITE</text>
+  <rect x="680" y="482" width="104" height="34" rx="6" fill="#161616" stroke="#3A3A3A"/>
+  <text x="732" y="504" text-anchor="middle" font-size="13" fill="#E8E8E8">temp file</text>
+  <line x1="786" y1="499" x2="836" y2="499" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <rect x="840" y="482" width="104" height="34" rx="6" fill="#161616" stroke="#E7C55A"/>
+  <text x="892" y="504" text-anchor="middle" font-size="13" fill="#E8E8E8">the real file</text>
+  <text x="680" y="542" font-size="13" fill="#9AA0A6">Written beside it, then moved over it</text>
+  <text x="680" y="562" font-size="13" fill="#9AA0A6">in one step: never half a file.</text>
+
+  <!-- legend -->
+  <rect x="40" y="598" width="14" height="14" rx="3" fill="#E7C55A"/>
+  <text x="62" y="610" font-size="13" fill="#9AA0A6">one instance's data root</text>
+  <rect x="250" y="598" width="14" height="14" rx="3" fill="#AEB6C1"/>
+  <text x="272" y="610" font-size="13" fill="#9AA0A6">shared by every instance on the machine</text>
+  <rect x="560" y="598" width="14" height="14" rx="3" fill="#6FAEE8"/>
+  <text x="582" y="610" font-size="13" fill="#9AA0A6">how comando handles them</text>
+  <text x="40" y="646" font-size="13" fill="#9AA0A6">comando · docs/modules/app.md</text>
+</svg>

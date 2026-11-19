@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="520" viewBox="0 0 1000 520" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Claude Code in comando: you type in comando's window; comando writes prompts to a claude -p process and reads its events; the process sends the context to the model and gets the next step back; its tool calls come to comando's MCP server, which turns them into cards, views and intents; Claude Code keeps the conversation on disk</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="520" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">CLAUDE CODE IN COMANDO</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">comando is the window; Claude Code does the work</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="150" width="130" height="80" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="290" y="110" width="280" height="200" rx="8" stroke="#6FAEE8"/>
+    <rect x="680" y="110" width="280" height="120" rx="8" stroke="#D98E5F"/>
+    <rect x="740" y="290" width="220" height="74" rx="8" stroke="#D98E5F"/>
+    <rect x="740" y="402" width="220" height="62" rx="8" stroke="#D98E5F" stroke-dasharray="5 4"/>
+    <rect x="290" y="384" width="280" height="80" rx="8" stroke="#6FAEE8"/>
+  </g>
+  <g fill="#161616" stroke="#6FAEE8" stroke-width="0.8" stroke-opacity="0.6">
+    <rect x="306" y="150" width="248" height="38" rx="5"/>
+    <rect x="306" y="200" width="248" height="38" rx="5"/>
+    <rect x="306" y="250" width="248" height="38" rx="5"/>
+  </g>
+
+  <text x="56" y="182" font-size="13" letter-spacing="3" fill="#E7C55A">YOU</text>
+  <text x="56" y="208" font-size="13" fill="#9AA0A6">read and decide</text>
+
+  <g font-family="Menlo, Consolas, monospace" font-size="15">
+    <text x="306" y="136" fill="#6FAEE8">comando</text>
+    <text x="696" y="138" fill="#D98E5F">claude -p</text>
+    <text x="306" y="410" fill="#6FAEE8">McpServer</text>
+  </g>
+  <g font-size="14" fill="#E8E8E8">
+    <text x="320" y="174">Session tab · the transcript</text>
+    <text x="320" y="224">Approvals tab · the cards</text>
+    <text x="320" y="274">views · tables, plots, diffs</text>
+    <text x="756" y="318">the model</text>
+    <text x="756" y="430">the conversation</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="696" y="162">Claude Code, one process per session</text>
+    <text x="696" y="182">your login, kit, hooks and skills</text>
+    <text x="696" y="202">runs the agent loop and the tools</text>
+    <text x="756" y="340">reads the context,</text>
+    <text x="756" y="356">picks the next step</text>
+    <text x="756" y="450">kept on disk by Claude Code</text>
+    <text x="306" y="432">loopback · a token per session</text>
+    <text x="306" y="450">tools, approvals, the audit log</text>
+  </g>
+
+  <g stroke="#9AA0A6" stroke-width="1.3" fill="none" marker-end="url(#a)">
+    <path d="M170 175 H288"/>
+    <path d="M290 205 H172"/>
+    <path d="M570 150 H678"/>
+    <path d="M680 190 H572"/>
+    <path d="M830 230 V288"/>
+    <path d="M870 290 V232"/>
+    <path d="M680 215 H625 V424 H572"/>
+    <path d="M430 384 V312"/>
+    <path d="M720 230 V433 H738" stroke-dasharray="5 4"/>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="229" y="167" text-anchor="middle">prompts</text>
+    <text x="229" y="224" text-anchor="middle">answers, cards</text>
+    <text x="625" y="142" text-anchor="middle">stdin</text>
+    <text x="625" y="208" text-anchor="middle">stdout</text>
+    <text x="822" y="265" text-anchor="end">context</text>
+    <text x="878" y="265">next step</text>
+    <text x="633" y="322">tool calls</text>
+    <text x="438" y="352">intents</text>
+  </g>
+  <text x="633" y="342" font-size="13" font-family="Menlo, Consolas, monospace" fill="#9AA0A6">POST /mcp</text>
+  <text x="625" y="170" font-size="13" text-anchor="middle" fill="#9AA0A6">stream-JSON</text>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="484" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+    <text x="62" y="496">you</text>
+    <rect x="104" y="484" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.5"/>
+    <text x="126" y="496">comando</text>
+    <rect x="200" y="484" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.5"/>
+    <text x="222" y="496">Claude Code</text>
+    <path d="M318 491 H346" stroke="#9AA0A6" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <text x="354" y="496">a file on disk</text>
+    <text x="960" y="496" text-anchor="end">comando · docs/claude-code.md</text>
+  </g>
+</svg>

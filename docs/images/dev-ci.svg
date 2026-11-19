@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The three workflows: build starts on a push to main, a pull request, Mondays and by hand, and runs three jobs side by side, build on Ubuntu and macOS, window with :app:uiTest in shards (three on macOS, two on Ubuntu under xvfb-run), and disk-image with :app:dmg in the weekly run only; release starts on a tag v* or by hand and runs package on macOS, Ubuntu and Windows, then release, the tag's GitHub release of the three files; assign starts on a pull request opened, reopened or ready for review and assigns it to the owner</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="500" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">CONTINUOUS INTEGRATION</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Three workflows: what starts each, what each runs</text>
+
+  <g font-size="13" letter-spacing="2" fill="#9AA0A6">
+    <text x="40" y="116">WHAT STARTS IT</text>
+    <text x="300" y="116">ITS JOBS</text>
+  </g>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="132" width="220" height="120" rx="8" stroke="#E7C55A"/>
+    <rect x="300" y="132" width="210" height="120" rx="8" stroke="#6FAEE8"/>
+    <rect x="525" y="132" width="225" height="120" rx="8" stroke="#6FAEE8"/>
+    <rect x="765" y="132" width="195" height="120" rx="8" stroke="#6FAEE8"/>
+    <rect x="40" y="282" width="220" height="84" rx="8" stroke="#E7C55A"/>
+    <rect x="300" y="282" width="320" height="84" rx="8" stroke="#6FAEE8"/>
+    <rect x="640" y="282" width="320" height="84" rx="8" stroke="#6FAEE8"/>
+    <rect x="40" y="396" width="220" height="64" rx="8" stroke="#E7C55A"/>
+    <rect x="300" y="396" width="660" height="64" rx="8" stroke="#6FAEE8"/>
+  </g>
+
+  <g font-family="Menlo, Consolas, monospace" font-size="14" fill="#E7C55A">
+    <text x="54" y="158">build</text>
+    <text x="54" y="308">release</text>
+    <text x="54" y="422">assign</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="54" y="182">a push to main</text>
+    <text x="54" y="200">a pull request</text>
+    <text x="54" y="218">Mondays, 05:17 UTC</text>
+    <text x="54" y="236">by hand</text>
+    <text x="54" y="332">a tag v*</text>
+    <text x="54" y="350">by hand, as a dry run</text>
+    <text x="54" y="446">a pull request opens</text>
+  </g>
+
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#6FAEE8">
+    <text x="314" y="158">build</text>
+    <text x="539" y="158">window</text>
+    <text x="779" y="158">disk-image</text>
+    <text x="314" y="308">package</text>
+    <text x="654" y="308">release</text>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="314" y="184">./gradlew build</text>
+    <text x="539" y="184">:app:uiTest</text>
+    <text x="779" y="184">:app:dmg</text>
+    <text x="314" y="334">:app:package</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="314" y="208">Ubuntu and macOS</text>
+    <text x="314" y="226">a test report per module</text>
+    <text x="539" y="208">3 shards on macOS, 2 on</text>
+    <text x="539" y="226">Ubuntu under xvfb-run</text>
+    <text x="539" y="244">a test report per module</text>
+    <text x="779" y="208">macOS, in the weekly</text>
+    <text x="779" y="226">run only</text>
+    <text x="314" y="354">macOS, Ubuntu and Windows, no tests</text>
+    <text x="654" y="334">the tag's GitHub release, three files</text>
+    <text x="654" y="354">its notes: the commits since the last tag</text>
+    <text x="314" y="424">assigns the pull request to the owner</text>
+    <text x="314" y="444">checks out no code</text>
+  </g>
+
+  <g stroke="#9AA0A6" stroke-width="1.3" fill="none" marker-end="url(#a)">
+    <path d="M260 192 H298"/>
+    <path d="M260 324 H298"/>
+    <path d="M620 324 H638"/>
+    <path d="M260 428 H298"/>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="474" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+    <text x="62" y="486">a workflow and its triggers</text>
+    <rect x="250" y="474" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.5"/>
+    <text x="272" y="486">a job; jobs in one row of build run side by side</text>
+    <text x="960" y="486" text-anchor="end">comando · docs/development.md</text>
+  </g>
+</svg>

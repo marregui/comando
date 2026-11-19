@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="590" viewBox="0 0 1200 590" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>One prompt travels the map in six steps: you, the kit's hooks, the session, the gates, the agents, reflect</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="48%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#121212"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/>
+    </marker>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:3px}
+      .h{font-size:26px;font-weight:300;fill:#E8E8E8}
+      .t{font-size:17px;fill:#E8E8E8}
+      .d{font-size:14px;fill:#9AA0A6}
+      .n{font-size:15px;font-weight:600;fill:#E7C55A}
+      .foot{font-size:13px;fill:#9AA0A6}
+      .box{fill:#1E1E1E;stroke-width:1.5}
+      .flow{fill:none;stroke:#9AA0A6;stroke-width:1.4}
+    </style>
+  </defs>
+  <rect width="1200" height="590" fill="url(#bg)"/>
+
+  <text x="40" y="50" class="cap" fill="#E7C55A">ONE PROMPT, ONE LAP</text>
+  <text x="40" y="84" class="h">Follow a prompt around the map</text>
+  <text x="40" y="110" class="d">Every branch takes a turn. The lap ends where the next one starts: in a brain that knows a little more.</text>
+
+  <!-- flow -->
+  <path class="flow" marker-end="url(#arrow)" d="M380 205 L436 205"/>
+  <path class="flow" marker-end="url(#arrow)" d="M760 205 L816 205"/>
+  <path class="flow" marker-end="url(#arrow)" d="M980 270 L980 336"/>
+  <path class="flow" marker-end="url(#arrow)" d="M820 405 L764 405"/>
+  <path class="flow" marker-end="url(#arrow)" d="M440 405 L384 405"/>
+  <path class="flow" stroke-dasharray="5 5" marker-end="url(#arrow)" d="M220 340 L220 274"/>
+  <text x="236" y="311" class="d">the next lap starts smarter</text>
+
+  <!-- 1 -->
+  <rect class="box" stroke="#6FAEE8" x="60" y="140" width="320" height="130" rx="12"/>
+  <circle cx="92" cy="172" r="14" fill="none" stroke="#E7C55A"/><text x="92" y="177" text-anchor="middle" class="n">1</text>
+  <text x="118" y="177" class="cap" fill="#6FAEE8">YOU, IN COMANDO</text>
+  <text x="84" y="212" class="t">You type a prompt</text>
+  <text x="84" y="236" class="d">comando hands it to the session's</text>
+  <text x="84" y="256" class="d">Claude Code process.</text>
+
+  <!-- 2 -->
+  <rect class="box" stroke="#6CC69A" x="440" y="140" width="320" height="130" rx="12"/>
+  <circle cx="472" cy="172" r="14" fill="none" stroke="#E7C55A"/><text x="472" y="177" text-anchor="middle" class="n">2</text>
+  <text x="498" y="177" class="cap" fill="#6CC69A">KIT</text>
+  <text x="464" y="212" class="t">Hooks add context</text>
+  <text x="464" y="236" class="d">The kit's hooks put matching memory</text>
+  <text x="464" y="256" class="d">and knowledge in front of the model.</text>
+
+  <!-- 3 -->
+  <rect class="box" stroke="#D98E5F" x="820" y="140" width="320" height="130" rx="12"/>
+  <circle cx="852" cy="172" r="14" fill="none" stroke="#E7C55A"/><text x="852" y="177" text-anchor="middle" class="n">3</text>
+  <text x="878" y="177" class="cap" fill="#D98E5F">SESSION</text>
+  <text x="844" y="212" class="t">The session thinks and acts</text>
+  <text x="844" y="236" class="d">The model reads, plans and asks</text>
+  <text x="844" y="256" class="d">to use tools: read, edit, run.</text>
+
+  <!-- 4 -->
+  <rect class="box" stroke="#E8E8E8" stroke-opacity=".8" x="820" y="340" width="320" height="130" rx="12"/>
+  <circle cx="852" cy="372" r="14" fill="none" stroke="#E7C55A"/><text x="852" y="377" text-anchor="middle" class="n">4</text>
+  <text x="878" y="377" class="cap" fill="#E8E8E8">GATES</text>
+  <text x="844" y="412" class="t">Gates check each tool call</text>
+  <text x="844" y="436" class="d">Rules, guard hooks and your approval</text>
+  <text x="844" y="456" class="d">card decide: go or stop.</text>
+
+  <!-- 5 -->
+  <rect class="box" stroke="#D98E5F" x="440" y="340" width="320" height="130" rx="12"/>
+  <circle cx="472" cy="372" r="14" fill="none" stroke="#E7C55A"/><text x="472" y="377" text-anchor="middle" class="n">5</text>
+  <text x="498" y="377" class="cap" fill="#D98E5F">AGENTS</text>
+  <text x="464" y="412" class="t">Agents take narrow tasks</text>
+  <text x="464" y="436" class="d">Each works from a spec, in a context</text>
+  <text x="464" y="456" class="d">of its own, and reports back.</text>
+
+  <!-- 6 -->
+  <rect class="box" stroke="#E7C55A" x="60" y="340" width="320" height="130" rx="12"/>
+  <circle cx="92" cy="372" r="14" fill="none" stroke="#E7C55A"/><text x="92" y="377" text-anchor="middle" class="n">6</text>
+  <text x="118" y="377" class="cap" fill="#E7C55A">BRAIN</text>
+  <text x="84" y="412" class="t">Reflect writes what was learned</text>
+  <text x="84" y="436" class="d">Memory, knowledge base and scratchpad</text>
+  <text x="84" y="456" class="d">are brought up to date.</text>
+
+  <!-- legend -->
+  <line x1="40" y1="548" x2="1160" y2="548" stroke="#2A2A2A"/>
+  <g class="foot">
+    <circle cx="46" cy="568" r="5" fill="#6FAEE8"/><text x="58" y="573">comando</text>
+    <circle cx="146" cy="568" r="5" fill="#D98E5F"/><text x="158" y="573">Claude Code</text>
+    <circle cx="266" cy="568" r="5" fill="#6CC69A"/><text x="278" y="573">kit</text>
+    <circle cx="326" cy="568" r="5" fill="#E7C55A"/><text x="338" y="573">brain</text>
+    <text x="1160" y="573" text-anchor="end">comando · docs/kit-and-brain</text>
+  </g>
+</svg>

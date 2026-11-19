@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="610" viewBox="0 0 1000 610" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Which tool calls reach you: when Claude Code's own permission rules settle a call, it runs or is refused and comando is not asked; otherwise Claude Code calls comando's approve tool; for a session in bypass comando allows Bash, Edit, Write, MultiEdit and NotebookEdit once by itself, except a Bash command with rm or rmdir; every other call becomes a card in the Approvals tab that you answer with Allow once, For session, Always or Deny, and a card unanswered for 24 hours is denied. The six kinds of card are tool, question, plan, SQL write, connection and terminal</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="610" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">APPROVALS</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Which tool calls reach you</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="110" width="250" height="56" rx="8" stroke="#D98E5F"/>
+    <rect x="40" y="206" width="250" height="74" rx="8" stroke="#D98E5F"/>
+    <rect x="350" y="206" width="300" height="74" rx="8" stroke="#D98E5F" stroke-dasharray="5 4"/>
+    <rect x="40" y="320" width="250" height="100" rx="8" stroke="#6FAEE8"/>
+    <rect x="350" y="320" width="300" height="100" rx="8" stroke="#6FAEE8" stroke-dasharray="5 4"/>
+    <rect x="40" y="460" width="250" height="74" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="350" y="466" width="140" height="62" rx="8" stroke="#E7C55A"/>
+    <rect x="500" y="466" width="140" height="62" rx="8" stroke="#E7C55A"/>
+    <rect x="650" y="466" width="140" height="62" rx="8" stroke="#E7C55A"/>
+    <rect x="800" y="466" width="160" height="62" rx="8" stroke="#E7C55A"/>
+    <rect x="710" y="110" width="250" height="196" rx="8" stroke="#9AA0A6" stroke-width="0.8"/>
+  </g>
+
+  <g font-size="14" fill="#E8E8E8">
+    <text x="56" y="143">Claude wants to call a tool</text>
+    <text x="56" y="236">Do Claude Code's permission</text>
+    <text x="56" y="256">rules settle it?</text>
+    <text x="56" y="348">Is the session in bypass, and</text>
+    <text x="56" y="368">the tool Bash, Edit, Write,</text>
+    <text x="56" y="388">MultiEdit or NotebookEdit,</text>
+    <text x="56" y="408">with no rm or rmdir?</text>
+    <text x="56" y="490">A card waits for you</text>
+    <text x="56" y="510">in the Approvals tab</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="366" y="236">it runs, or it is refused;</text>
+    <text x="366" y="256">comando is not asked</text>
+    <text x="366" y="348">comando allows this one call and</text>
+    <text x="366" y="368">saves no rule; the audit log reads</text>
+  </g>
+  <text x="366" y="396" font-size="13" font-family="Menlo, Consolas, monospace" fill="#6FAEE8">Allow[self: session in bypass]</text>
+
+  <g font-size="14" fill="#E7C55A">
+    <text x="364" y="492">Allow once</text>
+    <text x="514" y="492">For session</text>
+    <text x="664" y="492">Always</text>
+    <text x="814" y="492">Deny</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="364" y="512">this call only</text>
+    <text x="514" y="512">adds a session rule</text>
+    <text x="664" y="512">saves a project rule</text>
+    <text x="814" y="512">with your note</text>
+  </g>
+
+  <g stroke="#9AA0A6" stroke-width="1.3" fill="none" marker-end="url(#a)">
+    <path d="M165 166 V204"/>
+    <path d="M290 243 H348"/>
+    <path d="M165 280 V318"/>
+    <path d="M290 370 H348"/>
+    <path d="M165 420 V458"/>
+    <path d="M290 497 H348"/>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="319" y="235" text-anchor="middle">yes</text>
+    <text x="175" y="304">no: it calls</text>
+    <text x="319" y="362" text-anchor="middle">yes</text>
+    <text x="175" y="444">no</text>
+  </g>
+  <text x="246" y="304" font-size="13" font-family="Menlo, Consolas, monospace" fill="#6FAEE8">approve</text>
+
+  <text x="726" y="138" font-size="13" letter-spacing="2" fill="#E8E8E8">SIX KINDS OF CARD</text>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="726" y="166">tool · Bash, Edit, an MCP tool</text>
+    <text x="726" y="188">question · AskUserQuestion</text>
+    <text x="726" y="210">plan · ExitPlanMode</text>
+    <text x="726" y="232">SQL write · db_run_sql</text>
+    <text x="726" y="254">connection · a weaker setting</text>
+    <text x="726" y="276">terminal · terminal_send</text>
+  </g>
+
+  <text x="350" y="556" font-size="13" fill="#9AA0A6">No answer within 24 hours: the card is withdrawn and the call denied.</text>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="580" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.5"/>
+    <text x="62" y="592">decided by Claude Code</text>
+    <rect x="226" y="580" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.5"/>
+    <text x="248" y="592">decided by comando</text>
+    <rect x="388" y="580" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+    <text x="410" y="592">decided by you</text>
+    <text x="960" y="592" text-anchor="end">comando · docs/claude-code.md</text>
+  </g>
+</svg>

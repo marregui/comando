@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="650" viewBox="0 0 1000 650" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The comando universe: you and the window in the centre; around it the workbench, Claude Code, the kit, the brain, cdb, frontear, the code and the other instances, each with the page that explains it</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+  </defs>
+  <rect width="1000" height="650" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">THE COMANDO UNIVERSE</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One window, and everything around it</text>
+
+  <!-- spokes -->
+  <g stroke="#E7C55A" stroke-width="1.1" opacity="0.7">
+    <line x1="320" y1="335" x2="360" y2="335"/><line x1="640" y1="335" x2="680" y2="335"/>
+    <line x1="500" y1="240" x2="500" y2="270"/><line x1="500" y1="400" x2="500" y2="430"/>
+    <line x1="320" y1="240" x2="360" y2="270"/><line x1="680" y1="240" x2="640" y2="270"/>
+    <line x1="320" y1="430" x2="360" y2="400"/><line x1="680" y1="430" x2="640" y2="400"/>
+  </g>
+
+  <!-- boxes -->
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="110" width="280" height="130" rx="8" stroke="#6FAEE8"/>
+    <rect x="360" y="110" width="280" height="130" rx="8" stroke="#D98E5F"/>
+    <rect x="680" y="110" width="280" height="130" rx="8" stroke="#6CC69A"/>
+    <rect x="40" y="270" width="280" height="130" rx="8" stroke="#6FAEE8"/>
+    <rect x="360" y="270" width="280" height="130" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="680" y="270" width="280" height="130" rx="8" stroke="#6CC69A"/>
+    <rect x="40" y="430" width="280" height="130" rx="8" stroke="#6FAEE8"/>
+    <rect x="360" y="430" width="280" height="130" rx="8" stroke="#6FAEE8"/>
+    <rect x="680" y="430" width="280" height="130" rx="8" stroke="#AEB6C1"/>
+  </g>
+
+  <!-- labels in spaced capitals -->
+  <g font-size="13" letter-spacing="2.5">
+    <text x="60" y="138" fill="#6FAEE8">WORKBENCH</text>
+    <text x="380" y="138" fill="#D98E5F">CLAUDE CODE</text>
+    <text x="700" y="138" fill="#6CC69A">KIT</text>
+    <text x="60" y="298" fill="#6FAEE8">DATABASE</text>
+    <text x="380" y="298" fill="#E7C55A">YOU · THE WINDOW</text>
+    <text x="700" y="298" fill="#6CC69A">BRAIN</text>
+    <text x="60" y="458" fill="#6FAEE8">MESSAGING</text>
+    <text x="380" y="458" fill="#6FAEE8">THE CODE</text>
+    <text x="700" y="458" fill="#AEB6C1">INSTANCES</text>
+  </g>
+
+  <!-- headlines -->
+  <g font-size="17" fill="#E8E8E8">
+    <text x="60" y="164">One editor, two targets</text>
+    <text x="380" y="164">Sessions that drive the window</text>
+    <text x="700" y="164">How the agent works</text>
+    <text x="60" y="324">cdb, comando's own database</text>
+    <text x="380" y="324">A block runs, the answer lands</text>
+    <text x="700" y="324">What the agent remembers</text>
+    <text x="60" y="484">frontear, its MQTT fabric</text>
+    <text x="380" y="484">Ten modules, one reducer</text>
+    <text x="700" y="484">Several comandos, one machine</text>
+  </g>
+
+  <!-- descriptions -->
+  <g font-size="13" fill="#9AA0A6">
+    <text x="60" y="186">panels, results, plots, a terminal,</text>
+    <text x="60" y="204">Gradle runs, files and git changes</text>
+    <text x="380" y="186">one claude -p process per session;</text>
+    <text x="380" y="204">tools, views and approval cards</text>
+    <text x="700" y="186">hooks, agents, skills, tools and</text>
+    <text x="700" y="204">gates that every session runs on</text>
+    <text x="60" y="346">columnar, split by time; and your</text>
+    <text x="60" y="364">PostgreSQL or QuestDB servers</text>
+    <text x="380" y="346">SQL goes to the panel's database,</text>
+    <text x="380" y="364">a prompt to the panel's session</text>
+    <text x="700" y="346">memory, a knowledge base and a</text>
+    <text x="700" y="364">scratchpad, kept true by reflect</text>
+    <text x="60" y="506">a client, a broker and signed</text>
+    <text x="60" y="524">links between brokers</text>
+    <text x="380" y="506">core in the middle, adapters</text>
+    <text x="380" y="524">around it, app wires them</text>
+    <text x="700" y="506">each with its own kit and brain;</text>
+    <text x="700" y="524">they ask each other over MQTT</text>
+  </g>
+
+  <!-- the page that explains each -->
+  <g font-family="Menlo, Consolas, monospace" font-size="13">
+    <text x="60" y="226" fill="#6FAEE8">tutorial · workbench</text>
+    <text x="380" y="226" fill="#D98E5F">claude-code</text>
+    <text x="700" y="226" fill="#6CC69A">kit-and-brain · kit</text>
+    <text x="60" y="386" fill="#6FAEE8">cdb · cdb-sql</text>
+    <text x="380" y="386" fill="#E7C55A">README · tutorial</text>
+    <text x="700" y="386" fill="#6CC69A">kit-and-brain · brain</text>
+    <text x="60" y="546" fill="#6FAEE8">frontear</text>
+    <text x="380" y="546" fill="#6FAEE8">architecture · modules/</text>
+    <text x="700" y="546" fill="#AEB6C1">architecture · workbench</text>
+  </g>
+
+  <!-- legend -->
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="590" width="14" height="14" rx="3" fill="#E7C55A"/><text x="62" y="602">you and the window</text>
+    <rect x="216" y="590" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="238" y="602">comando</text>
+    <rect x="328" y="590" width="14" height="14" rx="3" fill="#D98E5F"/><text x="350" y="602">Claude Code</text>
+    <rect x="462" y="590" width="14" height="14" rx="3" fill="#6CC69A"/><text x="484" y="602">kit and brain</text>
+    <rect x="596" y="590" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="618" y="602">instances</text>
+    <text x="40" y="632">comando · docs/README</text>
+  </g>
+</svg>

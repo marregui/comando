@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="566" viewBox="0 0 1200 566" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>Three ways core starts work off the loop: a strand, an errand, a fork</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="566" fill="url(#bg)"/>
+<text x="48" y="48" font-size="13" fill="#E7C55A" letter-spacing="3">MODULE · CORE · THREADS</text>
+<text x="48" y="82" font-size="24" font-weight="300" fill="#E8E8E8">Three ways to work off the loop, each on virtual threads</text>
+
+<text x="560" y="118" font-size="13" fill="#9AA0A6" letter-spacing="2">TIME</text>
+<path d="M606,113 L1140,113" fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)"/>
+
+<line x1="48" y1="136" x2="1152" y2="136" stroke="#3A3A3A" stroke-width="1"/>
+<text x="48" y="172" font-size="16" fill="#6FAEE8">Strand</text>
+<text x="48" y="198" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">Threads.strand(name)</text>
+<text x="48" y="222" font-size="14" fill="#9AA0A6">One thread, one queue.</text>
+<text x="48" y="242" font-size="14" fill="#9AA0A6">Tasks run in order, never two at once.</text>
+<g font-size="13" fill="#E8E8E8" text-anchor="middle">
+<rect x="360" y="178" width="52" height="30" rx="4" fill="#2A2A2A" stroke="#6FAEE8" stroke-width="1"/><text x="386" y="198">C</text>
+<rect x="420" y="178" width="52" height="30" rx="4" fill="#2A2A2A" stroke="#6FAEE8" stroke-width="1"/><text x="446" y="198">B</text>
+<rect x="560" y="178" width="180" height="30" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="650" y="198">task A</text>
+<rect x="740" y="178" width="120" height="30" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="800" y="198">task B</text>
+<rect x="860" y="178" width="220" height="30" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="970" y="198">task C</text>
+</g>
+<path d="M476,193 L556,193" fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)"/>
+<text x="360" y="232" font-size="13" fill="#9AA0A6">waiting in the queue</text>
+<text x="560" y="232" font-size="13" fill="#9AA0A6">one virtual thread runs them one after another</text>
+
+<line x1="48" y1="264" x2="1152" y2="264" stroke="#3A3A3A" stroke-width="1"/>
+<text x="48" y="300" font-size="16" fill="#6FAEE8">Errand</text>
+<text x="48" y="326" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">errands.start(name, task)</text>
+<text x="48" y="350" font-size="14" fill="#9AA0A6">One thread per job, kept by an owner.</text>
+<text x="48" y="370" font-size="14" fill="#9AA0A6">close() interrupts every one of them.</text>
+<g font-size="13" fill="#E8E8E8" text-anchor="middle">
+<rect x="560" y="282" width="200" height="24" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="660" y="299">job 1 (done)</text>
+<rect x="640" y="314" width="360" height="24" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="820" y="331">job 2</text>
+<rect x="800" y="346" width="200" height="24" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="900" y="363">job 3</text>
+</g>
+<line x1="1000" y1="274" x2="1000" y2="380" stroke="#E7C55A" stroke-width="1.4"/>
+<text x="1012" y="330" font-size="13" fill="#E7C55A" font-family="Menlo, Consolas, monospace">close()</text>
+<text x="1012" y="350" font-size="13" fill="#9AA0A6">waits up to 2 s</text>
+
+<line x1="48" y1="392" x2="1152" y2="392" stroke="#3A3A3A" stroke-width="1"/>
+<text x="48" y="428" font-size="16" fill="#6FAEE8">Fork</text>
+<text x="48" y="454" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">Threads.fork(name, task)</text>
+<text x="48" y="478" font-size="14" fill="#9AA0A6">A helper for one call.</text>
+<text x="48" y="498" font-size="14" fill="#9AA0A6">The caller collects it before it returns.</text>
+<g font-size="13" fill="#E8E8E8" text-anchor="middle">
+<rect x="560" y="410" width="520" height="24" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="820" y="427">the caller</text>
+<rect x="680" y="458" width="280" height="24" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="820" y="475">the fork</text>
+</g>
+<g fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)">
+<path d="M650,434 L678,456"/>
+<path d="M962,458 L990,436"/>
+</g>
+<text x="596" y="474" font-size="13" fill="#9AA0A6">start</text>
+<text x="1000" y="474" font-size="13" fill="#9AA0A6">join</text>
+<text x="48" y="546" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/modules/core.md</text>
+</svg>

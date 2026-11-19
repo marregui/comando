@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>How comando routes a block: the editor holds blocks separated by empty lines; a block that starts like SQL goes to the panel's connection and answers in the Results tab, any other block goes to the panel's Claude session and answers in the Session tab; three keys choose the route</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#E7C55A"/></marker>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#D98E5F"/></marker>
+  </defs>
+  <rect width="1000" height="560" fill="url(#bg)"/>
+  <text x="32" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">ONE EDITOR, TWO DESTINATIONS</text>
+  <text x="32" y="78" font-size="24" font-weight="300" fill="#E8E8E8">A block is SQL or a prompt</text>
+
+  <!-- the editor -->
+  <rect x="32" y="110" width="440" height="300" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="52" y="138" font-size="13" letter-spacing="2.5" fill="#6FAEE8">THE EDITOR</text>
+  <line x1="92" y1="152" x2="92" y2="394" stroke="#9AA0A6" stroke-width="0.6"/>
+  <text x="52" y="398" font-size="13" fill="#9AA0A6" transform="rotate(-90 52 398)">gutter</text>
+
+  <!-- block 1: SQL -->
+  <rect x="100" y="158" width="356" height="62" rx="5" fill="#161616" stroke="#E7C55A" stroke-width="0.8"/>
+  <g stroke="#E7C55A" stroke-width="1.4" fill="none">
+    <ellipse cx="74" cy="178" rx="9" ry="4"/><path d="M65 178 V196 A9 4 0 0 0 83 196 V178"/><path d="M65 187 A9 4 0 0 0 83 187"/>
+  </g>
+  <g font-size="13" font-family="Menlo, Consolas, monospace" fill="#E8E8E8">
+    <text x="112" y="183">select sym, count(), avg(price)</text>
+    <text x="112" y="205">from trades;</text>
+  </g>
+  <text x="112" y="244" font-size="13" fill="#9AA0A6">an empty line ends a block</text>
+
+  <!-- block 2: prompt -->
+  <rect x="100" y="260" width="356" height="62" rx="5" fill="#161616" stroke="#D98E5F" stroke-width="0.8"/>
+  <g stroke="#D98E5F" stroke-width="2.2" stroke-linecap="round">
+    <line x1="74" y1="280" x2="74" y2="302"/><line x1="64.5" y1="285.5" x2="83.5" y2="296.5"/><line x1="64.5" y1="296.5" x2="83.5" y2="285.5"/>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="112" y="285">Which symbol trades most? Look at the</text>
+    <text x="112" y="307">table first, then tell me in one line.</text>
+  </g>
+
+  <!-- block 3: a comment -->
+  <rect x="100" y="344" width="356" height="40" rx="5" fill="#161616" stroke="#9AA0A6" stroke-width="0.6"/>
+  <text x="112" y="369" font-size="13" font-family="Menlo, Consolas, monospace" fill="#9AA0A6">-- only a comment: nothing to run</text>
+
+  <!-- arrows -->
+  <path d="M456 189 H608" stroke="#E7C55A" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
+  <path d="M456 291 H608" stroke="#D98E5F" stroke-width="1.5" fill="none" marker-end="url(#o)"/>
+  <g font-size="13" text-anchor="middle" fill="#9AA0A6">
+    <text x="541" y="180">starts like SQL</text>
+    <text x="541" y="282">anything else</text>
+  </g>
+
+  <!-- destinations -->
+  <rect x="612" y="134" width="356" height="110" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.3"/>
+  <text x="632" y="162" font-size="13" letter-spacing="2.5" fill="#E7C55A">THE PANEL'S CONNECTION</text>
+  <text x="632" y="190" font-size="15" fill="#E8E8E8">cdb runs the statement</text>
+  <text x="632" y="218" font-size="13" fill="#9AA0A6">the answer lands in the Results tab</text>
+  <rect x="612" y="262" width="356" height="110" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.3"/>
+  <text x="632" y="290" font-size="13" letter-spacing="2.5" fill="#D98E5F">THE PANEL'S SESSION</text>
+  <text x="632" y="318" font-size="15" fill="#E8E8E8">Claude Code reads the prompt</text>
+  <text x="632" y="346" font-size="13" fill="#9AA0A6">the answer streams into the Session tab</text>
+
+  <!-- keys -->
+  <text x="32" y="446" font-size="13" letter-spacing="2.5" fill="#9AA0A6">THE KEYS</text>
+  <g fill="#1E1E1E" stroke="#9AA0A6" stroke-width="0.8">
+    <rect x="32" y="458" width="222" height="40" rx="6"/><rect x="270" y="458" width="222" height="40" rx="6"/>
+    <rect x="508" y="458" width="222" height="40" rx="6"/><rect x="746" y="458" width="222" height="40" rx="6"/>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="46" y="483"><tspan fill="#E7C55A" font-weight="600">Cmd Enter</tspan>  as the gutter says</text>
+    <text x="284" y="483"><tspan fill="#E7C55A" font-weight="600">Option Enter</tspan>  always SQL</text>
+    <text x="522" y="483"><tspan fill="#D98E5F" font-weight="600">Cmd Shift Enter</tspan>  to Claude</text>
+    <text x="760" y="483"><tspan fill="#E7C55A" font-weight="600">Cmd .</tspan>  stop what runs</text>
+  </g>
+
+  <!-- legend -->
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="32" y="518" width="14" height="14" rx="3" fill="#E7C55A"/><text x="54" y="530">SQL, to cdb</text>
+    <rect x="160" y="518" width="14" height="14" rx="3" fill="#D98E5F"/><text x="182" y="530">a prompt, to Claude Code</text>
+    <rect x="372" y="518" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="394" y="530">comando's window</text>
+    <text x="968" y="530" text-anchor="end">comando · docs/tutorial</text>
+  </g>
+</svg>

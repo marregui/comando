@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="470" viewBox="0 0 1000 470" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>A subagent seen two ways: the claude -p process sends the subagent's blocks in its stream, marked with parent_tool_use_id, and comando nests them in the Agent card of the Session tab; Claude Code also writes the subagent's whole conversation to agent-id.jsonl under the session's subagents folder, and comando follows that file every 2 seconds into a tab of its own</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="470" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">SUBAGENTS</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One helper, shown twice: in its card and in its own tab</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="350" y="106" width="300" height="56" rx="8" stroke="#D98E5F"/>
+    <rect x="40" y="230" width="290" height="190" rx="8" stroke="#6FAEE8"/>
+    <rect x="360" y="230" width="280" height="190" rx="8" stroke="#D98E5F" stroke-dasharray="5 4"/>
+    <rect x="670" y="230" width="290" height="190" rx="8" stroke="#6FAEE8"/>
+  </g>
+  <rect x="56" y="270" width="258" height="104" rx="6" fill="#161616" stroke="#D98E5F" stroke-width="1"/>
+  <g stroke="#9AA0A6" stroke-width="1" stroke-opacity="0.5">
+    <path d="M72 300 V362"/>
+  </g>
+
+  <g font-family="Menlo, Consolas, monospace" font-size="15">
+    <text x="366" y="130" fill="#D98E5F">claude -p</text>
+  </g>
+  <text x="366" y="150" font-size="13" fill="#9AA0A6">the session calls the Agent tool</text>
+
+  <g font-size="13" letter-spacing="2">
+    <text x="56" y="256" fill="#6FAEE8">SESSION TAB</text>
+    <text x="376" y="256" fill="#D98E5F">ON DISK</text>
+    <text x="686" y="256" fill="#6FAEE8">A TAB OF ITS OWN</text>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="68" y="292">Agent · look for the cause</text>
+    <text x="84" y="316">text</text>
+    <text x="84" y="336">tool call · Grep</text>
+    <text x="84" y="356">text</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="56" y="398">the subagent's blocks nest in its card</text>
+    <text x="376" y="398">written by Claude Code as it works</text>
+    <text x="686" y="322">adds the whole lines the file gained,</text>
+    <text x="686" y="340">every 2 s while the session runs</text>
+    <text x="686" y="366">at most 4 tabs follow at once</text>
+    <text x="686" y="392">stops when the subagent ends, or</text>
+    <text x="686" y="410">after 10 min without growth</text>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="376" y="286">&lt;session-id&gt;.jsonl</text>
+    <text x="376" y="310">&lt;session-id&gt;/subagents/</text>
+    <text x="392" y="334">agent-&lt;id&gt;.jsonl</text>
+    <text x="392" y="358">agent-&lt;id&gt;.meta.json</text>
+    <text x="686" y="292" fill="#6FAEE8">ClaudeAdapter.showSubagent</text>
+  </g>
+
+  <g stroke="#9AA0A6" stroke-width="1.3" fill="none" marker-end="url(#a)">
+    <path d="M420 162 V196 H185 V228"/>
+    <path d="M500 162 V228" stroke-dasharray="5 4"/>
+    <path d="M640 330 H668"/>
+  </g>
+  <g font-size="13" fill="#E8E8E8">
+    <text x="194" y="188">stream events with</text>
+    <text x="510" y="204">writes</text>
+    <text x="654" y="216" text-anchor="middle">tail</text>
+  </g>
+  <text x="194" y="212" font-size="13" font-family="Menlo, Consolas, monospace" fill="#9AA0A6">parent_tool_use_id</text>
+  <path d="M654 222 V318" stroke="#9AA0A6" stroke-width="0.8" stroke-opacity="0.5"/>
+
+  <text x="960" y="452" font-size="13" text-anchor="end" fill="#9AA0A6">comando · docs/claude-code.md</text>
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="440" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.5"/>
+    <text x="62" y="452">comando</text>
+    <rect x="136" y="440" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.5"/>
+    <text x="158" y="452">Claude Code</text>
+    <path d="M254 447 H282" stroke="#9AA0A6" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <text x="290" y="452">files on disk</text>
+  </g>
+</svg>

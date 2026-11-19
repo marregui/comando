@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="694" viewBox="0 0 1100 694" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>SQL on cdb in one picture: a table of rows and columns, a query, and the table that answers it</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
+<rect width="1100" height="694" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">CDB SQL · THE WHOLE IDEA</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">You ask in one sentence. cdb answers with a table.</text>
+
+<text x="40" y="112" font-size="13" fill="#9AA0A6" letter-spacing="2">TABLE weather · 12 ROWS × 6 COLUMNS</text>
+<rect x="40" y="124" width="532" height="358" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<path d="M40,170 H572" stroke="#3A3A3A" stroke-width="1"/>
+<g stroke="#2A2A2A" stroke-width="1">
+<path d="M40,196 H572"/><path d="M40,222 H572"/><path d="M40,248 H572"/><path d="M40,274 H572"/><path d="M40,300 H572"/><path d="M40,326 H572"/><path d="M40,352 H572"/><path d="M40,378 H572"/><path d="M40,404 H572"/><path d="M40,430 H572"/><path d="M40,456 H572"/>
+</g>
+<g fill="#E7C55A" fill-opacity="0.13" stroke="#E7C55A" stroke-width="1">
+<rect x="40" y="222" width="532" height="26"/><rect x="40" y="300" width="532" height="26"/><rect x="40" y="404" width="532" height="26"/>
+</g>
+<rect x="274" y="126" width="60" height="354" fill="#6FAEE8" fill-opacity="0.07" stroke="#6FAEE8" stroke-width="1.2" stroke-dasharray="5 4"/>
+<g font-family="Menlo, Consolas, monospace" font-size="14" fill="#E8E8E8" font-weight="600">
+<text x="52" y="143">ts</text><text x="202" y="143">city</text><text x="282" y="143">temp</text><text x="342" y="143">rain</text><text x="400" y="143">sunny</text><text x="466" y="143">note</text>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#9AA0A6">
+<text x="52" y="162">TIMESTAMP</text><text x="202" y="162">SYMBOL</text><text x="282" y="162">DOUBLE</text><text x="342" y="162">LONG</text><text x="400" y="162">BOOLEAN</text><text x="466" y="162">VARCHAR</text>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="52" y="188">2026-06-01 06:00</text><text x="202" y="188">Madrid</text><text x="282" y="188">18.0</text><text x="342" y="188">0</text><text x="400" y="188">true</text><text x="466" y="188">clear</text>
+<text x="52" y="214">2026-06-01 06:00</text><text x="202" y="214">Oslo</text><text x="282" y="214">9.5</text><text x="342" y="214">2</text><text x="400" y="214">false</text><text x="466" y="214">drizzle</text>
+<text x="52" y="240">2026-06-01 12:00</text><text x="202" y="240">Madrid</text><text x="282" y="240">29.5</text><text x="342" y="240">0</text><text x="400" y="240">true</text><text x="466" y="240">hot</text>
+<text x="52" y="266">2026-06-01 12:00</text><text x="202" y="266">Oslo</text><text x="282" y="266">14.0</text><text x="342" y="266">5</text><text x="400" y="266">false</text><text x="466" y="266">rain</text>
+<text x="52" y="292">2026-06-01 12:30</text><text x="202" y="292">Lima</text><text x="282" y="292">19.0</text><text x="342" y="292">0</text><text x="400" y="292">false</text><text x="466" y="292">fog</text>
+<text x="52" y="318">2026-06-01 18:00</text><text x="202" y="318">Madrid</text><text x="282" y="318">27.0</text><text x="342" y="318">0</text><text x="400" y="318">true</text><text x="466" y="318" fill="#9AA0A6">NULL</text>
+<text x="52" y="344">2026-06-01 18:00</text><text x="202" y="344">Oslo</text><text x="282" y="344">12.5</text><text x="342" y="344">1</text><text x="400" y="344">false</text><text x="466" y="344">drizzle</text>
+<text x="52" y="370">2026-06-02 06:00</text><text x="202" y="370">Madrid</text><text x="282" y="370">19.5</text><text x="342" y="370">0</text><text x="400" y="370">true</text><text x="466" y="370">clear</text>
+<text x="52" y="396">2026-06-02 06:00</text><text x="202" y="396">Oslo</text><text x="282" y="396">8.0</text><text x="342" y="396">0</text><text x="400" y="396">true</text><text x="466" y="396">clear</text>
+<text x="52" y="422">2026-06-02 12:00</text><text x="202" y="422">Madrid</text><text x="282" y="422">31.0</text><text x="342" y="422">0</text><text x="400" y="422">true</text><text x="466" y="422">hot</text>
+<text x="52" y="448">2026-06-02 12:00</text><text x="202" y="448">Oslo</text><text x="282" y="448" fill="#9AA0A6">NULL</text><text x="342" y="448">3</text><text x="400" y="448">false</text><text x="466" y="448">sensor fault</text>
+<text x="52" y="474">2026-06-02 12:00</text><text x="202" y="474">Lima</text><text x="282" y="474">18.5</text><text x="342" y="474">0</text><text x="400" y="474">false</text><text x="466" y="474">fog</text>
+</g>
+
+<rect x="40" y="500" width="22" height="14" fill="#6FAEE8" fill-opacity="0.07" stroke="#6FAEE8" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="72" y="512" font-size="14" fill="#E8E8E8">a column: one kind of fact, one type for every row</text>
+<rect x="40" y="524" width="22" height="14" fill="#E7C55A" fill-opacity="0.13" stroke="#E7C55A" stroke-width="1"/>
+<text x="72" y="536" font-size="14" fill="#E8E8E8">a row: one reading. The gold rows pass the test <tspan font-family="Menlo, Consolas, monospace" font-size="13">temp &gt; 25</tspan></text>
+
+<text x="620" y="112" font-size="13" fill="#9AA0A6" letter-spacing="2">1 · YOU ASK</text>
+<rect x="620" y="124" width="440" height="92" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.4"/>
+<g font-family="Menlo, Consolas, monospace" font-size="15" fill="#E8E8E8">
+<text x="640" y="152"><tspan fill="#E7C55A">SELECT</tspan> city, temp</text>
+<text x="640" y="176"><tspan fill="#E7C55A">FROM</tspan> weather</text>
+<text x="640" y="200"><tspan fill="#E7C55A">WHERE</tspan> temp &gt; 25</text>
+</g>
+<g font-size="13" fill="#9AA0A6">
+<text x="850" y="152">which columns</text><text x="850" y="176">which table</text><text x="850" y="200">which rows</text>
+</g>
+
+<text x="700" y="268" font-size="13" fill="#9AA0A6" letter-spacing="2">2 · CDB ANSWERS WITH A TABLE</text>
+<rect x="700" y="282" width="280" height="104" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<path d="M700,308 H980" stroke="#3A3A3A" stroke-width="1"/>
+<g stroke="#2A2A2A" stroke-width="1"><path d="M700,334 H980"/><path d="M700,360 H980"/></g>
+<g font-family="Menlo, Consolas, monospace" font-size="14" fill="#E8E8E8" font-weight="600"><text x="716" y="300">city</text><text x="860" y="300">temp</text></g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="716" y="326">Madrid</text><text x="860" y="326">29.5</text>
+<text x="716" y="352">Madrid</text><text x="860" y="352">27.0</text>
+<text x="716" y="378">Madrid</text><text x="860" y="378">31.0</text>
+</g>
+<g fill="none" stroke="#E7C55A" stroke-width="1.2" stroke-opacity="0.75">
+<path d="M572,235 C640,235 632,321 700,321"/><path d="M572,313 C640,313 632,347 700,347"/><path d="M572,417 C640,417 632,373 700,373"/>
+</g>
+
+<rect x="620" y="412" width="440" height="70" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="636" y="438" font-size="13" fill="#9AA0A6" letter-spacing="2">3 · THE ANSWER IS A TABLE TOO</text>
+<text x="636" y="464" font-size="14" fill="#E8E8E8">So one query can read the answer of another query.</text>
+
+<text x="40" y="574" font-size="13" fill="#9AA0A6" letter-spacing="2">WHAT THIS PAGE TEACHES</text>
+<g fill="#1E1E1E" stroke-width="1.2">
+<rect x="40" y="586" width="246" height="68" rx="8" stroke="#E7C55A"/><rect x="298" y="586" width="246" height="68" rx="8" stroke="#6FAEE8"/><rect x="556" y="586" width="246" height="68" rx="8" stroke="#D98E5F"/><rect x="814" y="586" width="246" height="68" rx="8" stroke="#6CC69A"/>
+</g>
+<g font-size="13" letter-spacing="2">
+<text x="54" y="607" fill="#E7C55A">READ</text><text x="312" y="607" fill="#6FAEE8">READ BY TIME</text><text x="570" y="607" fill="#D98E5F">CHANGE</text><text x="828" y="607" fill="#6CC69A">INSPECT</text>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="54" y="627">SELECT WHERE ORDER BY LIMIT</text><text x="54" y="645">GROUP BY JOIN UNION OVER</text>
+<text x="312" y="627">SAMPLE BY · FILL</text><text x="312" y="645">LATEST ON · IN '2026-06'</text>
+<text x="570" y="627">CREATE ALTER DROP TRUNCATE</text><text x="570" y="645">INSERT UPDATE DELETE</text>
+<text x="828" y="627">SHOW · EXPLAIN</text><text x="828" y="645">tables() · BACKUP</text>
+</g>
+<text x="40" y="678" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/cdb-sql</text>
+</svg>

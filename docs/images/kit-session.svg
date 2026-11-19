@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500" viewBox="0 0 1200 500" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>A session's life as a timeline of six moments, with the part of the kit that acts at each</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="48%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#121212"/>
+    </radialGradient>
+    <linearGradient id="rail" gradientUnits="userSpaceOnUse" x1="60" y1="210" x2="1140" y2="210">
+      <stop offset="0" stop-color="#6CC69A" stop-opacity=".15"/>
+      <stop offset=".5" stop-color="#6CC69A" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#6CC69A" stop-opacity=".15"/>
+    </linearGradient>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:3px}
+      .h{font-size:26px;font-weight:300;fill:#E8E8E8}
+      .t{font-size:17px;fill:#E8E8E8}
+      .l{font-size:14px;fill:#E8E8E8}
+      .d{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:13px;fill:#D98E5F}
+      .foot{font-size:13px;fill:#9AA0A6}
+    </style>
+  </defs>
+  <rect width="1200" height="500" fill="url(#bg)"/>
+
+  <text x="40" y="50" class="cap" fill="#6CC69A">A SESSION'S LIFE</text>
+  <text x="40" y="84" class="h">Which part acts, and when</text>
+  <text x="40" y="110" class="d">Claude Code announces each moment as an event. The kit decides what happens at it.</text>
+
+  <!-- rail -->
+  <line x1="60" y1="210" x2="1140" y2="210" stroke="url(#rail)" stroke-width="2"/>
+
+  <g text-anchor="middle">
+    <!-- start -->
+    <text x="130" y="158" class="m">SessionStart</text>
+    <text x="130" y="186" class="t">start</text>
+    <circle cx="130" cy="210" r="8" fill="#1E1E1E" stroke="#6CC69A" stroke-width="2"/><circle cx="130" cy="210" r="3" fill="#6CC69A"/>
+    <text x="130" y="250" class="l">CLAUDE.md loads</text>
+    <text x="130" y="272" class="l">settings load</text>
+    <text x="130" y="294" class="l">start hooks run</text>
+    <text x="130" y="316" class="l" style="fill:#E7C55A">memory index loads</text>
+
+    <!-- prompt -->
+    <text x="318" y="158" class="m">UserPromptSubmit</text>
+    <text x="318" y="186" class="t">a prompt</text>
+    <circle cx="318" cy="210" r="8" fill="#1E1E1E" stroke="#6CC69A" stroke-width="2"/><circle cx="318" cy="210" r="3" fill="#6CC69A"/>
+    <text x="318" y="250" class="l">hooks add context:</text>
+    <text x="318" y="272" class="l" style="fill:#E7C55A">matching memory</text>
+    <text x="318" y="294" class="l" style="fill:#E7C55A">and knowledge</text>
+    <text x="318" y="316" class="l">a skill runs by /name</text>
+
+    <!-- before a tool -->
+    <text x="506" y="158" class="m">PreToolUse</text>
+    <text x="506" y="186" class="t">before a tool</text>
+    <circle cx="506" cy="210" r="8" fill="#1E1E1E" stroke="#6CC69A" stroke-width="2"/><circle cx="506" cy="210" r="3" fill="#6CC69A"/>
+    <text x="506" y="250" class="l">permission rules apply</text>
+    <text x="506" y="272" class="l">guard hooks may refuse</text>
+    <text x="506" y="294" class="l" style="fill:#6FAEE8">comando shows a card</text>
+    <text x="506" y="316" class="l" style="fill:#6FAEE8">for a call left to ask</text>
+
+    <!-- after a tool -->
+    <text x="694" y="158" class="m">PostToolUse</text>
+    <text x="694" y="186" class="t">after a tool</text>
+    <circle cx="694" cy="210" r="8" fill="#1E1E1E" stroke="#6CC69A" stroke-width="2"/><circle cx="694" cy="210" r="3" fill="#6CC69A"/>
+    <text x="694" y="250" class="l">check hooks look at</text>
+    <text x="694" y="272" class="l">what was written</text>
+    <text x="694" y="294" class="l">and report what is</text>
+    <text x="694" y="316" class="l">now missing</text>
+
+    <!-- compaction -->
+    <text x="882" y="158" class="m">SessionStart · compact</text>
+    <text x="882" y="186" class="t">a compaction</text>
+    <circle cx="882" cy="210" r="8" fill="#1E1E1E" stroke="#6CC69A" stroke-width="2"/><circle cx="882" cy="210" r="3" fill="#6CC69A"/>
+    <text x="882" y="250" class="l">the talk is summarised</text>
+    <text x="882" y="272" class="l">a hook puts the rules</text>
+    <text x="882" y="294" class="l">that must survive</text>
+    <text x="882" y="316" class="l">back in context</text>
+
+    <!-- checkpoint -->
+    <text x="1070" y="158" class="m" style="fill:#6FAEE8">comando</text>
+    <text x="1070" y="186" class="t">the checkpoint</text>
+    <circle cx="1070" cy="210" r="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="2"/><circle cx="1070" cy="210" r="3" fill="#6FAEE8"/>
+    <text x="1070" y="250" class="l" style="fill:#6FAEE8">comando sends /reflect</text>
+    <text x="1070" y="272" class="l">the reflect skill</text>
+    <text x="1070" y="294" class="l" style="fill:#E7C55A">updates the brain</text>
+    <text x="1070" y="316" class="l" style="fill:#6FAEE8">then comes /compact</text>
+  </g>
+
+  <!-- outside any session -->
+  <rect x="40" y="356" width="1120" height="62" rx="12" fill="#1E1E1E" stroke="#2A2A2A"/>
+  <text x="64" y="382" class="cap" fill="#6CC69A">OUTSIDE ANY SESSION</text>
+  <text x="64" y="404" class="l">Scheduled jobs run with no window, started by the operating system's scheduler. comando starts none of them.</text>
+
+  <!-- legend -->
+  <line x1="40" y1="458" x2="1160" y2="458" stroke="#2A2A2A"/>
+  <g class="foot">
+    <circle cx="46" cy="478" r="5" fill="#6CC69A"/><text x="58" y="483">kit</text>
+    <circle cx="106" cy="478" r="5" fill="#E7C55A"/><text x="118" y="483">brain</text>
+    <circle cx="182" cy="478" r="5" fill="#6FAEE8"/><text x="194" y="483">comando</text>
+    <circle cx="282" cy="478" r="5" fill="#D98E5F"/><text x="294" y="483">Claude Code's event</text>
+    <text x="1160" y="483" text-anchor="end">comando · docs/kit</text>
+  </g>
+</svg>

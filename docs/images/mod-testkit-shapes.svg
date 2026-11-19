@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>Two shapes of test: a rule test with States and FakeClock, an adapter test with RecordingSink</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="520" fill="url(#bg)"/>
+<text x="48" y="48" font-size="13" fill="#E7C55A" letter-spacing="3">MODULE · TESTKIT · TWO SHAPES OF TEST</text>
+<text x="48" y="82" font-size="24" font-weight="300" fill="#E8E8E8">Test the rules without threads; test an adapter without the app</text>
+
+<text x="48" y="130" font-size="13" fill="#9AA0A6" letter-spacing="2">A RULE TEST · NO THREAD, NO WAITING</text>
+<line x1="48" y1="142" x2="1152" y2="142" stroke="#3A3A3A" stroke-width="1"/>
+<g fill="#1E1E1E" stroke-width="1.2">
+<rect x="48" y="162" width="240" height="96" rx="8" stroke="#6FAEE8" stroke-dasharray="5 4"/>
+<rect x="336" y="162" width="240" height="96" rx="8" stroke="#6FAEE8"/>
+<rect x="624" y="162" width="240" height="96" rx="8" stroke="#E7C55A"/>
+<rect x="912" y="162" width="240" height="96" rx="8" stroke="#6FAEE8"/>
+</g>
+<text x="64" y="190" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">States.twoPanels()</text>
+<text x="64" y="216" font-size="14" fill="#E8E8E8">a ready-made state</text>
+<text x="64" y="240" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">new FakeClock()</text>
+<text x="352" y="190" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">an Intent</text>
+<text x="352" y="216" font-size="14" fill="#E8E8E8">what the test says</text>
+<text x="352" y="238" font-size="14" fill="#E8E8E8">happened</text>
+<text x="640" y="190" font-size="13" fill="#E7C55A" font-family="Menlo, Consolas, monospace">reducer.apply(s, i)</text>
+<text x="640" y="216" font-size="14" fill="#E8E8E8">the real rules run,</text>
+<text x="640" y="238" font-size="14" fill="#E8E8E8">on the test's thread</text>
+<text x="928" y="190" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">Transition</text>
+<text x="928" y="216" font-size="14" fill="#E8E8E8">check the new state</text>
+<text x="928" y="238" font-size="14" fill="#E8E8E8">and the list of effects</text>
+<g fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)">
+<path d="M288,210 L332,210"/>
+<path d="M576,210 L620,210"/>
+<path d="M864,210 L908,210"/>
+</g>
+
+<text x="48" y="312" font-size="13" fill="#9AA0A6" letter-spacing="2">AN ADAPTER TEST · REAL THREADS, A BOUNDED WAIT</text>
+<line x1="48" y1="324" x2="1152" y2="324" stroke="#3A3A3A" stroke-width="1"/>
+<g fill="#1E1E1E" stroke-width="1.2">
+<rect x="48" y="344" width="240" height="96" rx="8" stroke="#6FAEE8"/>
+<rect x="336" y="344" width="240" height="96" rx="8" stroke="#E7C55A"/>
+<rect x="624" y="344" width="240" height="96" rx="8" stroke="#6FAEE8" stroke-dasharray="5 4"/>
+<rect x="912" y="344" width="240" height="96" rx="8" stroke="#6FAEE8" stroke-dasharray="5 4"/>
+</g>
+<text x="64" y="372" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">the test</text>
+<text x="64" y="398" font-size="14" fill="#E8E8E8">calls a port method,</text>
+<text x="64" y="420" font-size="14" fill="#E8E8E8">as the router would</text>
+<text x="352" y="372" font-size="13" fill="#E7C55A" font-family="Menlo, Consolas, monospace">the real adapter</text>
+<text x="352" y="398" font-size="14" fill="#E8E8E8">works on its own threads,</text>
+<text x="352" y="420" font-size="14" fill="#E8E8E8">against a real database</text>
+<text x="640" y="372" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">RecordingSink</text>
+<text x="640" y="398" font-size="14" fill="#E8E8E8">stands in for the loop;</text>
+<text x="640" y="420" font-size="14" fill="#E8E8E8">keeps every intent sent</text>
+<text x="928" y="372" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">await(type, timeout)</text>
+<text x="928" y="398" font-size="14" fill="#E8E8E8">the test sleeps until the</text>
+<text x="928" y="420" font-size="14" fill="#E8E8E8">answer arrives, or fails</text>
+<g fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)">
+<path d="M288,392 L332,392"/>
+<path d="M576,392 L620,392"/>
+<path d="M864,392 L908,392"/>
+</g>
+
+<g font-size="13" fill="#9AA0A6">
+<rect x="48" y="466" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="70" y="478">the code under test</text>
+<rect x="220" y="466" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="242" y="478">from testkit</text>
+</g>
+<text x="48" y="504" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/modules/testkit.md</text>
+</svg>

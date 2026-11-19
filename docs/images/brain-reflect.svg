@@ -1,152 +1,101 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="600" viewBox="0 0 1100 600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t">
+  <title id="t">The reflect cycle: three ways it starts, its six steps from Measure to Report, the three checks of the knowledge base gate, and which steps a full run and an automatic run take</title>
   <defs>
-    <radialGradient id="bg" cx="50%" cy="45%" r="75%">
-      <stop offset="0" stop-color="#1B1B1B"/>
-      <stop offset="1" stop-color="#101010"/>
-    </radialGradient>
-    <linearGradient id="rail" gradientUnits="userSpaceOnUse" x1="60" y1="420" x2="1540" y2="420">
-      <stop offset="0" stop-color="#E7C55A" stop-opacity=".15"/>
-      <stop offset=".5" stop-color="#E7C55A" stop-opacity=".7"/>
-      <stop offset="1" stop-color="#E7C55A" stop-opacity=".15"/>
-    </linearGradient>
     <style>
-      .cap{font-size:13px;font-weight:500;letter-spacing:3px}
-      .h{font-size:24px;font-weight:300;fill:#F2F2F2}
-      .step{font-size:20px;font-weight:300;fill:#F2F2F2}
-      .s{font-size:13px;font-weight:300;fill:#BDBDBD}
-      .q{font-size:13px;font-weight:300;fill:#8E8E8E;font-style:italic}
-      .m{font-family:Menlo, monospace;font-size:12px;fill:#9A9A9A}
-      .mut{font-size:11px;font-weight:500;letter-spacing:2px}
+      .cap{font-size:13px;font-weight:600;letter-spacing:2.5px}
+      .n{font-size:13px;font-weight:600;letter-spacing:1.5px}
+      .t{font-size:15px;fill:#E8E8E8}
+      .b{font-size:13px;fill:#E8E8E8}
+      .s{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:13px;fill:#E8E8E8}
+      .foot{font-size:13px;fill:#9AA0A6;letter-spacing:.5px}
     </style>
   </defs>
-  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <rect width="1100" height="600" fill="#161616"/>
 
-  <text x="60" y="56" class="cap" fill="#E7C55A">BRAIN · /REFLECT</text>
-  <text x="60" y="88" class="h">The one step that turns a session into memory and checked knowledge</text>
-  <text x="60" y="112" class="s">Aim of every run: the next session recalls more of what matters from fewer bytes, and the KB is truer.</text>
+  <text x="40" y="44" class="cap" fill="#E7C55A">REFLECT · A SESSION BECOMES MEMORY</text>
+  <text x="40" y="68" class="s">One skill of the kit, six steps. The next session recalls more of what matters from fewer bytes.</text>
 
-  <!-- WHEN -->
-  <text x="60" y="166" class="cap" fill="#E7C55A">WHEN</text>
-  <g class="s">
-    <circle cx="66" cy="192" r="3.5" fill="#E7C55A"/><text x="80" y="196">the user asks</text>
-    <circle cx="166" cy="192" r="3.5" fill="#E7C55A"/><text x="180" y="196">a session ends</text>
-    <circle cx="306" cy="192" r="3.5" fill="#6CC69A"/><text x="320" y="196">a context threshold: a kit hook reminds</text>
-    <circle cx="606" cy="192" r="3.5" fill="#6FAEE8"/><text x="620" y="196">comando: /reflect, or /reflect --auto at its threshold; then /compact</text>
+  <!-- when -->
+  <text x="40" y="108" class="cap" fill="#9AA0A6">WHEN</text>
+  <rect x="40" y="120" width="230" height="36" rx="18" fill="#1E1E1E" stroke="#E8E8E8" stroke-opacity=".6"/>
+  <text x="155" y="143" text-anchor="middle" class="s" fill="#E8E8E8">you type /reflect</text>
+  <rect x="286" y="120" width="310" height="36" rx="18" fill="#1E1E1E" stroke="#6FAEE8"/>
+  <text x="441" y="143" text-anchor="middle" class="s" fill="#E8E8E8">you click Reflect: the checkpoint command</text>
+  <rect x="612" y="120" width="448" height="36" rx="18" fill="#1E1E1E" stroke="#6FAEE8"/>
+  <text x="836" y="143" text-anchor="middle" class="s" fill="#E8E8E8">at the threshold: the command with --auto, then /compact</text>
+
+  <!-- the steps -->
+  <text x="40" y="196" class="cap" fill="#9AA0A6">THE STEPS</text>
+  <line x1="40" y1="266" x2="1060" y2="266" stroke="#6CC69A" stroke-width="1.5"/>
+  <g fill="#6CC69A">
+    <path d="M201,261 L209,266 L201,271 Z"/>
+    <path d="M373,261 L381,266 L373,271 Z"/>
+    <path d="M545,261 L553,266 L545,271 Z"/>
+    <path d="M717,261 L725,266 L717,271 Z"/>
+    <path d="M889,261 L897,266 L889,271 Z"/>
   </g>
-  <text x="1080" y="166" class="cap" fill="#E7C55A">DEPTHS</text>
-  <g class="s">
-    <text x="1080" y="196">full, the user starts it: every step; asks its decisions</text>
-    <text x="1080" y="216">--auto: Measure, Memory, liveness only; asks nothing,</text>
-    <text x="1080" y="236">writes each decision as a Needs you line</text>
-    <text x="1080" y="256">headless: as --auto; decisions wait in INDEX.md</text>
+  <g fill="#1E1E1E" stroke="#6CC69A" stroke-opacity=".8">
+    <rect x="40" y="208" width="160" height="116" rx="6"/>
+    <rect x="212" y="208" width="160" height="116" rx="6"/>
+    <rect x="384" y="208" width="160" height="116" rx="6"/>
+    <rect x="556" y="208" width="160" height="116" rx="6"/>
+    <rect x="728" y="208" width="160" height="116" rx="6"/>
+    <rect x="900" y="208" width="160" height="116" rx="6"/>
   </g>
-
-  <!-- INPUTS -->
-  <text x="60" y="300" class="cap" fill="#E7C55A">INPUTS</text>
-  <g class="s">
-    <text x="60" y="328">the conversation itself</text>
-    <text x="300" y="328">scheduled reports: drift, corrections, recall</text>
-    <text x="640" y="328">agent reports, only once stamped verified</text>
-    <text x="960" y="328">FRICTION.md lines</text>
-    <text x="1120" y="328">memory files relevant to the session</text>
-  </g>
-
-  <!-- rail -->
-  <line x1="60" y1="420" x2="1540" y2="420" stroke="url(#rail)" stroke-width="1.4"/>
   <g>
-    <circle cx="150" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="150" cy="420" r="4" fill="#E7C55A"/>
-    <circle cx="410" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="410" cy="420" r="4" fill="#E7C55A"/>
-    <circle cx="670" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="670" cy="420" r="4" fill="#E7C55A"/>
-    <circle cx="930" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="930" cy="420" r="4" fill="#E7C55A"/>
-    <circle cx="1190" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="1190" cy="420" r="4" fill="#E7C55A"/>
-    <circle cx="1430" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="1430" cy="420" r="4" fill="#E7C55A"/>
-  </g>
-  <g text-anchor="middle">
-    <text x="150" y="388" class="q">A</text><text x="410" y="388" class="q">B</text><text x="670" y="388" class="q">C</text>
-    <text x="930" y="388" class="q">C</text><text x="1190" y="388" class="q">D</text><text x="1430" y="388" class="q">D</text>
-  </g>
+    <text x="54" y="234" class="n" fill="#6CC69A">1 · MEASURE</text>
+    <text x="54" y="260" class="b">a snapshot of</text>
+    <text x="54" y="280" class="b">memory, for the</text>
+    <text x="54" y="300" class="b">report; reads only</text>
 
-  <!-- step columns -->
-  <g>
-    <text x="70" y="470" class="step">Measure</text>
-    <text x="70" y="494" class="mut" fill="#9A9A9A">READS ONLY</text>
-    <text x="70" y="524" class="s">a snapshot tool</text>
-    <text x="70" y="546" class="s">snapshots MEMORY/</text>
-    <text x="70" y="568" class="s">reads MEMORY.md, then only</text>
-    <text x="70" y="586" class="s">the files this session touched</text>
+    <text x="226" y="234" class="n" fill="#6CC69A">2 · MEMORY</text>
+    <text x="226" y="260" class="b">entries rewritten,</text>
+    <text x="226" y="280" class="b">cues sharpened,</text>
+    <text x="226" y="300" class="b">state brought up</text>
 
-    <text x="330" y="470" class="step">Memory</text>
-    <text x="330" y="494" class="mut" fill="#E7C55A">MUTATES MEMORY · EVAL</text>
-    <text x="330" y="524" class="q">will it change behaviour</text>
-    <text x="330" y="542" class="q">in a future session?</text>
-    <text x="330" y="566" class="s">rewrite the entry, never append</text>
-    <text x="330" y="586" class="s">cues sharpened to triggers</text>
-    <text x="330" y="606" class="s">the current work: this topic's section</text>
-    <text x="330" y="626" class="s">session log via its tool</text>
-    <text x="330" y="646" class="s">agent runs via their ledger</text>
-    <text x="330" y="666" class="s">recall report's fixes applied</text>
-    <text x="330" y="686" class="s">gold rows labelled → EVAL</text>
-    <text x="330" y="706" class="s">kit edits proposed: user confirms</text>
-    <text x="330" y="726" class="s">feedback, user: asked once</text>
+    <text x="398" y="234" class="n" fill="#6CC69A">3 · KB</text>
+    <text x="398" y="260" class="b">what the session</text>
+    <text x="398" y="280" class="b">proved, through</text>
+    <text x="398" y="300" class="b">the gate below</text>
 
-    <text x="590" y="470" class="step">KB</text>
-    <text x="590" y="494" class="mut" fill="#E7C55A">MUTATES KB</text>
-    <text x="590" y="524" class="s">only what this session proved;</text>
-    <text x="590" y="542" class="s">each statement through the gate:</text>
-    <text x="590" y="566" class="s">verified at its source, refuted</text>
-    <text x="590" y="584" class="s">by a reviewer, approved by the user</text>
-    <text x="590" y="608" class="s">through the set's 99:</text>
-    <text x="590" y="626" class="s">statement, header date,</text>
-    <text x="590" y="644" class="s">register, change-log line</text>
-    <text x="590" y="668" class="q">a run that cannot ask writes none</text>
+    <text x="570" y="234" class="n" fill="#6CC69A">4 · SCRATCHPAD</text>
+    <text x="570" y="260" class="b">done tasks folded</text>
+    <text x="570" y="280" class="b">and cleared; open</text>
+    <text x="570" y="300" class="b">ones: State, Next</text>
 
-    <text x="850" y="470" class="step">Scratchpad</text>
-    <text x="850" y="494" class="mut" fill="#E7C55A">MUTATES SCRATCHPAD · KB</text>
-    <text x="850" y="524" class="s">a collection: INDEX.md is the root set</text>
-    <text x="850" y="546" class="s">unpointed files folded, then Trash</text>
-    <text x="850" y="566" class="s">done tasks of any session: decisions</text>
-    <text x="850" y="584" class="s">settled, files trashed, entry gone</text>
-    <text x="850" y="606" class="s">entries cut to State and Next</text>
-    <text x="850" y="626" class="s">reports fold only when verified</text>
-    <text x="850" y="646" class="s">FRICTION lines → a change</text>
-    <text x="850" y="666" class="s">every open task names who acts</text>
+    <text x="742" y="234" class="n" fill="#6CC69A">5 · INDEXES</text>
+    <text x="742" y="260" class="b">every file written</text>
+    <text x="742" y="280" class="b">has its line in</text>
+    <text x="742" y="300" class="b">its index</text>
 
-    <text x="1110" y="470" class="step">Indexes</text>
-    <text x="1110" y="494" class="mut" fill="#E7C55A">MUTATES ALL INDEXES</text>
-    <text x="1110" y="524" class="s">MEMORY.md, each set's 00,</text>
-    <text x="1110" y="542" class="s">the day's INDEX.md, the folder</text>
-    <text x="1110" y="560" class="s">tabs' index and listedIn files</text>
-    <text x="1110" y="584" class="s">part of every write,</text>
-    <text x="1110" y="602" class="s">never a follow-up</text>
-    <text x="1110" y="626" class="s">an index check runs</text>
-    <text x="1110" y="646" class="s">after each write to BRAIN/</text>
-
-    <text x="1370" y="470" class="step">Report</text>
-    <text x="1370" y="494" class="mut" fill="#9A9A9A">READS ONLY</text>
-    <text x="1370" y="524" class="s">the snapshot compared</text>
-    <text x="1370" y="546" class="s">MEMORY.md before → after</text>
-    <text x="1370" y="566" class="s">lines ± per file</text>
-    <text x="1370" y="586" class="s">files only appended to</text>
-    <text x="1370" y="606" class="s">budget warnings</text>
-    <text x="1370" y="630" class="s">then four lines at most</text>
+    <text x="914" y="234" class="n" fill="#6CC69A">6 · REPORT</text>
+    <text x="914" y="260" class="b">what changed,</text>
+    <text x="914" y="280" class="b">budget warnings;</text>
+    <text x="914" y="300" class="b">four lines at most</text>
   </g>
 
-  <!-- WHY -->
-  <line x1="60" y1="780" x2="1540" y2="780" stroke="#2A2A2A"/>
-  <text x="60" y="816" class="cap" fill="#E7C55A">WHY IT IS BUILT THIS WAY</text>
-  <g class="s">
-    <text x="60" y="848">One writer for the KB: what is stated as fact was verified, survived a reviewer and was approved by the user.</text>
-    <text x="60" y="870">Memory and KB never point at each other: memory changes daily, the KB must read cold to anyone.</text>
-    <text x="60" y="892">Rewrite, not append: a rule plus one line of evidence; displaced detail goes to the session log or archive/.</text>
-    <text x="60" y="914">Budgets hold the index under what Claude Code loads at start; nothing is dropped to fit.</text>
-    <text x="60" y="936">Parallel sessions: re-read before every write, change only your own lines, delete per artefact, never per folder.</text>
-  </g>
+  <!-- the gate -->
+  <line x1="464" y1="324" x2="464" y2="354" stroke="#E7C55A" stroke-width="1.5"/>
+  <rect x="40" y="354" width="700" height="64" rx="6" fill="#1E1E1E" stroke="#E7C55A" stroke-opacity=".7"/>
+  <text x="60" y="380" class="cap" fill="#E7C55A">THE KB GATE · THREE CHECKS PER STATEMENT</text>
+  <text x="60" y="404" class="s" fill="#E8E8E8">1 verified against its source   →   2 a reviewer agent tries to refute it   →   3 you approve</text>
+  <text x="760" y="380" class="t">A run that cannot ask you</text>
+  <text x="760" y="402" class="t">writes nothing to the KB.</text>
 
-  <!-- legend -->
-  <g class="s">
-    <circle cx="1196" cy="976" r="4" fill="#E7C55A"/><text x="1208" y="980">brain</text>
-    <circle cx="1266" cy="976" r="4" fill="#6CC69A"/><text x="1278" y="980">kit</text>
-    <circle cx="1320" cy="976" r="4" fill="#6FAEE8"/><text x="1332" y="980">comando</text>
-    <text x="1540" y="980" text-anchor="end">comando · docs/kit-and-brain</text>
-  </g>
+  <!-- depth -->
+  <text x="40" y="456" class="cap" fill="#9AA0A6">DEPTH</text>
+  <text x="130" y="456" class="s" fill="#E8E8E8">a run you start takes every step and asks its decisions</text>
+  <line x1="40" y1="470" x2="1060" y2="470" stroke="#E8E8E8" stroke-width="3" stroke-linecap="round"/>
+  <text x="130" y="506" class="s" fill="#E8E8E8">an automatic run takes steps 1 and 2 and keeps open tasks current; it asks nothing</text>
+  <line x1="40" y1="520" x2="1060" y2="520" stroke="#3A3A3A" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 8"/>
+  <line x1="40" y1="520" x2="372" y2="520" stroke="#6FAEE8" stroke-width="3" stroke-linecap="round"/>
+  <line x1="556" y1="520" x2="716" y2="520" stroke="#6FAEE8" stroke-width="3" stroke-linecap="round"/>
+
+  <line x1="40" y1="552" x2="1060" y2="552" stroke="#2A2A2A"/>
+  <circle cx="46" cy="574" r="5" fill="#6CC69A"/><text x="60" y="579" class="foot">kit: the reflect skill</text>
+  <circle cx="226" cy="574" r="5" fill="#6FAEE8"/><text x="240" y="579" class="foot">comando</text>
+  <circle cx="326" cy="574" r="5" fill="#E7C55A"/><text x="340" y="579" class="foot">brain</text>
+  <circle cx="406" cy="574" r="5" fill="#E8E8E8"/><text x="420" y="579" class="foot">you</text>
+  <text x="1060" y="579" text-anchor="end" class="foot">comando · docs/brain</text>
 </svg>

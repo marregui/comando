@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="590" viewBox="0 0 1000 590" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The render loop across two threads: an intent reaches the reducer thread, the reducer makes a new state, a listener asks the Coalescer for a render, the EDT runs ComandoUi.render once on the newest state, and your next key or click becomes a Command that dispatches the next intent</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="590" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">MODULE UI · THE RENDER LOOP</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Two threads, one loop: decide on one, draw on the other</text>
+
+  <!-- lane: reducer -->
+  <rect x="40" y="106" width="920" height="126" rx="10" fill="none" stroke="#3A3A3A" stroke-width="1"/>
+  <text x="58" y="132" font-size="13" letter-spacing="2" fill="#E7C55A">THREAD comando-reducer · DECIDES</text>
+  <rect x="60" y="150" width="190" height="64" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="76" y="177" font-family="Menlo, Consolas, monospace" font-size="14" fill="#E8E8E8">dispatch(intent)</text>
+  <text x="76" y="199" font-size="13" fill="#9AA0A6">from any thread</text>
+  <rect x="320" y="150" width="230" height="64" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+  <text x="336" y="177" font-family="Menlo, Consolas, monospace" font-size="14" fill="#E7C55A">Reducer</text>
+  <text x="336" y="199" font-size="13" fill="#9AA0A6">old state + intent = new state</text>
+  <rect x="620" y="150" width="230" height="64" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="636" y="177" font-family="Menlo, Consolas, monospace" font-size="14" fill="#E8E8E8">stateListener</text>
+  <text x="636" y="199" font-size="13" fill="#9AA0A6">the window's ear on the loop</text>
+  <line x1="250" y1="182" x2="318" y2="182" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="550" y1="182" x2="618" y2="182" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+
+  <!-- crossings -->
+  <line x1="735" y1="214" x2="735" y2="328" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <text x="749" y="266" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">render.request()</text>
+  <line x1="155" y1="330" x2="155" y2="216" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <text x="169" y="266" font-size="13" fill="#E8E8E8">an</text>
+  <text x="190" y="266" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">Intent</text>
+  <text x="246" y="266" font-size="13" fill="#9AA0A6">: what you asked for, as data</text>
+
+  <!-- lane: EDT -->
+  <rect x="40" y="286" width="920" height="150" rx="10" fill="none" stroke="#3A3A3A" stroke-width="1"/>
+  <text x="58" y="312" font-size="13" letter-spacing="2" fill="#6FAEE8">THREAD AWT-EventQueue (THE EDT) · DRAWS</text>
+  <rect x="60" y="330" width="190" height="64" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="76" y="357" font-family="Menlo, Consolas, monospace" font-size="14" fill="#E8E8E8">Command</text>
+  <text x="76" y="379" font-size="13" fill="#9AA0A6">your key, click or menu</text>
+  <rect x="320" y="330" width="230" height="64" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="336" y="357" font-family="Menlo, Consolas, monospace" font-size="14" fill="#E8E8E8">ComandoUi.render()</text>
+  <text x="336" y="379" font-size="13" fill="#9AA0A6">reads the newest AppState</text>
+  <rect x="620" y="330" width="230" height="64" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="636" y="357" font-family="Menlo, Consolas, monospace" font-size="14" fill="#E8E8E8">Coalescer</text>
+  <text x="636" y="379" font-size="13" fill="#9AA0A6">many requests, one pending run</text>
+  <line x1="620" y1="362" x2="552" y2="362" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="320" y1="362" x2="252" y2="362" stroke="#9AA0A6" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+  <text x="285" y="420" text-anchor="middle" font-size="13" fill="#9AA0A6">you look, then you act</text>
+  <text x="862" y="357" font-family="Menlo, Consolas, monospace" font-size="13" fill="#6FAEE8">EdtWatchdog</text>
+  <text x="862" y="379" font-size="13" fill="#9AA0A6">a ping each</text>
+  <text x="862" y="397" font-size="13" fill="#9AA0A6">100 ms</text>
+
+  <!-- coalescing -->
+  <text x="40" y="478" font-size="13" letter-spacing="2" fill="#9AA0A6">COALESCING</text>
+  <line x1="40" y1="490" x2="960" y2="490" stroke="#3A3A3A" stroke-width="1"/>
+  <text x="40" y="524" font-size="14" fill="#E8E8E8">Five states arrive in a burst</text>
+  <g fill="#E7C55A">
+    <circle cx="262" cy="519" r="6"/><circle cx="284" cy="519" r="6"/><circle cx="306" cy="519" r="6"/><circle cx="328" cy="519" r="6"/><circle cx="350" cy="519" r="6"/>
+  </g>
+  <line x1="372" y1="519" x2="448" y2="519" stroke="#9AA0A6" stroke-width="1.3" marker-end="url(#ar)"/>
+  <rect x="456" y="503" width="32" height="32" rx="6" fill="#6FAEE8"/>
+  <text x="504" y="524" font-size="14" fill="#E8E8E8">the EDT renders once, and draws the fifth.</text>
+  <text x="40" y="568" font-size="13" fill="#9AA0A6">comando · docs/modules/ui.md</text>
+</svg>

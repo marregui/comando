@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>The code rules in three layers and what holds them: the Java Coding Standard v2.0.3 with its G rules, comando's Apply section saying which of them apply and which departures it keeps, and comando's own rules 1 to 16; five checks hold them, from the earliest to the latest: the compiler with warnings as errors, Checkstyle with no report allowed, the rule tests, a review, and watchdogs while comando runs</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="500" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">CODE RULES</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Three layers of rules, five checks that hold them</text>
+
+  <g font-size="13" letter-spacing="2" fill="#9AA0A6">
+    <text x="40" y="116">THE RULES</text>
+    <text x="560" y="116">WHAT HOLDS THEM</text>
+  </g>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="134" width="400" height="84" rx="8" stroke="#AEB6C1"/>
+    <rect x="40" y="238" width="400" height="84" rx="8" stroke="#6FAEE8"/>
+    <rect x="40" y="342" width="400" height="84" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="560" y="134" width="400" height="48" rx="8" stroke="#6FAEE8"/>
+    <rect x="560" y="195" width="400" height="48" rx="8" stroke="#6FAEE8"/>
+    <rect x="560" y="256" width="400" height="48" rx="8" stroke="#6FAEE8"/>
+    <rect x="560" y="317" width="400" height="48" rx="8" stroke="#6FAEE8"/>
+    <rect x="560" y="378" width="400" height="48" rx="8" stroke="#6FAEE8"/>
+  </g>
+
+  <g font-size="15" fill="#E8E8E8">
+    <text x="56" y="162">Java Coding Standard v2.0.3</text>
+    <text x="56" y="266">comando's Apply section</text>
+    <text x="56" y="370">comando's own rules, 1 to 16</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="56" y="184">the general rules, cited by ID: G-7.10, G-11.7</text>
+    <text x="56" y="202">kept in its own repository</text>
+    <text x="56" y="288">14 parts: the version, the hot paths, what is</text>
+    <text x="56" y="306">enforced, the departures kept on purpose</text>
+    <text x="56" y="392">what a desktop application meets: one writer of</text>
+    <text x="56" y="410">state, threads by kind, the EDT, files, secrets</text>
+  </g>
+
+  <g font-size="14" fill="#E8E8E8">
+    <text x="576" y="164">1 · the compiler</text>
+    <text x="576" y="225">2 · Checkstyle</text>
+    <text x="576" y="286">3 · the rule tests</text>
+    <text x="576" y="347">4 · a review</text>
+    <text x="576" y="408">5 · watchdogs</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">
+    <text x="724" y="164">-Xlint:all -Werror</text>
+    <text x="724" y="225">maxWarnings 0</text>
+    <text x="724" y="286">ThreadRulesTest and more</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="724" y="347">what no checker reports</text>
+    <text x="724" y="408">a stall over 200 ms is logged</text>
+  </g>
+
+  <g stroke="#9AA0A6" stroke-width="1.3" fill="none" marker-end="url(#a)">
+    <path d="M440 176 H500 V158 H558"/>
+    <path d="M500 176 V219 H558"/>
+    <path d="M440 384 H500 V280 H558"/>
+    <path d="M440 280 H520 V341 H558"/>
+    <path d="M500 384 V402 H558"/>
+  </g>
+
+  <path d="M978 138 V422" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+  <text x="560" y="450" font-size="13" fill="#9AA0A6">Top to bottom: from the moment you compile to the moment comando runs.</text>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="474" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.5"/>
+    <text x="62" y="486">shared with other projects</text>
+    <rect x="246" y="474" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.5"/>
+    <text x="268" y="486">comando's</text>
+    <rect x="350" y="474" width="14" height="14" rx="3" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.5"/>
+    <text x="372" y="486">the core of the design</text>
+    <text x="960" y="486" text-anchor="end">comando · docs/development.md</text>
+  </g>
+</svg>

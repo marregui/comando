@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Two ladders: how comando finds the kit's folder and the brain's folder, first match wins</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="48%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#121212"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/>
+    </marker>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:3px}
+      .h{font-size:26px;font-weight:300;fill:#E8E8E8}
+      .l{font-size:14px;fill:#E8E8E8}
+      .d{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:14px;fill:#E8E8E8}
+      .n{font-size:14px;font-weight:600}
+      .s{font-family:-apple-system, Segoe UI, Helvetica, Arial, sans-serif}
+      .foot{font-size:13px;fill:#9AA0A6}
+      .box{fill:#1E1E1E;stroke-width:1.5}
+      .flow{fill:none;stroke:#9AA0A6;stroke-width:1.4}
+    </style>
+  </defs>
+  <rect width="1200" height="640" fill="url(#bg)"/>
+
+  <text x="40" y="50" class="cap" fill="#6FAEE8">AT START</text>
+  <text x="40" y="84" class="h">comando asks two questions, top to bottom</text>
+  <text x="40" y="110" class="d">The first rung that answers yes wins. comando asks once, when it starts.</text>
+
+  <!-- left ladder: the kit -->
+  <text x="40" y="156" class="cap" fill="#6CC69A">WHERE IS THE KIT?</text>
+
+  <g>
+    <rect class="box" stroke="#6CC69A" x="40" y="174" width="540" height="52" rx="10"/>
+    <circle cx="68" cy="200" r="13" fill="none" stroke="#6CC69A"/><text x="68" y="205" text-anchor="middle" class="n" fill="#6CC69A">1</text>
+    <text x="94" y="205" class="m">CLAUDE_CONFIG_DIR<tspan class="l s" dx="8">is set</tspan></text>
+    <text x="560" y="205" text-anchor="end" class="l" style="fill:#6CC69A">that folder</text>
+
+    <path class="flow" marker-end="url(#arrow)" d="M68 226 L68 244"/>
+    <rect class="box" stroke="#6CC69A" x="40" y="246" width="540" height="52" rx="10"/>
+    <circle cx="68" cy="272" r="13" fill="none" stroke="#6CC69A"/><text x="68" y="277" text-anchor="middle" class="n" fill="#6CC69A">2</text>
+    <text x="94" y="277" class="m">~/.claude<tspan class="l s" dx="8">holds a manifest</tspan></text>
+    <text x="560" y="277" text-anchor="end" class="m" style="fill:#6CC69A">~/.claude</text>
+
+    <path class="flow" marker-end="url(#arrow)" d="M68 298 L68 316"/>
+    <rect class="box" stroke="#6CC69A" x="40" y="318" width="540" height="52" rx="10"/>
+    <circle cx="68" cy="344" r="13" fill="none" stroke="#6CC69A"/><text x="68" y="349" text-anchor="middle" class="n" fill="#6CC69A">3</text>
+    <text x="94" y="349" class="m">~/comando-kit<tspan class="l s" dx="8">holds a manifest</tspan></text>
+    <text x="560" y="349" text-anchor="end" class="m" style="fill:#6CC69A">~/comando-kit</text>
+
+    <path class="flow" marker-end="url(#arrow)" d="M68 370 L68 388"/>
+    <rect class="box" stroke="#6CC69A" x="40" y="390" width="540" height="52" rx="10"/>
+    <circle cx="68" cy="416" r="13" fill="none" stroke="#6CC69A"/><text x="68" y="421" text-anchor="middle" class="n" fill="#6CC69A">4</text>
+    <text x="94" y="421" class="m">~/.claude/comando-kit<tspan class="l s" dx="8">holds a manifest</tspan></text>
+    <text x="560" y="421" text-anchor="end" class="l" style="fill:#6CC69A">that folder</text>
+
+    <path class="flow" marker-end="url(#arrow)" d="M68 442 L68 460"/>
+    <rect class="box" stroke="#9AA0A6" stroke-dasharray="5 4" x="40" y="462" width="540" height="52" rx="10"/>
+    <circle cx="68" cy="488" r="13" fill="none" stroke="#9AA0A6"/><text x="68" y="493" text-anchor="middle" class="n" fill="#9AA0A6">5</text>
+    <text x="94" y="493" class="l">none of them</text>
+    <text x="560" y="493" text-anchor="end" class="m" style="fill:#9AA0A6">~/.claude<tspan class="d s" dx="8">with no kit</tspan></text>
+  </g>
+
+  <!-- right ladder: the brain -->
+  <text x="620" y="156" class="cap" fill="#E7C55A">WHERE IS THE BRAIN?</text>
+
+  <g>
+    <rect class="box" stroke="#9AA0A6" stroke-dasharray="5 4" x="620" y="174" width="540" height="52" rx="10"/>
+    <circle cx="648" cy="200" r="13" fill="none" stroke="#9AA0A6"/><text x="648" y="205" text-anchor="middle" class="n" fill="#9AA0A6">1</text>
+    <text x="674" y="205" class="l">there is no kit</text>
+    <text x="1140" y="205" text-anchor="end" class="d">no brain</text>
+
+    <path class="flow" marker-end="url(#arrow)" d="M648 226 L648 244"/>
+    <rect class="box" stroke="#E7C55A" x="620" y="246" width="540" height="52" rx="10"/>
+    <circle cx="648" cy="272" r="13" fill="none" stroke="#E7C55A"/><text x="648" y="277" text-anchor="middle" class="n" fill="#E7C55A">2</text>
+    <text x="674" y="277" class="m">COMANDO_BRAIN<tspan class="l s" dx="8">is set</tspan></text>
+    <text x="1140" y="277" text-anchor="end" class="l" style="fill:#E7C55A">that folder</text>
+
+    <path class="flow" marker-end="url(#arrow)" d="M648 298 L648 316"/>
+    <rect class="box" stroke="#E7C55A" x="620" y="318" width="540" height="52" rx="10"/>
+    <circle cx="648" cy="344" r="13" fill="none" stroke="#E7C55A"/><text x="648" y="349" text-anchor="middle" class="n" fill="#E7C55A">3</text>
+    <text x="674" y="349" class="l">the manifest names a<tspan class="m" dx="8">brain</tspan></text>
+    <text x="1140" y="349" text-anchor="end" class="l" style="fill:#E7C55A">that folder</text>
+
+    <path class="flow" marker-end="url(#arrow)" d="M648 370 L648 388"/>
+    <rect class="box" stroke="#E7C55A" x="620" y="390" width="540" height="52" rx="10"/>
+    <circle cx="648" cy="416" r="13" fill="none" stroke="#E7C55A"/><text x="648" y="421" text-anchor="middle" class="n" fill="#E7C55A">4</text>
+    <text x="674" y="421" class="l">it names none</text>
+    <text x="1140" y="421" text-anchor="end" class="m" style="fill:#E7C55A">&lt;kit&gt;/BRAIN</text>
+
+    <rect x="620" y="462" width="540" height="52" rx="10" fill="none" stroke="#2A2A2A"/>
+    <text x="644" y="493" class="d">Memory is the brain's<tspan class="m" dx="8">MEMORY/</tspan><tspan dx="8">folder, wherever the brain is.</tspan></text>
+  </g>
+
+  <!-- the stop rule -->
+  <rect x="40" y="536" width="1120" height="44" rx="10" fill="#1E1E1E" stroke="#2A2A2A"/>
+  <circle cx="64" cy="558" r="5" fill="#D98E5F"/>
+  <text x="80" y="563" class="l">A manifest that does not read stops the search: comando runs with no kit and a notice says why. It never tries the next folder.</text>
+
+  <!-- legend -->
+  <line x1="40" y1="598" x2="1160" y2="598" stroke="#2A2A2A"/>
+  <g class="foot">
+    <circle cx="46" cy="618" r="5" fill="#6CC69A"/><text x="58" y="623">kit</text>
+    <circle cx="106" cy="618" r="5" fill="#E7C55A"/><text x="118" y="623">brain</text>
+    <circle cx="182" cy="618" r="5" fill="#9AA0A6"/><text x="194" y="623">nothing found</text>
+    <text x="1160" y="623" text-anchor="end">comando · docs/kit</text>
+  </g>
+</svg>

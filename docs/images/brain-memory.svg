@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t">
+  <title id="t">Memory is an index plus one fact per file: each index line is a cue that points at one file, and a prompt that matches a cue opens that file alone</title>
+  <defs>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,1 L10,5 L0,9 Z" fill="#D98E5F"/></marker>
+    <style>
+      .cap{font-size:13px;font-weight:600;letter-spacing:2.5px}
+      .t{font-size:15px;fill:#E8E8E8}
+      .s{font-size:14px;fill:#9AA0A6}
+      .m{font-family:Menlo, Consolas, monospace;font-size:13px;fill:#E8E8E8}
+      .mc{font-family:Menlo, Consolas, monospace;font-size:13px;fill:#9AA0A6}
+      .foot{font-size:13px;fill:#9AA0A6;letter-spacing:.5px}
+    </style>
+  </defs>
+  <rect width="1100" height="620" fill="#161616"/>
+
+  <text x="40" y="44" class="cap" fill="#E7C55A">MEMORY · AN INDEX PLUS ONE FACT PER FILE</text>
+  <text x="40" y="68" class="s">The index says when to open a file. The file holds the fact. An invented example.</text>
+
+  <!-- the index -->
+  <rect x="40" y="96" width="440" height="376" rx="6" fill="#1E1E1E" stroke="#E7C55A" stroke-opacity=".7"/>
+  <text x="60" y="126" class="cap" fill="#E7C55A">MEMORY.md · THE INDEX</text>
+  <text x="60" y="148" class="s">loaded whole at every session start</text>
+  <line x1="60" y1="162" x2="460" y2="162" stroke="#2A2A2A"/>
+
+  <text x="60" y="190" class="m">- [Tide app](project_tide_app.md)</text>
+  <text x="60" y="210" class="mc">  read when: tides, harbours, a release</text>
+  <text x="60" y="252" class="m">- [Reviews](feedback_reviews.md)</text>
+  <text x="60" y="272" class="mc">  read when: a review, "looks fine"</text>
+  <text x="60" y="314" class="m">- [The user](user_profile.md)</text>
+  <text x="60" y="334" class="mc">  read when: choosing depth or tone</text>
+  <text x="60" y="376" class="m">- [Weather API](reference_weather.md)</text>
+  <text x="60" y="396" class="mc">  read when: <tspan fill="#D98E5F">HTTP 429</tspan>, an API key</text>
+  <line x1="60" y1="420" x2="460" y2="420" stroke="#2A2A2A"/>
+  <text x="60" y="448" class="s">one line per file: when to open it, not what it holds</text>
+
+  <!-- connectors -->
+  <g fill="none" stroke="#E7C55A" stroke-opacity=".55">
+    <path d="M480,196 C550,196 550,133 620,133"/>
+    <path d="M480,258 C550,258 550,231 620,231"/>
+    <path d="M480,320 C550,320 550,329 620,329"/>
+  </g>
+  <path d="M480,382 C550,382 550,427 614,427" fill="none" stroke="#D98E5F" stroke-width="2" marker-end="url(#o)"/>
+
+  <!-- the files -->
+  <g fill="#1E1E1E" stroke="#E7C55A" stroke-opacity=".7">
+    <rect x="620" y="96" width="440" height="74" rx="6"/>
+    <rect x="620" y="194" width="440" height="74" rx="6"/>
+    <rect x="620" y="292" width="440" height="74" rx="6"/>
+  </g>
+  <rect x="620" y="390" width="440" height="74" rx="6" fill="#1E1E1E" stroke="#D98E5F" stroke-width="2"/>
+
+  <text x="640" y="126" class="m">project_tide_app.md</text>
+  <text x="1040" y="126" text-anchor="end" class="cap" fill="#E7C55A">PROJECT</text>
+  <text x="640" y="152" class="s">the work: its state, its constraints</text>
+
+  <text x="640" y="224" class="m">feedback_reviews.md</text>
+  <text x="1040" y="224" text-anchor="end" class="cap" fill="#E7C55A">FEEDBACK</text>
+  <text x="640" y="250" class="s">corrections, and ways of working that held</text>
+
+  <text x="640" y="322" class="m">user_profile.md</text>
+  <text x="1040" y="322" text-anchor="end" class="cap" fill="#E7C55A">USER</text>
+  <text x="640" y="348" class="s">who the user is</text>
+
+  <text x="640" y="420" class="m">reference_weather.md</text>
+  <text x="1040" y="420" text-anchor="end" class="cap" fill="#E7C55A">REFERENCE</text>
+  <text x="640" y="446" class="s">pointers to systems outside the brain</text>
+
+  <!-- a prompt -->
+  <path d="M260,502 L260,478" fill="none" stroke="#D98E5F" stroke-width="2" marker-end="url(#o)"/>
+  <rect x="40" y="502" width="440" height="58" rx="6" fill="#1E1E1E" stroke="#D98E5F"/>
+  <text x="60" y="526" class="cap" fill="#D98E5F">A PROMPT</text>
+  <text x="60" y="548" class="t">“The forecast call fails with <tspan fill="#D98E5F">HTTP 429</tspan>.”</text>
+  <text x="620" y="526" class="t">The cue matches, so one file opens.</text>
+  <text x="620" y="548" class="s">The other three stay closed and cost no context.</text>
+
+  <line x1="40" y1="580" x2="1060" y2="580" stroke="#2A2A2A"/>
+  <circle cx="46" cy="598" r="5" fill="#E7C55A"/><text x="60" y="603" class="foot">brain</text>
+  <circle cx="126" cy="598" r="5" fill="#D98E5F"/><text x="140" y="603" class="foot">Claude Code session</text>
+  <text x="1060" y="603" text-anchor="end" class="foot">comando · docs/brain</text>
+</svg>

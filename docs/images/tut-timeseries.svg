@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" viewBox="0 0 1000 640" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Four time-series tools: SAMPLE BY cuts time into equal buckets and answers one row per bucket; FILL decides what an empty bucket shows; LATEST ON keeps the newest row of each symbol; a window function such as lag lets each row see the row before it</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#E7C55A"/></marker>
+  </defs>
+  <rect width="1000" height="640" fill="url(#bg)"/>
+  <text x="32" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">TIME-SERIES SQL</text>
+  <text x="32" y="78" font-size="24" font-weight="300" fill="#E8E8E8">Four ways to ask a question about time</text>
+
+  <g fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.3">
+    <rect x="32" y="104" width="460" height="226" rx="8"/>
+    <rect x="508" y="104" width="460" height="226" rx="8"/>
+    <rect x="32" y="346" width="460" height="226" rx="8"/>
+    <rect x="508" y="346" width="460" height="226" rx="8"/>
+  </g>
+
+  <!-- A: SAMPLE BY -->
+  <text x="52" y="132" font-size="13" letter-spacing="2.5" fill="#6FAEE8">1 · SAMPLE BY 1h</text>
+  <g stroke="#9AA0A6" stroke-width="0.6">
+    <line x1="60" y1="270" x2="464" y2="270"/>
+    <line x1="60" y1="150" x2="60" y2="270" stroke-dasharray="3 4"/><line x1="161" y1="150" x2="161" y2="270" stroke-dasharray="3 4"/>
+    <line x1="262" y1="150" x2="262" y2="270" stroke-dasharray="3 4"/><line x1="363" y1="150" x2="363" y2="270" stroke-dasharray="3 4"/>
+    <line x1="464" y1="150" x2="464" y2="270" stroke-dasharray="3 4"/>
+  </g>
+  <g fill="#9AA0A6">
+    <circle cx="74" cy="212" r="3"/><circle cx="92" cy="186" r="3"/><circle cx="110" cy="228" r="3"/><circle cx="128" cy="198" r="3"/><circle cx="148" cy="216" r="3"/>
+    <circle cx="176" cy="176" r="3"/><circle cx="196" cy="190" r="3"/><circle cx="216" cy="166" r="3"/><circle cx="238" cy="184" r="3"/>
+    <circle cx="278" cy="238" r="3"/><circle cx="298" cy="222" r="3"/><circle cx="318" cy="246" r="3"/><circle cx="340" cy="230" r="3"/>
+    <circle cx="378" cy="196" r="3"/><circle cx="398" cy="210" r="3"/><circle cx="420" cy="188" r="3"/><circle cx="444" cy="206" r="3"/>
+  </g>
+  <g stroke="#E7C55A" stroke-width="2.4">
+    <line x1="66" y1="208" x2="155" y2="208"/><line x1="167" y1="179" x2="256" y2="179"/><line x1="268" y1="234" x2="357" y2="234"/><line x1="369" y1="200" x2="458" y2="200"/>
+  </g>
+  <g font-size="13" font-family="Menlo, Consolas, monospace" text-anchor="middle" fill="#9AA0A6">
+    <text x="110" y="290">10:00</text><text x="211" y="290">11:00</text><text x="312" y="290">12:00</text><text x="413" y="290">13:00</text>
+  </g>
+  <text x="52" y="316" font-size="13" fill="#E8E8E8">Many rows in, one row per hour out: the gold line is avg(price).</text>
+
+  <!-- B: FILL -->
+  <text x="528" y="132" font-size="13" letter-spacing="2.5" fill="#6FAEE8">2 · FILL: WHAT AN EMPTY BUCKET SHOWS</text>
+  <g stroke="#9AA0A6" stroke-width="0.6">
+    <line x1="536" y1="270" x2="940" y2="270"/>
+    <line x1="536" y1="150" x2="536" y2="270" stroke-dasharray="3 4"/><line x1="637" y1="150" x2="637" y2="270" stroke-dasharray="3 4"/>
+    <line x1="738" y1="150" x2="738" y2="270" stroke-dasharray="3 4"/><line x1="839" y1="150" x2="839" y2="270" stroke-dasharray="3 4"/>
+    <line x1="940" y1="150" x2="940" y2="270" stroke-dasharray="3 4"/>
+  </g>
+  <g stroke="#E7C55A" stroke-width="2.4">
+    <line x1="542" y1="182" x2="631" y2="182"/><line x1="643" y1="198" x2="732" y2="198"/><line x1="845" y1="246" x2="934" y2="246"/>
+  </g>
+  <rect x="744" y="158" width="89" height="106" fill="none" stroke="#9AA0A6" stroke-width="0.8" stroke-dasharray="2 4"/>
+  <g stroke="#6FAEE8" stroke-width="2" stroke-dasharray="5 4">
+    <line x1="744" y1="198" x2="833" y2="198"/><line x1="744" y1="222" x2="833" y2="222"/>
+  </g>
+  <g font-size="13" fill="#6FAEE8" text-anchor="middle">
+    <text x="788" y="190">prev</text><text x="788" y="240">linear</text>
+  </g>
+  <g font-size="13" font-family="Menlo, Consolas, monospace" text-anchor="middle" fill="#9AA0A6">
+    <text x="586" y="290">10:00</text><text x="687" y="290">11:00</text><text x="788" y="290">12:00</text><text x="889" y="290">13:00</text>
+  </g>
+  <text x="528" y="316" font-size="13" fill="#E8E8E8">No rows at 12:00. Skip it, or fill it: null, a constant, prev, linear.</text>
+
+  <!-- C: LATEST ON -->
+  <text x="52" y="374" font-size="13" letter-spacing="2.5" fill="#6FAEE8">3 · LATEST ON ts PARTITION BY sym</text>
+  <g font-size="13" font-family="Menlo, Consolas, monospace" fill="#9AA0A6">
+    <text x="52" y="414">AAPL</text><text x="52" y="454">MSFT</text><text x="52" y="494">NVDA</text>
+  </g>
+  <g stroke="#9AA0A6" stroke-width="0.6">
+    <line x1="104" y1="410" x2="464" y2="410"/><line x1="104" y1="450" x2="464" y2="450"/><line x1="104" y1="490" x2="464" y2="490"/>
+  </g>
+  <g fill="#9AA0A6">
+    <circle cx="124" cy="410" r="3.5"/><circle cx="186" cy="410" r="3.5"/><circle cx="262" cy="410" r="3.5"/><circle cx="330" cy="410" r="3.5"/>
+    <circle cx="150" cy="450" r="3.5"/><circle cx="222" cy="450" r="3.5"/><circle cx="296" cy="450" r="3.5"/><circle cx="372" cy="450" r="3.5"/>
+    <circle cx="112" cy="490" r="3.5"/><circle cx="204" cy="490" r="3.5"/><circle cx="280" cy="490" r="3.5"/>
+  </g>
+  <g fill="#E7C55A"><circle cx="412" cy="410" r="5"/><circle cx="446" cy="450" r="5"/><circle cx="356" cy="490" r="5"/></g>
+  <g fill="none" stroke="#E7C55A" stroke-width="1.2"><circle cx="412" cy="410" r="10"/><circle cx="446" cy="450" r="10"/><circle cx="356" cy="490" r="10"/></g>
+  <text x="104" y="526" font-size="13" fill="#9AA0A6">time</text>
+  <line x1="140" y1="522" x2="200" y2="522" stroke="#9AA0A6" stroke-width="0.8" marker-end="url(#a)"/>
+  <text x="52" y="556" font-size="13" fill="#E8E8E8">The newest row of each symbol, found from the newest folder back.</text>
+
+  <!-- D: lag -->
+  <text x="528" y="374" font-size="13" letter-spacing="2.5" fill="#6FAEE8">4 · lag(price) OVER (... ORDER BY ts)</text>
+  <line x1="548" y1="470" x2="940" y2="470" stroke="#9AA0A6" stroke-width="0.6"/>
+  <g fill="#9AA0A6">
+    <circle cx="580" cy="470" r="4.5"/><circle cx="668" cy="470" r="4.5"/><circle cx="756" cy="470" r="4.5"/><circle cx="844" cy="470" r="4.5"/>
+  </g>
+  <circle cx="920" cy="470" r="5.5" fill="#E7C55A"/>
+  <g fill="none" stroke="#E7C55A" stroke-width="1.3">
+    <path d="M664 462 Q624 424 586 460" marker-end="url(#a)"/>
+    <path d="M752 462 Q712 424 674 460" marker-end="url(#a)"/>
+    <path d="M840 462 Q800 424 762 460" marker-end="url(#a)"/>
+    <path d="M916 462 Q882 424 850 460" marker-end="url(#a)"/>
+  </g>
+  <g font-size="13" font-family="Menlo, Consolas, monospace" text-anchor="middle" fill="#E8E8E8">
+    <text x="580" y="496">101.2</text><text x="668" y="496">104.9</text><text x="756" y="496">103.1</text><text x="844" y="496">109.4</text><text x="920" y="496">108.0</text>
+  </g>
+  <g font-size="13" font-family="Menlo, Consolas, monospace" text-anchor="middle" fill="#9AA0A6">
+    <text x="580" y="518">null</text><text x="668" y="518">101.2</text><text x="756" y="518">104.9</text><text x="844" y="518">103.1</text><text x="920" y="518">109.4</text>
+  </g>
+  <text x="528" y="414" font-size="13" fill="#9AA0A6">price, then the price one row earlier</text>
+  <text x="528" y="556" font-size="13" fill="#E8E8E8">Each row sees the row before it; the first one sees null.</text>
+
+  <!-- legend -->
+  <g font-size="13" fill="#9AA0A6">
+    <circle cx="39" cy="597" r="4" fill="#9AA0A6"/><text x="54" y="602">a row</text>
+    <rect x="112" y="590" width="14" height="14" rx="3" fill="#E7C55A"/><text x="134" y="602">what the query answers</text>
+    <rect x="308" y="590" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="330" y="602">a filled value</text>
+    <text x="968" y="602" text-anchor="end">comando · docs/tutorial</text>
+  </g>
+</svg>

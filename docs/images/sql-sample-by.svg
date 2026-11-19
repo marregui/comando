@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="672" viewBox="0 0 1100 672" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>How SAMPLE BY buckets time: two days cut into six-hour buckets, the average of each bucket, the empty bucket, and what FILL puts there</title>
+<rect width="1100" height="672" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">CDB SQL · SAMPLE BY</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">SAMPLE BY cuts time into equal buckets and folds each bucket into one row.</text>
+
+<rect x="40" y="98" width="1020" height="40" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="123" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace"><tspan fill="#E7C55A">SELECT</tspan> ts, count(*) AS readings, avg(temp) AS avg_temp <tspan fill="#E7C55A">FROM</tspan> weather <tspan fill="#E7C55A">SAMPLE BY</tspan> 6h</text>
+
+<rect x="80" y="160" width="960" height="210" fill="#1B1B1B" stroke="#3A3A3A" stroke-width="1"/>
+<g fill="#1E1E1E"><rect x="200" y="161" width="120" height="208"/><rect x="440" y="161" width="120" height="208"/><rect x="680" y="161" width="120" height="208"/><rect x="920" y="161" width="119" height="208"/></g>
+<rect x="561" y="161" width="118" height="208" fill="none" stroke="#9AA0A6" stroke-width="1" stroke-dasharray="4 4"/>
+<g stroke="#3A3A3A" stroke-width="1">
+<path d="M200,160 V376"/><path d="M320,160 V376"/><path d="M440,160 V376"/><path d="M560,160 V376"/><path d="M680,160 V376"/><path d="M800,160 V376"/><path d="M920,160 V376"/>
+</g>
+<g stroke="#2A2A2A" stroke-width="1"><path d="M80,327.5 H1040"/><path d="M80,262.5 H1040"/><path d="M80,197.5 H1040"/></g>
+<g font-size="13" fill="#9AA0A6" text-anchor="end"><text x="72" y="332">10</text><text x="72" y="267">20</text><text x="72" y="202">30</text></g>
+<text x="40" y="178" font-size="13" fill="#9AA0A6">temp</text>
+<text x="620" y="268" font-size="13" fill="#9AA0A6" text-anchor="middle">no readings</text>
+
+<g stroke="#E7C55A" stroke-width="3.5" stroke-linecap="round">
+<path d="M204,303.1 H316"/><path d="M324,257.1 H436"/><path d="M444,264.1 H556"/><path d="M684,303.1 H796"/><path d="M804,231.6 H916"/>
+</g>
+<g fill="#6FAEE8" stroke="#161616" stroke-width="1"><circle cx="200" cy="275.5" r="5.5"/><circle cx="320" cy="200.8" r="5.5"/><circle cx="440" cy="217" r="5.5"/><circle cx="680" cy="265.8" r="5.5"/><circle cx="800" cy="191" r="5.5"/></g>
+<g fill="#6CC69A" stroke="#161616" stroke-width="1"><circle cx="200" cy="330.8" r="5.5"/><circle cx="320" cy="301.5" r="5.5"/><circle cx="440" cy="311.3" r="5.5"/><circle cx="680" cy="340.5" r="5.5"/></g>
+<circle cx="800" cy="356" r="5" fill="none" stroke="#6CC69A" stroke-width="1.6"/>
+<text x="811" y="361" font-size="13" fill="#9AA0A6">NULL</text>
+<g fill="#D98E5F" stroke="#161616" stroke-width="1"><circle cx="330" cy="269" r="5.5"/><circle cx="800" cy="272.3" r="5.5"/></g>
+
+<g font-size="13" fill="#9AA0A6" text-anchor="middle" font-family="Menlo, Consolas, monospace">
+<text x="80" y="392">00:00</text><text x="200" y="392">06:00</text><text x="320" y="392">12:00</text><text x="440" y="392">18:00</text><text x="560" y="392">00:00</text><text x="680" y="392">06:00</text><text x="800" y="392">12:00</text><text x="920" y="392">18:00</text><text x="1040" y="392">00:00</text>
+</g>
+<g font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace"><text x="80" y="412">2026-06-01</text><text x="560" y="412">2026-06-02</text></g>
+
+<text x="40" y="446" font-size="13" fill="#9AA0A6" letter-spacing="2">THE ANSWER · ONE ROW PER BUCKET · ts IS THE START OF THE BUCKET</text>
+<g fill="#E7C55A" fill-opacity="0.13" stroke="#E7C55A" stroke-width="1.2">
+<rect x="204" y="456" width="112" height="48" rx="6"/><rect x="324" y="456" width="112" height="48" rx="6"/><rect x="444" y="456" width="112" height="48" rx="6"/><rect x="684" y="456" width="112" height="48" rx="6"/><rect x="804" y="456" width="112" height="48" rx="6"/>
+</g>
+<rect x="564" y="456" width="112" height="48" rx="6" fill="none" stroke="#9AA0A6" stroke-width="1" stroke-dasharray="4 4"/>
+<g font-size="13" fill="#9AA0A6" text-anchor="middle">
+<text x="260" y="475">2 readings</text><text x="380" y="475">3 readings</text><text x="500" y="475">2 readings</text><text x="620" y="485">no row</text><text x="740" y="475">2 readings</text><text x="860" y="475">3 readings</text>
+</g>
+<g font-size="13" fill="#E8E8E8" text-anchor="middle" font-family="Menlo, Consolas, monospace">
+<text x="260" y="495">avg 13.75</text><text x="380" y="495">avg 20.83…</text><text x="500" y="495">avg 19.75</text><text x="740" y="495">avg 13.75</text><text x="860" y="495">avg 24.75</text>
+</g>
+
+<text x="40" y="540" font-size="13" fill="#9AA0A6" letter-spacing="2">FILL DECIDES WHAT THE EMPTY BUCKET 2026-06-02 00:00 SHOWS</text>
+<g fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1">
+<rect x="40" y="550" width="196" height="54" rx="8"/><rect x="246" y="550" width="196" height="54" rx="8"/><rect x="452" y="550" width="196" height="54" rx="8"/><rect x="658" y="550" width="196" height="54" rx="8"/><rect x="864" y="550" width="196" height="54" rx="8"/>
+</g>
+<g font-size="13" fill="#E7C55A" font-family="Menlo, Consolas, monospace">
+<text x="54" y="572">FILL(NONE)</text><text x="260" y="572">FILL(NULL)</text><text x="466" y="572">FILL(PREV)</text><text x="672" y="572">FILL(LINEAR)</text><text x="878" y="572">FILL(0)</text>
+</g>
+<g font-size="13" fill="#E8E8E8">
+<text x="54" y="592">no row, the default</text><text x="260" y="592">a row with NULL</text><text x="466" y="592">the bucket before: 19.75</text><text x="672" y="592">halfway between: 16.75</text><text x="878" y="592">the constant: 0.0</text>
+</g>
+
+<g font-size="13" fill="#9AA0A6">
+<circle cx="48" cy="630" r="5.5" fill="#6FAEE8"/><text x="62" y="635">Madrid</text>
+<circle cx="130" cy="630" r="5.5" fill="#6CC69A"/><text x="144" y="635">Oslo</text>
+<circle cx="196" cy="630" r="5.5" fill="#D98E5F"/><text x="210" y="635">Lima</text>
+<circle cx="262" cy="630" r="5" fill="none" stroke="#6CC69A" stroke-width="1.6"/><text x="276" y="635">NULL, left out of avg</text>
+<path d="M430,630 H462" stroke="#E7C55A" stroke-width="3.5" stroke-linecap="round"/><text x="472" y="635">avg(temp) of the bucket</text>
+<text x="660" y="635">A bucket includes its start and excludes its end.</text>
+</g>
+<text x="40" y="658" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/cdb-sql</text>
+</svg>

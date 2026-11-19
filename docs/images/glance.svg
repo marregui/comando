@@ -1,45 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="640" viewBox="0 0 1600 640" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
-<defs><radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#101010"/></radialGradient><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9A9A9A" stroke-width="1.4"/></marker></defs>
-<rect width="1600" height="640" fill="url(#bg)"/>
-<text x="60" y="52" text-anchor="start" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">COMANDO · AT A GLANCE</text>
-<text x="60" y="84" text-anchor="start" font-size="24" font-weight="300" fill="#F2F2F2" >Where a block goes, and what comes back</text>
-<rect x="60" y="230" width="330" height="150" rx="8" fill="#1E1E1E" stroke="#F2F2F2" stroke-width="1.2"/>
-<text x="74" y="256" text-anchor="start" font-size="15" font-weight="400" fill="#F2F2F2" >a block in the editor</text>
-<text x="74" y="278" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >a run of lines between blank lines;</text>
-<text x="74" y="297" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >the gutter marks where it goes</text>
-<text x="74" y="316" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >before it runs</text>
-<rect x="600" y="150" width="380" height="110" rx="8" fill="#1E1E1E" stroke="#BDBDBD" stroke-width="1.2"/>
-<text x="614" y="176" text-anchor="start" font-size="15" font-weight="400" fill="#BDBDBD" >the panel's database</text>
-<text x="614" y="198" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >PostgreSQL or QuestDB, over the</text>
-<text x="614" y="217" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >PostgreSQL wire protocol</text>
-<rect x="600" y="350" width="380" height="110" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
-<text x="614" y="376" text-anchor="start" font-size="15" font-weight="400" fill="#D98E5F" >the panel's claude -p session</text>
-<text x="614" y="398" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >your Claude Code setup, headless,</text>
-<text x="614" y="417" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >one process per session</text>
-<rect x="1180" y="150" width="360" height="110" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
-<text x="1194" y="176" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >results in the window</text>
-<text x="1194" y="198" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >the grid, plots and live plots,</text>
-<text x="1194" y="217" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >EXPLAIN trees</text>
-<rect x="1180" y="330" width="360" height="110" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
-<text x="1194" y="356" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >placed in the window</text>
-<text x="1194" y="378" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >tables, plots, diffs, files, Markdown,</text>
-<text x="1194" y="397" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >trees, text in the editor</text>
-<rect x="1180" y="470" width="360" height="90" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
-<text x="1194" y="496" text-anchor="start" font-size="15" font-weight="400" fill="#E7C55A" >approval cards</text>
-<text x="1194" y="518" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >what the session must ask you</text>
-<line x1="390" y1="280" x2="600" y2="205" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
-<text x="490" y="228" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >SQL · ⌥⏎</text>
-<line x1="390" y1="330" x2="600" y2="405" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
-<text x="505" y="410" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >a prompt or /command · ⌘⇧⏎</text>
-<text x="225" y="420" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" >⌘⏎: where the gutter says</text>
-<line x1="980" y1="205" x2="1180" y2="205" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
-<text x="1080" y="196" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >rows</text>
-<line x1="980" y1="385" x2="1180" y2="385" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
-<text x="1080" y="376" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >comando's MCP tools</text>
-<line x1="980" y1="440" x2="1180" y2="500" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
-<text x="1060" y="450" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >permission requests</text>
-<line x1="1180" y1="535" x2="980" y2="456" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
-<text x="1060" y="532" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >allow or deny</text>
-<text x="60" y="600" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Blue: comando. Copper: Claude Code. Gold: what waits for you. Solid: a request. Dashed: what comes back.</text>
-<text x="1540" y="600" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E" >comando · README</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="480" viewBox="0 0 1000 480" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Where a block goes: SQL to the panel's database, a prompt or a slash command to the panel's claude -p session; back come results, plots and EXPLAIN trees from the database, and from the session a transcript, tables, plots, diffs and approval cards</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="1000" height="480" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">COMANDO · AT A GLANCE</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One editor, two places a block can go</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="40" y="170" width="280" height="170" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="640" y="120" width="320" height="120" rx="8" stroke="#6FAEE8"/>
+    <rect x="640" y="270" width="320" height="120" rx="8" stroke="#D98E5F"/>
+  </g>
+  <text x="56" y="198" font-size="13" letter-spacing="2.5" fill="#E7C55A">A BLOCK IN THE EDITOR</text>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="56" y="224">the lines around the caret,</text>
+    <text x="56" y="242">up to a blank line</text>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13">
+    <text x="56" y="276" fill="#6FAEE8">select count(*) from trades;</text>
+    <text x="56" y="312" fill="#D98E5F">why is this query slow?</text>
+  </g>
+
+  <text x="656" y="148" font-size="13" letter-spacing="2.5" fill="#6FAEE8">THE PANEL'S DATABASE</text>
+  <text x="656" y="176" font-size="16" fill="#E8E8E8">PostgreSQL, QuestDB or cdb</text>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="656" y="200">back: result grids, plots,</text>
+    <text x="656" y="218">EXPLAIN trees</text>
+  </g>
+  <text x="656" y="298" font-size="13" letter-spacing="2.5" fill="#D98E5F">THE PANEL'S SESSION</text>
+  <text x="656" y="326" font-family="Menlo, Consolas, monospace" font-size="15" fill="#E8E8E8">claude -p</text>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="656" y="350">back: a transcript, tables, plots,</text>
+    <text x="656" y="368">diffs, approval cards</text>
+  </g>
+
+  <g stroke="#9AA0A6" stroke-width="1.1" fill="none">
+    <path d="M320 230 L420 230 L420 160 L639 160" marker-end="url(#ar)"/>
+    <path d="M640 210 L470 210 L470 262 L321 262" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+    <path d="M320 318 L420 318 L420 350 L639 350" marker-end="url(#ar)"/>
+    <path d="M640 300 L470 300 L470 290 L321 290" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="432" y="152">SQL · Alt+Enter</text>
+    <text x="340" y="374">a prompt or a /command · Cmd+Shift+Enter</text>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6">
+    <text x="40" y="420">Cmd+Enter sends the block where the gutter says it goes. Ctrl replaces Cmd on Linux and Windows.</text>
+    <rect x="40" y="440" width="14" height="14" rx="3" fill="#E7C55A"/><text x="62" y="452">you</text>
+    <rect x="104" y="440" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="126" y="452">comando and its databases</text>
+    <rect x="306" y="440" width="14" height="14" rx="3" fill="#D98E5F"/><text x="328" y="452">Claude Code</text>
+    <text x="430" y="452">Solid: what you send. Dashed: what comes back.</text>
+    <text x="960" y="452" text-anchor="end">comando · README</text>
+  </g>
 </svg>

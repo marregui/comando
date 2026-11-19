@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="666" viewBox="0 0 1100 666" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>How a join matches rows: weather rows pair with the cities row that has the same city; JOIN keeps the pairs, LEFT JOIN keeps every left row</title>
+<rect width="1100" height="666" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">CDB SQL · JOIN</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">A join pairs rows of two tables that share a value.</text>
+
+<rect x="40" y="98" width="1020" height="40" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="123" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace"><tspan fill="#E7C55A">SELECT</tspan> w.ts, w.city, w.temp, c.country <tspan fill="#E7C55A">FROM</tspan> weather w <tspan fill="#E7C55A">JOIN</tspan> cities c <tspan fill="#E7C55A">ON</tspan> w.city = c.city <tspan fill="#E7C55A">WHERE</tspan> w.ts IN '2026-06-02'</text>
+
+<g font-size="13" fill="#9AA0A6" letter-spacing="2">
+<text x="40" y="166">LEFT TABLE · weather w · 2026-06-02</text><text x="760" y="166">RIGHT TABLE · cities c</text>
+</g>
+<text x="550" y="166" font-size="13" fill="#E7C55A" text-anchor="middle" font-family="Menlo, Consolas, monospace">ON w.city = c.city</text>
+
+<rect x="40" y="176" width="300" height="178" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<path d="M40,204 H340" stroke="#3A3A3A" stroke-width="1"/>
+<g stroke="#2A2A2A" stroke-width="1"><path d="M40,234 H340"/><path d="M40,264 H340"/><path d="M40,294 H340"/><path d="M40,324 H340"/></g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#9AA0A6"><text x="54" y="195">ts</text><text x="170" y="195">city</text><text x="262" y="195">temp</text></g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="54" y="224">06-02 06:00</text><text x="170" y="224">Madrid</text><text x="262" y="224">19.5</text>
+<text x="54" y="254">06-02 06:00</text><text x="170" y="254">Oslo</text><text x="262" y="254">8.0</text>
+<text x="54" y="284">06-02 12:00</text><text x="170" y="284">Madrid</text><text x="262" y="284">31.0</text>
+<text x="54" y="314">06-02 12:00</text><text x="170" y="314">Oslo</text><text x="262" y="314" fill="#9AA0A6">NULL</text>
+<text x="54" y="344">06-02 12:00</text><text x="170" y="344" fill="#D98E5F">Lima</text><text x="262" y="344">18.5</text>
+</g>
+
+<rect x="760" y="176" width="300" height="118" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<path d="M760,204 H1060" stroke="#3A3A3A" stroke-width="1"/>
+<g stroke="#2A2A2A" stroke-width="1"><path d="M760,234 H1060"/><path d="M760,264 H1060"/></g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#9AA0A6"><text x="774" y="195">city</text><text x="856" y="195">country</text><text x="950" y="195">population</text></g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="774" y="224">Madrid</text><text x="856" y="224">Spain</text><text x="950" y="224">3300000</text>
+<text x="774" y="254">Oslo</text><text x="856" y="254">Norway</text><text x="950" y="254">700000</text>
+<text x="774" y="284" fill="#D98E5F">Tokyo</text><text x="856" y="284">Japan</text><text x="950" y="284">14000000</text>
+</g>
+
+<g fill="none" stroke="#E7C55A" stroke-width="1.4">
+<path d="M340,219 H760"/><path d="M340,279 C520,279 580,219 760,219"/>
+<path d="M340,249 H760"/><path d="M340,309 C520,309 580,249 760,249"/>
+</g>
+<g fill="#E7C55A"><circle cx="340" cy="219" r="3.5"/><circle cx="340" cy="249" r="3.5"/><circle cx="340" cy="279" r="3.5"/><circle cx="340" cy="309" r="3.5"/><circle cx="760" cy="219" r="3.5"/><circle cx="760" cy="249" r="3.5"/></g>
+<g fill="none" stroke="#D98E5F" stroke-width="1.4" stroke-dasharray="5 4"><path d="M340,339 H420"/><path d="M760,279 H712"/></g>
+<g stroke="#D98E5F" stroke-width="1.6"><path d="M421,333 L433,345 M433,333 L421,345"/><path d="M699,273 L711,285 M711,273 L699,285"/></g>
+<text x="444" y="344" font-size="13" fill="#D98E5F">no Lima in cities</text>
+<text x="760" y="318" font-size="13" fill="#D98E5F">no Tokyo row in weather</text>
+
+<g font-size="13" fill="#9AA0A6">
+<path d="M444,372 H476" stroke="#E7C55A" stroke-width="1.4"/><text x="486" y="376">a pair: the ON test is true</text>
+<path d="M444,394 H476" stroke="#D98E5F" stroke-width="1.4" stroke-dasharray="5 4"/><text x="486" y="398">no partner on the other side</text>
+</g>
+
+<g font-size="13" fill="#9AA0A6" letter-spacing="2">
+<text x="40" y="440">JOIN · ONLY THE PAIRS · 4 ROWS</text><text x="570" y="440">LEFT JOIN · EVERY LEFT ROW · 5 ROWS</text>
+</g>
+<rect x="40" y="450" width="490" height="130" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<path d="M40,476 H530" stroke="#3A3A3A" stroke-width="1"/>
+<g stroke="#2A2A2A" stroke-width="1"><path d="M40,502 H530"/><path d="M40,528 H530"/><path d="M40,554 H530"/></g>
+<rect x="570" y="450" width="490" height="156" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<path d="M570,476 H1060" stroke="#3A3A3A" stroke-width="1"/>
+<g stroke="#2A2A2A" stroke-width="1"><path d="M570,502 H1060"/><path d="M570,528 H1060"/><path d="M570,554 H1060"/></g>
+<rect x="570" y="580" width="490" height="26" fill="#E7C55A" fill-opacity="0.13" stroke="#E7C55A" stroke-width="1"/>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#9AA0A6">
+<text x="54" y="468">ts</text><text x="190" y="468">city</text><text x="290" y="468">temp</text><text x="380" y="468">country</text>
+<text x="584" y="468">ts</text><text x="720" y="468">city</text><text x="820" y="468">temp</text><text x="910" y="468">country</text>
+</g>
+<g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+<text x="54" y="494">06-02 06:00</text><text x="190" y="494">Madrid</text><text x="290" y="494">19.5</text><text x="380" y="494">Spain</text>
+<text x="54" y="520">06-02 06:00</text><text x="190" y="520">Oslo</text><text x="290" y="520">8.0</text><text x="380" y="520">Norway</text>
+<text x="54" y="546">06-02 12:00</text><text x="190" y="546">Madrid</text><text x="290" y="546">31.0</text><text x="380" y="546">Spain</text>
+<text x="54" y="572">06-02 12:00</text><text x="190" y="572">Oslo</text><text x="290" y="572" fill="#9AA0A6">NULL</text><text x="380" y="572">Norway</text>
+<text x="584" y="494">06-02 06:00</text><text x="720" y="494">Madrid</text><text x="820" y="494">19.5</text><text x="910" y="494">Spain</text>
+<text x="584" y="520">06-02 06:00</text><text x="720" y="520">Oslo</text><text x="820" y="520">8.0</text><text x="910" y="520">Norway</text>
+<text x="584" y="546">06-02 12:00</text><text x="720" y="546">Madrid</text><text x="820" y="546">31.0</text><text x="910" y="546">Spain</text>
+<text x="584" y="572">06-02 12:00</text><text x="720" y="572">Oslo</text><text x="820" y="572" fill="#9AA0A6">NULL</text><text x="910" y="572">Norway</text>
+<text x="584" y="598">06-02 12:00</text><text x="720" y="598">Lima</text><text x="820" y="598">18.5</text><text x="910" y="598" fill="#E7C55A">NULL</text>
+</g>
+<text x="40" y="606" font-size="14" fill="#E8E8E8">Lima has no partner, so JOIN leaves it out.</text>
+<text x="40" y="626" font-size="14" fill="#E8E8E8">LEFT JOIN keeps it and fills the right side with NULL.</text>
+<text x="40" y="650" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/cdb-sql</text>
+</svg>

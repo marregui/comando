@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, edge, fabric) and the instance's identity; outside it sit the machine's cdb, the Edge registry, and Claude Code's root with the kit and the conversations</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
+  </defs>
+  <rect width="1000" height="560" fill="url(#bg)"/>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">ARCHITECTURE · DATA ON DISK</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One folder per instance, and three neighbours</text>
+
+  <!-- the data root -->
+  <rect x="40" y="108" width="600" height="388" rx="10" fill="#161616" stroke="#6FAEE8" stroke-width="1.3"/>
+  <text x="60" y="136" font-size="13" letter-spacing="2.5" fill="#6FAEE8">THE DATA ROOT</text>
+  <text x="218" y="136" font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">~/.comando</text>
+
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="60" y="152" width="270" height="156" rx="8" stroke="#E7C55A" stroke-width="2"/>
+    <rect x="350" y="152" width="270" height="156" rx="8" stroke="#6FAEE8"/>
+    <rect x="60" y="324" width="270" height="156" rx="8" stroke="#6FAEE8"/>
+    <rect x="350" y="324" width="270" height="156" rx="8" stroke="#AEB6C1"/>
+  </g>
+  <g font-size="13" letter-spacing="2.5">
+    <text x="76" y="178" fill="#E7C55A">WHAT YOU MADE</text>
+    <text x="366" y="178" fill="#6FAEE8">WHAT A RUN LEAVES</text>
+    <text x="76" y="350" fill="#6FAEE8">THE SERVERS' DATA</text>
+    <text x="366" y="350" fill="#AEB6C1">WHO THIS INSTANCE IS</text>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="76" y="204">connections.json</text>
+    <text x="76" y="224">sessions.json · folders.json</text>
+    <text x="76" y="244">panels.json · panels/*.md</text>
+    <text x="76" y="264">settings.json · themes/</text>
+    <text x="366" y="204">run/</text>
+    <text x="366" y="224">logs/</text>
+    <text x="366" y="244">audit/</text>
+    <text x="366" y="264">cache/</text>
+    <text x="76" y="376">cdb/</text>
+    <text x="76" y="396">edge/</text>
+    <text x="76" y="416">fabric/</text>
+    <text x="366" y="376">instance.json</text>
+    <text x="366" y="396">comando.lock</text>
+    <text x="366" y="416">agents.json</text>
+    <text x="366" y="436">instances-seen.json</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="76" y="292">worth a backup</text>
+    <text x="420" y="204">sessions' MCP configurations</text>
+    <text x="420" y="224">the log, the intent log</text>
+    <text x="420" y="244">tool calls and approvals</text>
+    <text x="420" y="264">drawn pictures</text>
+    <text x="366" y="292">safe to lose between runs</text>
+    <text x="140" y="376">the local cdb's tables</text>
+    <text x="140" y="396">the comando Edge</text>
+    <text x="140" y="416">a frontear node's data</text>
+    <text x="76" y="464">each server keeps its own files</text>
+    <text x="366" y="464">name, role, lock, grants, peers</text>
+  </g>
+
+  <!-- neighbours -->
+  <g fill="#1E1E1E" stroke-width="1.3">
+    <rect x="680" y="108" width="280" height="116" rx="8" stroke="#6FAEE8"/>
+    <rect x="680" y="244" width="280" height="116" rx="8" stroke="#AEB6C1"/>
+    <rect x="680" y="380" width="280" height="116" rx="8" stroke="#D98E5F"/>
+  </g>
+  <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
+    <text x="696" y="162">~/.comando-cdb/</text>
+    <text x="696" y="298">~/.comando-edge.json</text>
+    <text x="696" y="434">~/.claude/</text>
+  </g>
+  <g font-size="13" letter-spacing="2.5">
+    <text x="696" y="136" fill="#6FAEE8">THE MACHINE'S CDB</text>
+    <text x="696" y="272" fill="#AEB6C1">THE EDGE REGISTRY</text>
+    <text x="696" y="408" fill="#D98E5F">CLAUDE CODE'S ROOT</text>
+  </g>
+  <g font-size="13" fill="#9AA0A6">
+    <text x="696" y="184">one database server for the machine:</text>
+    <text x="696" y="202">its launcher, data, registry, secrets</text>
+    <text x="696" y="320">which instance started the one Edge;</text>
+    <text x="696" y="338">shared by every instance</text>
+    <text x="696" y="456">the kit and every conversation;</text>
+    <text x="696" y="474">Claude Code owns these files</text>
+  </g>
+
+  <g font-size="13" fill="#9AA0A6">
+    <rect x="40" y="520" width="14" height="14" rx="3" fill="#E7C55A"/><text x="62" y="532">yours</text>
+    <rect x="118" y="520" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="140" y="532">comando</text>
+    <rect x="214" y="520" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="236" y="532">instances</text>
+    <rect x="316" y="520" width="14" height="14" rx="3" fill="#D98E5F"/><text x="338" y="532">Claude Code</text>
+    <text x="960" y="532" text-anchor="end">comando · docs/architecture</text>
+  </g>
+</svg>

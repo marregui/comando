@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The path of one message through a link: publish, match, append to the log and force it, acknowledge, send to the peer, move the cursor, deliver</title>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+<marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#E7C55A" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="640" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">FRONTEAR · ONE MESSAGE THROUGH A LINK</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">On disk first, acknowledged second, sent third</text>
+
+<!-- clients -->
+<rect x="50" y="104" width="210" height="64" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="66" y="128" font-size="13" fill="#9AA0A6" letter-spacing="2">PUBLISHER</text>
+<text x="66" y="152" font-size="13" fill="#E8E8E8">a client of node a</text>
+<rect x="960" y="104" width="200" height="64" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="976" y="128" font-size="13" fill="#9AA0A6" letter-spacing="2">SUBSCRIBER</text>
+<text x="976" y="152" font-size="13" fill="#E8E8E8">a client of node b</text>
+
+<!-- node containers -->
+<rect x="30" y="240" width="740" height="300" rx="10" fill="none" stroke="#3A3A3A" stroke-width="1"/>
+<text x="754" y="264" font-size="13" fill="#9AA0A6" letter-spacing="2" text-anchor="end">NODE a</text>
+<rect x="940" y="240" width="240" height="300" rx="10" fill="none" stroke="#3A3A3A" stroke-width="1"/>
+<text x="956" y="264" font-size="13" fill="#9AA0A6" letter-spacing="2">NODE b</text>
+
+<!-- 1 publish, 4 puback -->
+<line x1="100" y1="168" x2="100" y2="284" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="110" y="198" font-size="13" fill="#E8E8E8">1 · PUBLISH</text>
+<text x="110" y="216" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">jobs/1</text>
+<line x1="210" y1="288" x2="210" y2="172" stroke="#E7C55A" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#g)"/>
+<text x="220" y="198" font-size="13" fill="#E7C55A">4 · PUBACK</text>
+<text x="220" y="216" font-size="13" fill="#9AA0A6">only after step 3</text>
+
+<!-- boxes in node a -->
+<rect x="50" y="288" width="210" height="84" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="66" y="312" font-size="13" fill="#9AA0A6" letter-spacing="2">BROKER</text>
+<text x="66" y="336" font-size="13" fill="#E8E8E8">matches the topic to the</text>
+<text x="66" y="356" font-size="13" fill="#E8E8E8">link's out filter <tspan font-family="Menlo, Consolas, monospace" fill="#9AA0A6">jobs/#</tspan></text>
+<line x1="260" y1="330" x2="291" y2="330" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="295" y="288" width="210" height="84" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="311" y="312" font-size="13" fill="#9AA0A6" letter-spacing="2">2 · LINK b</text>
+<text x="311" y="336" font-size="14" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">$link/b</text>
+<text x="311" y="356" font-size="13" fill="#9AA0A6">a subscriber inside the node</text>
+<line x1="505" y1="330" x2="536" y2="330" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="540" y="288" width="210" height="84" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="2"/>
+<text x="556" y="312" font-size="13" fill="#E7C55A" letter-spacing="2">3 · LINK LOG</text>
+<text x="556" y="336" font-size="13" fill="#E8E8E8">append, with a checksum</text>
+<text x="556" y="356" font-size="13" fill="#E7C55A">force the file to disk</text>
+
+<!-- the acknowledgement's way back -->
+<path d="M645,372 L645,396 L155,396 L155,376" fill="none" stroke="#E7C55A" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#g)"/>
+<text x="400" y="416" font-size="13" fill="#9AA0A6" text-anchor="middle">the acknowledgement waits for the disk</text>
+
+<!-- the log strip -->
+<text x="50" y="462" font-size="13" fill="#9AA0A6" letter-spacing="2">THE LOG OF LINK b</text>
+<g stroke-width="1.2">
+<rect x="295" y="444" width="56" height="28" fill="#242424" stroke="#4A4A4A"/>
+<rect x="351" y="444" width="56" height="28" fill="#242424" stroke="#4A4A4A"/>
+<rect x="407" y="444" width="56" height="28" fill="#242424" stroke="#4A4A4A"/>
+<rect x="463" y="444" width="56" height="28" fill="#2B2618" stroke="#E7C55A"/>
+<rect x="519" y="444" width="56" height="28" fill="#2B2618" stroke="#E7C55A"/>
+<rect x="575" y="444" width="56" height="28" fill="#2B2618" stroke="#E7C55A"/>
+<rect x="631" y="444" width="56" height="28" fill="none" stroke="#3A3A3A" stroke-dasharray="4 4"/>
+<rect x="687" y="444" width="56" height="28" fill="none" stroke="#3A3A3A" stroke-dasharray="4 4"/>
+</g>
+<g font-size="13" fill="#9AA0A6" text-anchor="middle" font-family="Menlo, Consolas, monospace">
+<text x="323" y="463">0</text><text x="379" y="463">1</text><text x="435" y="463">2</text>
+<text x="491" y="463" fill="#E7C55A">3</text><text x="547" y="463" fill="#E7C55A">4</text><text x="603" y="463" fill="#E7C55A">5</text>
+</g>
+<line x1="463" y1="476" x2="463" y2="496" stroke="#E8E8E8" stroke-width="1.2"/>
+<text x="463" y="514" font-size="13" fill="#E8E8E8" text-anchor="middle" font-family="Menlo, Consolas, monospace">cursor = 3</text>
+<line x1="631" y1="476" x2="631" y2="496" stroke="#E8E8E8" stroke-width="1.2"/>
+<text x="631" y="514" font-size="13" fill="#E8E8E8" text-anchor="middle" font-family="Menlo, Consolas, monospace">tail = 6</text>
+<text x="379" y="496" font-size="13" fill="#9AA0A6" text-anchor="middle">settled</text>
+<text x="547" y="496" font-size="13" fill="#E7C55A" text-anchor="middle">queued = 3</text>
+
+<!-- 5 send, 6 peer puback -->
+<text x="855" y="286" font-size="13" fill="#E8E8E8" text-anchor="middle">5 · PUBLISH, QoS 1</text>
+<text x="855" y="304" font-size="13" fill="#9AA0A6" text-anchor="middle" font-family="Menlo, Consolas, monospace">frontear-hops: 1</text>
+<line x1="750" y1="316" x2="956" y2="316" stroke="#E7C55A" stroke-width="1.6" marker-end="url(#g)"/>
+<line x1="960" y1="348" x2="754" y2="348" stroke="#9AA0A6" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="855" y="370" font-size="13" fill="#E8E8E8" text-anchor="middle">6 · PUBACK</text>
+<text x="855" y="388" font-size="13" fill="#9AA0A6" text-anchor="middle">the cursor moves on</text>
+
+<!-- node b -->
+<rect x="960" y="288" width="200" height="84" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="976" y="312" font-size="13" fill="#9AA0A6" letter-spacing="2">BROKER</text>
+<text x="976" y="336" font-size="13" fill="#E8E8E8">treats the link as one</text>
+<text x="976" y="356" font-size="13" fill="#E8E8E8">more MQTT client</text>
+<line x1="1060" y1="288" x2="1060" y2="172" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="1070" y="198" font-size="13" fill="#E8E8E8">7 · PUBLISH</text>
+<text x="1070" y="216" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">jobs/1</text>
+<text x="956" y="462" font-size="13" fill="#9AA0A6">Node b may be down</text>
+<text x="956" y="480" font-size="13" fill="#9AA0A6">for hours. Steps 1 to 4</text>
+<text x="956" y="498" font-size="13" fill="#9AA0A6">still work on node a.</text>
+
+<text x="40" y="574" font-size="13" fill="#9AA0A6">Messages wait in the log in order. When node b returns, the link reconnects by itself and sends again from the cursor.</text>
+
+<line x1="40" y1="592" x2="1160" y2="592" stroke="#2A2A2A" stroke-width="1"/>
+<text x="40" y="618" font-size="13" fill="#9AA0A6">comando · docs/frontear.md</text>
+<rect x="640" y="606" width="14" height="14" rx="3" fill="#E7C55A"/><text x="660" y="618" font-size="13" fill="#9AA0A6">frontear, and what makes a message durable</text>
+<rect x="1000" y="606" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="1020" y="618" font-size="13" fill="#9AA0A6">MQTT clients</text>
+</svg>

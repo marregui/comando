@@ -19,7 +19,7 @@ for the newest release). Run each step, report what it printed when it fails, an
 |---|---|---|
 | Claude Code CLI, 2.1.316 or later | `claude --version` | the session running this recipe is Claude Code; comando finds `claude` at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else on `PATH`. An older version: ask the user to update it (`claude update`) before going on |
 | GitHub CLI, signed in | `gh auth status` and `gh repo view marregui/comando --json name` | install `gh` (macOS `brew install gh`; Debian and Ubuntu `sudo apt-get install -y gh`; Windows `winget install --id GitHub.cli -e`), then ask the user to run `gh auth login` |
-| Python 3.9 or later | `python3 --version` (`python` on Windows) | the kit's hooks and tools run on it, and a guard that cannot start refuses the call it guards ([Kit and brain §2.2](docs/kit-and-brain.md#22-a-sessions-life-and-which-part-acts)); [§5](#5-the-kit)'s recipe installs it |
+| Python 3.9 or later | `python3 --version` (`python` on Windows) | comando calls the kit's `install/kit.py` with it ([The kit](docs/kit.md#scheduled-jobs)), and a kit's hooks and tools may need it; ask the user to install it |
 | a desktop session | macOS; Linux with X11 or Wayland (XWayland); Windows 10 or 11 | comando is a window application |
 
 No Java is needed: each package carries its own runtime. A comando release needs, at least, the newest Claude Code on
@@ -120,28 +120,32 @@ and Ubuntu. A second start while comando runs only says that it is already runni
 
 ## 5. The kit
 
-The kit is the Claude Code setup comando runs every session on: instructions, settings, hooks, tools, skills, the
-manifest comando reads, and a check that proves its shape. The brain is what those sessions remember and know: memory, a knowledge base, a
+The kit is the Claude Code setup comando runs every session on: instructions, settings, hooks, tools, skills and the
+manifest comando reads. The brain is what those sessions remember and know: memory, a knowledge base, a
 scratchpad. They are two folders of their own, `~/comando-kit` and `~/comando-brain`; the user's own `~/.claude` is
 never touched, so a user trying comando keeps their Claude Code setup as it was. No kit is published: you create both
-for the user from [Kit and brain](docs/kit-and-brain.md) of the installed release, read at its tag (`TAG` from
-[§2](#2-choose-the-release-and-the-file); later, `v` and the version **About comando** names):
+for the user from [The kit](docs/kit.md) and [The brain](docs/brain.md) of the installed release, read at its tag
+(`TAG` from [§2](#2-choose-the-release-and-the-file); later, `v` and the version **About comando** names):
 
 ```sh
-gh api -H 'Accept: application/vnd.github.raw' "repos/marregui/comando/contents/docs/kit-and-brain.md?ref=$TAG"
+gh api -H 'Accept: application/vnd.github.raw' "repos/marregui/comando/contents/docs/kit.md?ref=$TAG"
+gh api -H 'Accept: application/vnd.github.raw' "repos/marregui/comando/contents/docs/brain.md?ref=$TAG"
 ```
 
 Ask the user: "comando is installed. Create a kit and a brain for it now? They go in `~/comando-kit` and
 `~/comando-brain` and leave your own `~/.claude` alone." When the user already has a kit (a folder with a
-`comando-kit.json`), a brain, or both, ask where; check what they bring against that document's contract and report each
-gap with its fix ([§8.4](docs/kit-and-brain.md#84-a-kit-or-a-brain-the-user-brings)). On no, go to
+`comando-kit.json`), a brain, or both, ask where; check what they bring against
+[The manifest](docs/kit.md#the-manifest) and [How comando finds a kit](docs/kit.md#how-comando-finds-a-kit), and report
+each gap with its fix. On no, go to
 [§6](#6-start-comando); the user can ask for a kit later, and this section applies then.
 
-On yes, follow [§8.1](docs/kit-and-brain.md#81-the-steps) of that document: check the tools, show the plan as one table
+On yes, follow [Make a minimal kit](docs/kit.md#make-a-minimal-kit): show the plan as one table
 and ask once; create the kit in `~/comando-kit` and the brain in `~/comando-brain`, each a git repository of its own,
-with the files of its §8.2 and §8.3; run its checks; commit. Then ask the user to sign the kit's folder in, once, in
-their own terminal, with the commands of that document's [§3.1 *Signing in*](docs/kit-and-brain.md#31-the-root). When
-comando runs, quit it and start it again, so its sessions use the kit: the Kit tab then shows the KIT row and the Brain tab the BRAIN row.
+with the files that section lists and the brain [The brain](docs/brain.md) describes; commit. Then ask the user to sign
+the kit's folder in, once, in their own terminal, with the commands of
+[How comando hosts a kit](docs/kit.md#how-comando-hosts-a-kit), *Signing in*. When
+comando runs, quit it and start it again, so its sessions use the kit: the Kit and Brain tabs
+then show the folders the manifest lists, the KIT and the BRAIN row with that section's manifest.
 
 ## 6. Start comando
 
@@ -163,9 +167,10 @@ Tell the user how to start it, and that **Help ▸ Tutorial** inside comando tak
 4. Check that it starts, as in [§4](#4-check-that-it-starts).
 
 The data in `~/.comando` is kept and read by the new version. The kit and the brain are not touched. When the new
-release's [Kit and brain](docs/kit-and-brain.md) changes a contract section, ask a session to bring the kit in line with
-it ([§8.5](docs/kit-and-brain.md#85-after-a-comando-upgrade)). A kit kept on a remote with tags also gets **Upgrade the
-kit…** on the KIT row when a newer tag is out.
+release's [The kit](docs/kit.md) changes what comando reads from a kit ([The manifest](docs/kit.md#the-manifest),
+[How comando hosts a kit](docs/kit.md#how-comando-hosts-a-kit)), ask a session to bring the kit in line with
+it. A kit kept on a remote with tags also gets **Upgrade the
+kit…** on the KIT row when a newer tag of the form `vN.N.N` is out.
 
 ## 8. Uninstall
 
@@ -183,5 +188,5 @@ kit…** on the KIT row when a newer tag is out.
    (`security delete-generic-password -s comando`, once per saved password).
 4. The kit and the brain stay. To remove them: back the brain up first (**Back up the brain**, or a copy of
    `~/comando-brain`); when the kit has a jobs tool, remove its scheduled jobs with
-   `echo '[]' | python3 ~/comando-kit/install/kit.py jobs set --root ~/comando-kit` (exit 0 or 1; `python` on Windows); then ask the user to
+   `echo '[]' | python3 ~/comando-kit/install/kit.py jobs set --root ~/comando-kit` (exit 0 done, 1 done in part, 2 refused, 3 an error; `python` on Windows); then ask the user to
    move `~/comando-kit`, and `~/comando-brain` if they want it gone too, to the Trash. Never delete them yourself.

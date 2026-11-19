@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="650" viewBox="0 0 1100 650" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The cdb module: callers, the facade, the servers, the engine's packages and the files</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
+<rect width="1100" height="650" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · CDB</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">Three doors in, one engine, one folder per table</text>
+
+<text x="40" y="112" font-size="13" fill="#9AA0A6" letter-spacing="2">WHO CALLS</text>
+<rect x="40" y="124" width="320" height="72" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="152" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">db.CdbAdapter</text>
+<text x="56" y="176" font-size="13" fill="#9AA0A6">comando's panels, in process</text>
+<rect x="390" y="124" width="320" height="72" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="406" y="152" font-size="15" fill="#AEB6C1">an HTTP client</text>
+<text x="406" y="176" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">GET /exec · POST /write</text>
+<rect x="740" y="124" width="320" height="72" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="756" y="152" font-size="15" fill="#AEB6C1">a PostgreSQL client</text>
+<text x="756" y="176" font-size="13" fill="#9AA0A6">pgjdbc, Grafana, psql</text>
+
+<line x1="200" y1="196" x2="200" y2="246" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<line x1="550" y1="196" x2="550" y2="246" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<line x1="900" y1="196" x2="900" y2="246" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="40" y="250" width="320" height="76" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="56" y="280" font-size="16" fill="#E7C55A" font-family="Menlo, Consolas, monospace">Cdb</text>
+<text x="100" y="280" font-size="13" fill="#E8E8E8">the one public facade</text>
+<text x="56" y="306" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">open · run · explain · appender</text>
+<rect x="390" y="250" width="670" height="76" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="406" y="280" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">serve</text>
+<text x="462" y="280" font-size="13" fill="#E8E8E8">the two listeners of CdbServe, the machine's server</text>
+<text x="406" y="306" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">CdbServer · PgServer · CommitQueue · IlpParser · Access · Secrets</text>
+<line x1="390" y1="288" x2="366" y2="288" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<line x1="200" y1="326" x2="200" y2="386" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="40" y="368" font-size="13" fill="#9AA0A6" letter-spacing="2">THE ENGINE</text>
+
+<rect x="40" y="390" width="230" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="56" y="418" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">sql</text>
+<text x="56" y="440" font-size="13" fill="#E8E8E8">text to a syntax tree</text>
+<text x="56" y="460" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Lexer · Parser · Ast</text>
+<line x1="270" y1="432" x2="296" y2="432" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="300" y="390" width="230" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="316" y="418" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">plan</text>
+<text x="316" y="440" font-size="13" fill="#E8E8E8">names, types, time range</text>
+<text x="316" y="460" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Planner · Binder · Plan</text>
+<line x1="530" y1="432" x2="556" y2="432" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="560" y="390" width="250" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="576" y="418" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">exec</text>
+<text x="576" y="440" font-size="13" fill="#E8E8E8">cursors over pages of rows</text>
+<text x="576" y="460" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Executor · Cursor · Page</text>
+<line x1="810" y1="432" x2="836" y2="432" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="840" y="390" width="220" height="84" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="856" y="418" font-size="15" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">catalog</text>
+<text x="856" y="440" font-size="13" fill="#E8E8E8">listings, no table data</text>
+<text x="856" y="460" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Catalog · Listings</text>
+
+<line x1="685" y1="474" x2="685" y2="516" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+<line x1="950" y1="474" x2="950" y2="516" stroke="#9AA0A6" stroke-width="1.2" marker-end="url(#a)"/>
+
+<rect x="40" y="520" width="1020" height="76" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="56" y="550" font-size="16" fill="#E7C55A" font-family="Menlo, Consolas, monospace">store</text>
+<text x="118" y="550" font-size="13" fill="#E8E8E8">snapshots for readers, a log and an applier for writers, one folder per table on the disk</text>
+<text x="56" y="576" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Store · TableState · Wal · Applier · Checkpoint · Version · PartitionReader · SymbolTable</text>
+
+<rect x="620" y="622" width="14" height="14" rx="3" fill="#E7C55A"/><text x="640" y="634" font-size="13" fill="#9AA0A6">centre</text>
+<rect x="710" y="622" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="730" y="634" font-size="13" fill="#9AA0A6">cdb's packages and comando</text>
+<rect x="930" y="622" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="950" y="634" font-size="13" fill="#9AA0A6">outside the JVM</text>
+<text x="40" y="634" font-size="13" fill="#9AA0A6">comando · docs/modules/cdb</text>
+</svg>

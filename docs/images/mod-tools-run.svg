@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The life of a Gradle run: an errand waits for a child process while a fork copies its output</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></radialGradient>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="560" fill="url(#bg)"/>
+<text x="48" y="48" font-size="13" fill="#E7C55A" letter-spacing="3">MODULE · TOOLS · A GRADLE RUN</text>
+<text x="48" y="82" font-size="24" font-weight="300" fill="#E8E8E8">Three things run side by side; one intent says it is over</text>
+
+<text x="320" y="118" font-size="13" fill="#9AA0A6" letter-spacing="2">TIME</text>
+<path d="M366,113 L1140,113" fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)"/>
+
+<line x1="48" y1="134" x2="1152" y2="134" stroke="#3A3A3A" stroke-width="1"/>
+<text x="48" y="164" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">gradle-&lt;run&gt;</text>
+<text x="48" y="186" font-size="14" fill="#9AA0A6">an errand: owns the run</text>
+<g font-size="13" fill="#E8E8E8" text-anchor="middle">
+<rect x="320" y="150" width="120" height="34" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="380" y="172">find gradlew</text>
+<rect x="446" y="150" width="120" height="34" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="506" y="172">start it</text>
+<rect x="572" y="150" width="276" height="34" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="710" y="172">wait for it to exit</text>
+<rect x="854" y="150" width="150" height="34" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/><text x="929" y="172">read JUnit XML</text>
+</g>
+<text x="1016" y="172" font-size="13" fill="#E7C55A" font-family="Menlo, Consolas, monospace">CommandFinished</text>
+
+<line x1="48" y1="204" x2="1152" y2="204" stroke="#3A3A3A" stroke-width="1"/>
+<text x="48" y="234" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">the child process</text>
+<text x="48" y="256" font-size="14" fill="#9AA0A6">Gradle itself, outside comando</text>
+<rect x="572" y="220" width="270" height="34" rx="4" fill="#9AA0A6" fill-opacity="0.18" stroke="#9AA0A6" stroke-width="1"/>
+<text x="707" y="242" font-size="13" fill="#E8E8E8" text-anchor="middle" font-family="Menlo, Consolas, monospace">./gradlew --console=plain test</text>
+
+<line x1="48" y1="274" x2="1152" y2="274" stroke="#3A3A3A" stroke-width="1"/>
+<text x="48" y="304" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">tool-output-&lt;run&gt;</text>
+<text x="48" y="326" font-size="14" fill="#9AA0A6">a fork: copies the output</text>
+<rect x="572" y="290" width="282" height="34" rx="4" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/>
+<text x="713" y="312" font-size="13" fill="#E8E8E8" text-anchor="middle">each line into the run's Console</text>
+<text x="868" y="312" font-size="13" fill="#9AA0A6">joined within 2 s of the exit</text>
+<line x1="48" y1="344" x2="1152" y2="344" stroke="#3A3A3A" stroke-width="1"/>
+
+<text x="48" y="392" font-size="13" fill="#9AA0A6" letter-spacing="2">WHEN YOU CANCEL THE RUN</text>
+<g fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2">
+<rect x="48" y="408" width="330" height="76" rx="8"/>
+<rect x="435" y="408" width="330" height="76" rx="8"/>
+<rect x="822" y="408" width="330" height="76" rx="8"/>
+</g>
+<text x="64" y="438" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">SIGTERM</text>
+<text x="64" y="464" font-size="14" fill="#E8E8E8">to the process and its descendants</text>
+<text x="451" y="438" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">tool-kill-&lt;run&gt;</text>
+<text x="451" y="464" font-size="14" fill="#E8E8E8">an errand waits 2 s</text>
+<text x="838" y="438" font-size="13" fill="#6FAEE8" font-family="Menlo, Consolas, monospace">SIGKILL</text>
+<text x="838" y="464" font-size="14" fill="#E8E8E8">to whatever is still alive</text>
+<g fill="none" stroke="#9AA0A6" stroke-width="1" marker-end="url(#a)">
+<path d="M378,446 L431,446"/>
+<path d="M765,446 L818,446"/>
+</g>
+
+<g font-size="13" fill="#9AA0A6">
+<rect x="820" y="522" width="14" height="14" rx="3" fill="#6FAEE8" fill-opacity="0.28" stroke="#6FAEE8" stroke-width="1"/>
+<text x="842" y="534">comando's threads</text>
+<rect x="990" y="522" width="14" height="14" rx="3" fill="#9AA0A6" fill-opacity="0.18" stroke="#9AA0A6" stroke-width="1"/>
+<text x="1012" y="534">outside comando</text>
+</g>
+<text x="48" y="534" font-size="13" fill="#9AA0A6" letter-spacing="1">comando · docs/modules/tools.md</text>
+</svg>
