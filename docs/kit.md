@@ -277,6 +277,13 @@ The **Kit** tab shows a **Jobs** row first inside the KIT row, the one the group
 a kit with no jobs and "cannot be read" when the installer fails. The reasons are in
 [ADR 0117](adr/0117-kit-jobs-a-row-and-a-window.md).
 
+The **Kit jobs** window lists the jobs on the left. Each row has a mark for how the job stands (a tick for a last
+run that ended well, a cross for one that failed, play while it runs, stop while it is paused, an hourglass before
+its first run), its name, and its schedule in grey. Right-click a row to run the job now, open its log or remove
+it. Above the fields sit the job's state, its last run with the exit code, and its next run. Each field has a hint
+under it, and the ⓘ on its label opens the longer explanation. The Program and Log rows each have an open button
+that shows the file in an editor panel, to read or change it. **Save** hands the whole list to the installer.
+
 > **Learn: a scheduler.** A computer has a service whose only work is to start programs at set times. You give it a
 > list: this program, at this hour, on these days. It keeps the list even when you log out, and it restarts a
 > program that must always run. Each system has its own. comando does not become a scheduler. It hands the kit's

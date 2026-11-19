@@ -183,8 +183,8 @@ final class JobActions {
             }
 
             @Override
-            public void openLog(final Path log) {
-                openFile.accept(log);
+            public void open(final Path file) {
+                openFile.accept(file);
             }
         }, this::save, null);
     }

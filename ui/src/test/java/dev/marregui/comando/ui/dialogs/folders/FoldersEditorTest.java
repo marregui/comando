@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import javax.swing.AbstractButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
@@ -378,7 +379,8 @@ class FoldersEditorTest {
         assertThat(on(e, FoldersDialog::saveOffered)).as("nothing to save").isFalse();
     }
 
-    /// Each of the eight field labels carries a non-blank tooltip, the index and listing tips naming their rules.
+    /// Each of the eight field labels carries a non-blank tooltip; the index's and the listing's explanations, behind
+    /// their labels' ⓘ, name their rules.
     @Test
     void everyFieldsNameExplainsItUnderTheMouse(@TempDir final Path dir) throws Exception {
         final FoldersEditor e = editor(List.of(new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of())),
@@ -391,8 +393,14 @@ class FoldersEditorTest {
         });
         assertThat(tips.keySet()).containsExactly("Name", "Folder", "Index file", "Leave out", "Icon", "Trash", "Listed in", "Group");
         assertThat(tips.values()).allSatisfy(t -> assertThat(t).isNotBlank());
-        assertThat(tips.get("Index file")).contains("Named but missing in the kit or the brain: Save creates it").contains("Empty: the folder has no index");
-        assertThat(tips.get("Listed in")).contains("An entry moved to the Trash takes its lines out");
+        final Map<String, String> about = on(e, (FoldersEditor x) -> {
+            final Map<String, String> out = new LinkedHashMap<>();
+            explanations(x.component(), out);
+            return out;
+        });
+        assertThat(about.get("Index file")).contains("Named but missing in the kit or the brain: Save creates it")
+                .contains("Empty: the folder has no index");
+        assertThat(about.get("Listed in")).contains("An entry moved to the Trash takes its lines out");
     }
 
     private static void labels(final Component c, final Map<String, String> out) {
@@ -402,6 +410,18 @@ class FoldersEditorTest {
         if (c instanceof Container k) {
             for (final Component child : k.getComponents()) {
                 labels(child, out);
+            }
+        }
+    }
+
+    /// Each labelled field's explanation, the text its label's ⓘ opens, by the label's text.
+    private static void explanations(final Component c, final Map<String, String> out) {
+        if (c instanceof JLabel l && l.getLabelFor() instanceof JComponent f) {
+            out.put(l.getText(), f.getAccessibleContext().getAccessibleDescription());
+        }
+        if (c instanceof Container k) {
+            for (final Component child : k.getComponents()) {
+                explanations(child, out);
             }
         }
     }

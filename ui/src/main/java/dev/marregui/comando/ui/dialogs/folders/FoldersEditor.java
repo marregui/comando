@@ -564,33 +564,35 @@ public final class FoldersEditor {
         chooseListing.addActionListener(e -> chooseInFolder("listing").ifPresent(f -> listedIn.setText(f.getFileName().toString())));
 
         final String home = configShown();
-        form.row("Name", name, name, NAME, "The row's name in the sidebar; unique");
-        form.row("Folder", FormRows.withButton(path, choosePath), path, PATH,
-                "The folder the row shows; chosen with …, only inside " + home);
+        form.row("Name", name, name, NAME, "Name the row in the sidebar; unique",
+                "The row's name in the sidebar; unique", "");
+        form.row("Folder", FormRows.withButton(path, choosePath), path, PATH, "Choose the folder the row shows",
+                "Chosen with …, only inside " + home,
+                "The folder the row shows; chosen with …, only inside " + home + ".");
         form.row("Index file", FormRows.withButton(index, chooseIndex), index, INDEX,
-                FormRows.lines(
-                        "The folder's catalogue, one line per entry: listed first, opened by Open in the row's menu",
-                        "Named but missing in the kit or the brain: Save creates it, and /reflect keeps a line in it for each entry",
-                        "Empty: the folder has no index"));
-        form.row("Leave out", excludes, excludes, EXCLUDES,
-                FormRows.lines("Names hidden from the tree wherever they appear, comma-separated, any case",
-                        "Always hidden: names starting with a dot, "
-                                + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList())));
-        form.row("Icon", icon, icon, ICON, "The icon of the folder's row");
-        form.row("Trash", deletable, deletable, DELETABLE,
-                "Whether the sidebar moves the folder's files and subfolders to the Trash; never the folder");
+                "Set the folder's catalogue file; empty for none", "One line per entry; empty: no index",
+                "The folder's catalogue, one line per entry: listed first, opened by Open in the row's menu. Named "
+                        + "but missing in the kit or the brain: Save creates it, and /reflect keeps a line in it for "
+                        + "each entry. Empty: the folder has no index.");
+        form.row("Leave out", excludes, excludes, EXCLUDES, "List names to hide from the tree, comma-separated",
+                "Comma-separated, any case",
+                "Names hidden from the tree wherever they appear, comma-separated, any case. Always hidden: names "
+                        + "starting with a dot, "
+                        + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList()) + ".");
+        form.row("Icon", icon, icon, ICON, "Pick the icon of the folder's row", "", "");
+        form.row("Trash", deletable, deletable, DELETABLE, "Let the sidebar move the folder's files to the Trash", "",
+                "Whether the sidebar moves the folder's files and subfolders to the Trash; never the folder itself.");
         form.row("Listed in", FormRows.withButton(listedIn, chooseListing), listedIn, LISTED_IN,
-                FormRows.lines(
-                        "The name of the file that, in each subfolder, lists the entries beside it, such as INDEX.md",
-                        "An entry moved to the Trash takes its lines out of the nearest such file above it",
-                        "Missing in a subfolder: nothing to take out there; /reflect creates it with its first line",
-                        "Empty, or Trash off: no file is changed"));
-        form.row("Group", group, group, GROUP,
-                FormRows.lines(
-                        "A header the sidebar shows above this folder and the folders after it in the same group,"
-                                + " such as Brain",
-                        "The folders stay where they are: nothing nests, nothing opens or closes",
-                        "Empty: the folder is in no group"));
+                "Name the file that lists each subfolder's entries", "Such as INDEX.md; empty: no file is changed",
+                "The name of the file that, in each subfolder, lists the entries beside it, such as INDEX.md. An "
+                        + "entry moved to the Trash takes its lines out of the nearest such file above it. Missing "
+                        + "in a subfolder: nothing to take out there; /reflect creates it with its first line. Empty, "
+                        + "or Trash off: no file is changed.");
+        form.row("Group", group, group, GROUP, "Set the header shown above this folder and the next ones",
+                "Such as Brain; empty: no group",
+                "A header the sidebar shows above this folder and the folders after it in the same group, such as "
+                        + "Brain. The folders stay where they are: nothing nests, nothing opens or closes. Empty: the "
+                        + "folder is in no group.");
         form.footer(facts, "Folder facts");
 
         FormRows.onEdit(this::store, List.of(name, path, index, excludes, listedIn, group));

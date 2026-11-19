@@ -2,14 +2,18 @@ package dev.marregui.comando.ui.dialogs;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.Rectangle;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.HashMap;
@@ -20,6 +24,7 @@ import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -35,15 +40,17 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
 
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.panels.TabCard;
 
 /**
  * The form the folder tabs' folders window and the kit jobs window share: a list beside labelled fields, each field
  * with its label, accessible name and tooltip, outlined in red while it fails, and a message line under the fields
- * naming the first that fails. An instance holds one window's fields and lays them out as rows; the static parts
- * build the list beside them, the window around them and its buttons, alike in both windows. EDT only.
+ * naming the first that fails. A row may also carry, as the session form's do, a muted hint line under its field
+ * and an ⓘ after its label that opens the sidebar's card with the longer explanation. An instance holds one
+ * window's fields and lays them out as rows; the static parts build the list beside them, the window around them and
+ * its buttons, alike in both windows. EDT only.
  */
 public final class FormRows {
 
@@ -53,7 +60,12 @@ public final class FormRows {
         void style(JLabel cell, T value, int index, boolean selected);
     }
 
+    /** The ⓘ after a label that explains more; the session form and the sidebar's rows use the same mark. */
+    private static final Icon INFO = Icons.get("info", 12);
+
     private final JPanel panel = new JPanel(new GridBagLayout());
+    /** The explanation behind a label's ⓘ: the sidebar's card, in its explaining form. */
+    private final TabCard explainer = new TabCard();
     /** One line under the fields: what was refused or the first problem in red, else a note in grey. */
     private final JLabel message = new JLabel(" ");
     /** The inputs by key, outlined in red while they fail. */
@@ -70,30 +82,31 @@ public final class FormRows {
 
     /**
      * Adds a row: {@code label}, then {@code field}, which holds {@code input}, the component editing {@code key}; the
-     * label and the input explain it under the mouse with {@code tip}, the input takes the label as its accessible
-     * name, and the label points at it.
+     * input explains it under the mouse with {@code tip}, takes the label as its accessible name, and the label points
+     * at it. {@code hint}, when not empty, is a muted line under the field; {@code about}, when not empty, sits behind
+     * an ⓘ after the label, which a click opens in the sidebar's card under the label, as the session form does;
+     * without it the label explains with {@code tip} too.
      */
     public void row(final String label, final JComponent field, final JComponent input, final String key,
-                    final String tip) {
-        final GridBagConstraints g = new GridBagConstraints();
-        g.gridx = 0;
-        g.gridy = y;
-        g.anchor = GridBagConstraints.LINE_END;
-        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, Theme.GAP);
-        final JLabel caption = new JLabel(label);
-        caption.setToolTipText(tip);
-        panel.add(caption, g);
-        g.gridx = 1;
-        g.anchor = GridBagConstraints.LINE_START;
-        g.fill = GridBagConstraints.HORIZONTAL;
-        g.weightx = 1;
-        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, 0);
-        panel.add(field, g);
+                    final String tip, final String hint, final String about) {
+        final JLabel caption = caption(label, field);
         input.setToolTipText(tip);
         input.getAccessibleContext().setAccessibleName(label);
+        if (!about.isEmpty()) {
+            input.getAccessibleContext().setAccessibleDescription(about);
+            explains(caption, key, label, about);
+        } else {
+            caption.setToolTipText(tip);
+        }
         caption.setLabelFor(input);
         input(key, input, label);
-        y++;
+        hint(key, hint);
+    }
+
+    /** Adds a read-only row: {@code label}, then {@code value}, named {@code label}; nothing to edit or outline. */
+    public void fact(final String label, final JComponent value, final String tip) {
+        caption(label, value).setToolTipText(tip);
+        value.getAccessibleContext().setAccessibleName(label);
     }
 
     /** Takes {@code input}, editing {@code key}, among the outlined inputs, named {@code label} in the message line. */
@@ -260,17 +273,20 @@ public final class FormRows {
         return false;
     }
 
-    /** {@code field} with {@code button} at its end. */
-    public static JPanel withButton(final JComponent field, final JButton button) {
+    /** {@code field} with {@code buttons} at its end, in that order. */
+    public static JPanel withButton(final JComponent field, final JButton... buttons) {
         final JPanel p = new JPanel(new BorderLayout(4, 0));
         p.add(field, BorderLayout.CENTER);
-        p.add(button, BorderLayout.EAST);
+        if (buttons.length == 1) {
+            p.add(buttons[0], BorderLayout.EAST);
+        } else {
+            final JPanel end = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
+            for (final JButton b : buttons) {
+                end.add(b);
+            }
+            p.add(end, BorderLayout.EAST);
+        }
         return p;
-    }
-
-    /** A tooltip of a few lines. */
-    public static String lines(final String... lines) {
-        return "<html>" + String.join("<br>", List.of(lines).stream().map(MarkdownHtml::escape).toList()) + "</html>";
     }
 
     /** A tool bar button showing icon {@code icon}, {@code tip} its tooltip and accessible name. */
@@ -326,5 +342,92 @@ public final class FormRows {
         });
         dialog.pack();
         dialog.setLocationRelativeTo(owner);
+    }
+
+    // ---- the rows' parts
+
+    /** The label of the next row and its {@code field} beside it, laid out; returns the label. */
+    private JLabel caption(final String label, final JComponent field) {
+        final GridBagConstraints g = new GridBagConstraints();
+        g.gridx = 0;
+        g.gridy = y;
+        g.anchor = GridBagConstraints.LINE_END;
+        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, Theme.GAP);
+        final JLabel caption = new JLabel(label);
+        panel.add(caption, g);
+        g.gridx = 1;
+        g.anchor = GridBagConstraints.LINE_START;
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.weightx = 1;
+        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, 0);
+        panel.add(field, g);
+        y++;
+        return caption;
+    }
+
+    /** {@code hint} in a muted line under the last row's field, named {@code hint:key}; nothing when empty. */
+    private void hint(final String key, final String hint) {
+        if (hint.isEmpty()) {
+            return;
+        }
+        // no width of its own: the fields set the column's width, and a hint never widens the form past the window
+        final JLabel line = new JLabel(hint) {
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(0, super.getPreferredSize().height);
+            }
+        };
+        line.setName("hint:" + key);
+        line.setToolTipText(hint);
+        line.setForeground(Theme.MUTED);
+        line.setFont(Theme.font(line.getFont(), Theme.TextSize.SMALL));
+        final GridBagConstraints g = new GridBagConstraints();
+        g.gridx = 1;
+        g.gridy = y;
+        g.anchor = GridBagConstraints.LINE_START;
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(0, 6, 2, 0);
+        panel.add(line, g);
+        y++;
+    }
+
+    /**
+     * The ⓘ after {@code caption}: a click shows {@code about} in the card under the label, a second click closes it,
+     * and so does the pointer drifting off the label without reaching the card, or the card's close button.
+     */
+    private void explains(final JLabel caption, final String key, final String label, final String about) {
+        caption.setIcon(INFO);
+        caption.setHorizontalTextPosition(JLabel.LEADING);
+        caption.setIconTextGap(4);
+        caption.setName("about:" + key);
+        caption.setToolTipText("What is " + label + "? Click the ⓘ");
+        caption.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        caption.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(final MouseEvent e) {
+                explain(caption, key, label, about);
+            }
+
+            @Override
+            public void mouseEntered(final MouseEvent e) {
+                if (key.equals(explainer.shown())) {
+                    explainer.stay();
+                }
+            }
+
+            @Override
+            public void mouseExited(final MouseEvent e) {
+                explainer.left();
+            }
+        });
+    }
+
+    /** Shows {@code about} under {@code caption}, or closes the card when it shows {@code key}'s already. */
+    private void explain(final JLabel caption, final String key, final String label, final String about) {
+        if (key.equals(explainer.shown())) {
+            explainer.hide();
+        } else {
+            explainer.explain(key, caption, new Rectangle(0, 0, caption.getWidth(), caption.getHeight()), label, about);
+        }
     }
 }

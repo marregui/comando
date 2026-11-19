@@ -44,8 +44,8 @@ class FormRowsTest {
         final JTextField name = new JTextField();
         final JTextField path = new JTextField();
         final JButton choose = new JButton("…");
-        form.row("Name", name, name, "name", "The row's name");
-        form.row("Folder", FormRows.withButton(path, choose), path, "path", "The folder the row shows");
+        form.row("Name", name, name, "name", "The row's name", "", "");
+        form.row("Folder", FormRows.withButton(path, choose), path, "path", "The folder the row shows", "", "");
 
         final JLabel nameLabel = captionOf(form, name);
         assertThat(nameLabel.getText()).isEqualTo("Name");
@@ -68,8 +68,8 @@ class FormRowsTest {
         final JTextField name = new JTextField();
         final JTextField path = new JTextField();
         final JLabel facts = new JLabel(" ");
-        form.row("Name", name, name, "name", "tip");
-        form.row("Folder", path, path, "path", "tip");
+        form.row("Name", name, name, "name", "tip", "", "");
+        form.row("Folder", path, path, "path", "tip", "", "");
         form.footer(facts, "Facts");
         final JLabel message = Arrays.stream(form.panel().getComponents())
                 .filter(c -> c instanceof JLabel l && "Problem".equals(l.getAccessibleContext().getAccessibleName()))

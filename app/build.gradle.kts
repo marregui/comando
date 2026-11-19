@@ -142,6 +142,7 @@ val uiTestClasses = listOf(
     "TranscriptFollowUiTest",
     "TerminalToolsUiTest",
     "WidgetMenusIconsUiTest",
+    "JobsEditorThemeUiTest",
     "SessionsMultiSelectUiTest",
     "SessionBarButtonsUiTest",
 )

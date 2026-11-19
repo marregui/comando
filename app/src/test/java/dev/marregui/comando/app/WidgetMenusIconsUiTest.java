@@ -234,7 +234,7 @@ class WidgetMenusIconsUiTest {
             }
 
             @Override
-            public void openLog(final Path log) {
+            public void open(final Path file) {
                 // nothing is opened
             }
         }));

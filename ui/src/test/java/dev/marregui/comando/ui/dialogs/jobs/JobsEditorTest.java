@@ -1,12 +1,17 @@
 package dev.marregui.comando.ui.dialogs.jobs;
 
 import java.awt.Component;
+import java.awt.Container;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import javax.swing.JCheckBox;
+import javax.swing.JComponent;
+import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.text.JTextComponent;
@@ -14,6 +19,7 @@ import javax.swing.text.JTextComponent;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
@@ -29,6 +35,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Adding gives a free name and asks for a program; removing takes the job out.
 /// - The state line says how the scheduler holds the job; a new one is not the scheduler's yet.
 /// - A job's menu runs it now or opens its log, only for a job the kit already has.
+/// - The program and the log open from their rows when their files exist; an empty log shows kit.py's default.
+/// - A service's Runs row says it is always running; each row's mark says how the job stands.
+/// - Every field has a hint under it and an ⓘ on its label.
 @ExtendWith(OnEdt.class)
 class JobsEditorTest {
 
@@ -66,8 +75,8 @@ class JobsEditorTest {
             }
 
             @Override
-            public void openLog(final Path log) {
-                did.add("log " + log);
+            public void open(final Path file) {
+                did.add("open " + file);
             }
         });
     }
@@ -111,8 +120,8 @@ class JobsEditorTest {
             }
 
             @Override
-            public void openLog(final Path log) {
-                did.add("log " + log);
+            public void open(final Path file) {
+                did.add("open " + file);
             }
         });
         assertThat(e.valid()).isTrue();
@@ -197,7 +206,7 @@ class JobsEditorTest {
         final JobsEditor e = editor();
         e.add();
         assertThat(e.list().getSelectedValue().toString()).isEqualTo("job");
-        assertThat(e.stateShown()).isEqualTo("new: Save installs it");
+        assertThat(e.stateShown()).isEqualTo("New: Save installs it · no run yet · after Save");
         assertThat(e.messageShown()).startsWith("Program:");
         assertThat(e.valid()).isFalse();
         type(e, KitJob.COMMAND_FIELD, "bin/curator");
@@ -214,11 +223,11 @@ class JobsEditorTest {
     @Test
     void theStateLineSaysHowTheSchedulerHoldsTheJob() {
         final JobsEditor e = editor();
-        assertThat(e.stateShown()).isEqualTo("installed · last Mon 10-26 07:30 exit 0 · next Mon 11-02 07:30");
+        assertThat(e.stateShown()).isEqualTo("Installed · Mon 10-26 07:30, exit 0 ✓ · Mon 11-02 07:30");
         e.select("daily-brief");
-        assertThat(e.stateShown()).startsWith("paused · last");
+        assertThat(e.stateShown()).isEqualTo("Paused · Mon 10-26 07:30, exit 0 ✓ · none while paused");
         type(e, KitJob.NAME_FIELD, "brief");
-        assertThat(e.stateShown()).isEqualTo("new: Save installs it");
+        assertThat(e.stateShown()).isEqualTo("New: Save installs it · no run yet · after Save");
     }
 
     /// A job's menu runs the job the kit has by its saved name and opens its log; both are off for a job added here,
@@ -229,7 +238,7 @@ class JobsEditorTest {
         final JPopupMenu menu = e.menuFor(0);
         ((JMenuItem) menu.getComponent(0)).doClick();
         ((JMenuItem) menu.getComponent(1)).doClick();
-        assertThat(did).containsExactly("run kb-drift", "log " + Path.of("/k/.kit-jobs/kb-drift.log"));
+        assertThat(did).containsExactly("run kb-drift", "open " + Path.of("/k/.kit-jobs/kb-drift.log"));
         assertThat(e.menuFor(1).getComponent(0).isEnabled()).as("paused").isFalse();
         e.add();
         final JPopupMenu added = e.menuFor(2);
@@ -256,10 +265,129 @@ class JobsEditorTest {
             }
 
             @Override
-            public void openLog(final Path log) {
+            public void open(final Path file) {
             }
         });
         assertThat(e.dirty()).isFalse();
         assertThat(e.jobs()).contains(List.of(spaced));
+    }
+
+    @TempDir
+    Path kit;
+
+    /// An editor on a real kit folder: `kb-drift`'s program and log exist there, `curator` failed its last run and
+    /// `cdb-serve` is a service.
+    private JobsEditor onKit() throws IOException {
+        Files.createDirectories(kit.resolve("tools/kb-drift"));
+        Files.writeString(kit.resolve("tools/kb-drift/kb-drift"), "#!/bin/sh\n");
+        Files.createDirectories(kit.resolve(".kit-jobs"));
+        Files.writeString(kit.resolve(".kit-jobs/kb-drift.log"), "ran\n");
+        final KitJob drift = new KitJob("kb-drift", "", List.of("MON"), "07:30", List.of("tools/kb-drift/kb-drift"),
+                Map.of(), "", true);
+        final KitJob curator = new KitJob("curator", "", List.of("MON"), "07:45", List.of("tools/curator/curator"),
+                Map.of(), "", true);
+        final KitJob serve = new KitJob("cdb-serve", "", List.of(), "", List.of("tools/cdb-serve/cdb-serve"), Map.of(),
+                "", true, true);
+        final List<KitJobs.Entry> entries = List.of(
+                new KitJobs.Entry(drift, true, true, true, false, "2026-11-16T07:30+01:00", 0, "2026-11-23T07:30+01:00",
+                        kit.resolve(".kit-jobs/kb-drift.log").toString()),
+                new KitJobs.Entry(curator, true, true, true, false, "2026-11-16T07:45+01:00", 1,
+                        "2026-11-23T07:45+01:00", kit.resolve(".kit-jobs/curator.log").toString()),
+                new KitJobs.Entry(serve, true, true, true, true, "2026-11-15T23:44+01:00", null, "",
+                        kit.resolve(".kit-jobs/cdb-serve.log").toString()));
+        return new JobsEditor(entries, kit, new JobsEditor.Actions() {
+            @Override
+            public Optional<Path> program(final Component owner, final Path tools) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void run(final String name) {
+                did.add("run " + name);
+            }
+
+            @Override
+            public void open(final Path file) {
+                did.add("open " + file);
+            }
+        });
+    }
+
+    /// The program's and the log's open buttons open the files their fields name, resolved in the kit, and are off
+    /// when nothing is named; an empty Log field shows, in grey, the default kit.py reported.
+    @Test
+    void theProgramAndTheLogOpenFromTheirRows() throws IOException {
+        final JobsEditor e = onKit();
+        assertThat(e.openProgramButton().isEnabled()).isTrue();
+        assertThat(e.openLogButton().isEnabled()).isTrue();
+        e.openProgramButton().doClick();
+        e.openLogButton().doClick();
+        assertThat(did).containsExactly("open " + kit.resolve("tools/kb-drift/kb-drift"),
+                "open " + kit.resolve(".kit-jobs/kb-drift.log"));
+        assertThat(e.field(KitJob.LOG_FIELD).getClientProperty("JTextField.placeholderText"))
+                .isEqualTo(".kit-jobs/kb-drift.log");
+
+        type(e, KitJob.COMMAND_FIELD, "");
+        assertThat(e.openProgramButton().isEnabled()).as("no program named").isFalse();
+        type(e, KitJob.LOG_FIELD, "logs/drift.log");
+        did.clear();
+        e.openLogButton().doClick();
+        assertThat(did).as("a typed log opens in the kit").containsExactly("open " + kit.resolve("logs/drift.log"));
+        e.add();
+        assertThat(e.openLogButton().isEnabled()).as("a new job has no log yet").isFalse();
+    }
+
+    /// A service's Runs row says it is always running, a timed job's shows its days; the status above the fields
+    /// names a failed last run with its exit code.
+    @Test
+    void aServiceSaysAlwaysRunningAndAFailedRunShowsItsExit() throws IOException {
+        final JobsEditor e = onKit();
+        assertThat(e.runsShown()).isEqualTo("days");
+        e.select("cdb-serve");
+        assertThat(e.runsShown()).isEqualTo("always");
+        assertThat(e.stateShown()).isEqualTo("Installed, running · Sun 11-15 23:44 · always on");
+        e.select("curator");
+        assertThat(e.stateShown()).isEqualTo("Installed · Mon 11-16 07:45, exit 1 ✗ · Mon 11-23 07:45");
+    }
+
+    /// Each row's tooltip says how the job stands and that a right click has its actions: a good last run, a failed
+    /// one with its exit, a running service.
+    @Test
+    void eachRowSaysHowItsJobStands() throws IOException {
+        final JobsEditor e = onKit();
+        assertThat(rowTip(e, 0)).isEqualTo("Last run ended well, Mon 11-16 07:30; right-click for actions");
+        assertThat(rowTip(e, 1)).isEqualTo("Last run failed with exit 1, Mon 11-16 07:45; right-click for actions");
+        assertThat(rowTip(e, 2)).isEqualTo("Running now; right-click for actions");
+    }
+
+    /// Every field's label carries an ⓘ, and every field but Enabled a hint line under it.
+    @Test
+    void everyFieldHasAHintAndAnExplanation() throws IOException {
+        final JobsEditor e = onKit();
+        final List<String> names = new ArrayList<>();
+        collect(e.component(), names);
+        for (final String key : List.of(KitJob.NAME_FIELD, KitJob.DESCRIPTION_FIELD, KitJob.DAYS_FIELD,
+                KitJob.COMMAND_FIELD, "arguments", KitJob.ENV_FIELD, KitJob.LOG_FIELD)) {
+            assertThat(names).contains("hint:" + key, "about:" + key);
+        }
+        assertThat(names).contains("about:enabled", "context", "context-actions");
+    }
+
+    private static String rowTip(final JobsEditor e, final int i) {
+        final JList<JobsEditor.Row> list = e.list();
+        final Component c = list.getCellRenderer().getListCellRendererComponent(list,
+                list.getModel().getElementAt(i), i, false, false);
+        return ((JComponent) c).getToolTipText();
+    }
+
+    private static void collect(final Component c, final List<String> names) {
+        if (c.getName() != null) {
+            names.add(c.getName());
+        }
+        if (c instanceof Container k) {
+            for (final Component child : k.getComponents()) {
+                collect(child, names);
+            }
+        }
     }
 }

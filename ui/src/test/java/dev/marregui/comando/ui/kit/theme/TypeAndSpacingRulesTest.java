@@ -35,7 +35,8 @@ class TypeAndSpacingRulesTest {
     /** Insets off the grid on purpose, by file and the text of the call. */
     private static final Map<String, String> ALIGNED = Map.of(
             // a field's hint starts where the field's text does: FlatLaf's text margin is 6
-            "dialogs/resource/ResourceDialog.java", "new Insets(0, 6, 2, 3)");
+            "dialogs/resource/ResourceDialog.java", "new Insets(0, 6, 2, 3)",
+            "dialogs/FormRows.java", "new Insets(0, 6, 2, 0)");
 
     /// Scanning `src/main` for `deriveFont(12f)`-style literals and `getSize2D() ± n` on font-making lines finds none.
     @Test
