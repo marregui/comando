@@ -7,12 +7,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import dev.marregui.comando.frontear.mqtt.Names;
 import dev.marregui.comando.frontear.mqtt.Packet;
 
 import static org.awaitility.Awaitility.await;
@@ -30,9 +34,12 @@ final class TestBroker implements AutoCloseable {
     static final int MAXIMUM_PACKET_SIZE = 64 * 1024;
     /// The QoS 1 messages a session queues beyond its client's Receive Maximum.
     static final int MAX_QUEUED = 4;
+    // the internal subscriber that counts, per client id, the presence clears the broker published
+    private static final String PRESENCE_WATCH = "test-presence-clears";
 
     final Clock clock = new Clock();
     final Broker broker;
+    private final Map<String, AtomicInteger> presenceClears = new ConcurrentHashMap<>();
 
     private TestBroker(final int maxSessions) throws IOException {
         broker = Broker.start(new BrokerOptions(loopback(), RECEIVE_MAXIMUM, MAXIMUM_PACKET_SIZE, maxSessions, clock,
@@ -80,13 +87,37 @@ final class TestBroker implements AutoCloseable {
     void sweepsDone() throws IOException {
         for (int i = 0; i < 2; i++) {
             final int before = broker.stats().sessions();
-            try (RawClient m = RawClient.connected(port(), RawClient.connect("sweep-marker-" + i, true, 1))) {
-                m.send(new Packet.Disconnect(Packet.SUCCESS, null));
-                m.untilClosed();
+            final String marker = "sweep-marker-" + i;
+            try (RawClient m = RawClient.connected(port(), RawClient.connect(marker, true, 1))) {
+                disconnect(m, marker);
             }
             clock.advance(Duration.ofSeconds(2));
             await().atMost(WAIT).until(() -> broker.stats().sessions() == before);
         }
+    }
+
+    /// Sends `client`, connected as `clientId`, a DISCONNECT 0x00 and returns once the broker has marked its session
+    /// offline. The close the client sees can come before the broker records when the session went offline, and a
+    /// test that moves the clock in between leaves the session short of its expiry for good; the broker clears the
+    /// client's presence after that record, so this waits for the clear.
+    void disconnect(final RawClient client, final String clientId) throws IOException {
+        // a subscription again on the same filter replaces it, so every call may make sure the watcher is there
+        broker.subscribe(PRESENCE_WATCH, Names.PRESENCE + "+", 1, false, (message, _) -> {
+            if (message.payload().length == 0) {
+                presenceClears.computeIfAbsent(message.topic().substring(Names.PRESENCE.length()),
+                        _ -> new AtomicInteger()).incrementAndGet();
+            }
+            return CompletableFuture.completedFuture(Packet.SUCCESS);
+        });
+        final int before = presenceClears(clientId);
+        client.send(new Packet.Disconnect(Packet.SUCCESS, null));
+        client.untilClosed();
+        await().atMost(WAIT).until(() -> presenceClears(clientId) > before);
+    }
+
+    private int presenceClears(final String clientId) {
+        final AtomicInteger clears = presenceClears.get(clientId);
+        return clears == null ? 0 : clears.get();
     }
 
     private static InetSocketAddress loopback() {

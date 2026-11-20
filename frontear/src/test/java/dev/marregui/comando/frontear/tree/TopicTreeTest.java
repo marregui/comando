@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,10 @@ class TopicTreeTest {
     private static final int WRITERS = 4;
     private static final int READERS = 4;
     private static final Duration JOIN = Duration.ofSeconds(60);
+    // a reader's pause between matches; unmeasured beyond the run below: with 2 or 4 carriers
+    // (-Djdk.virtualThreadScheduler.parallelism) a yield in its place let the readers starve a writer the tree's
+    // lock had woken, every run for 60 s, and any park lets it run; 10 us keeps a reader matching thousands of times
+    private static final long READER_PAUSE_NANOS = TimeUnit.MICROSECONDS.toNanos(10);
     // the broker's default depth; the depth tests below build their own trees
     private static final int LEVELS = 128;
 
@@ -293,8 +298,7 @@ class TopicTreeTest {
                     if (i > 0 && !tree.match(stepTopic("r", i), PUBLISHER).isEmpty()) {
                         failure.compareAndSet(null, "removal at step " + i + " not seen");
                     }
-                    // a virtual thread is not preempted: without a yield, spinning readers can hold every carrier
-                    Thread.yield();
+                    pause();
                 }
             }));
         }
@@ -365,7 +369,7 @@ class TopicTreeTest {
                     if (!byId.containsKey("keeper2")) {
                         failure.compareAndSet(null, "keeper2 lost: " + found);
                     }
-                    Thread.yield();
+                    pause();
                 }
             }));
         }
@@ -422,7 +426,7 @@ class TopicTreeTest {
                             failure.compareAndSet(null, "half removed: " + found);
                         }
                     }
-                    Thread.yield();
+                    pause();
                 }
             }));
         }
@@ -486,6 +490,13 @@ class TopicTreeTest {
             ids.add(match.subscriberId());
         }
         return ids;
+    }
+
+    /// A reader's pause between two matches. A virtual thread is not preempted, so a reader that spins holds its
+    /// carrier; a yield is not enough, as yielding readers can keep a writer the tree's lock woke from ever running.
+    /// Parking takes the reader off its carrier for [#READER_PAUSE_NANOS]; the loop around it re-checks its stop flag.
+    private static void pause() {
+        LockSupport.parkNanos(READER_PAUSE_NANOS);
     }
 
     private static void await(final CountDownLatch latch) {

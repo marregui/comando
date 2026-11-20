@@ -234,8 +234,7 @@ class BrokerConnectTest {
     @Test
     void aSessionPastItsExpiryEnds() throws IOException {
         try (RawClient a = RawClient.connected(test.port(), RawClient.connect("a", true, 5))) {
-            a.send(new Packet.Disconnect(Packet.SUCCESS, null));
-            a.untilClosed();
+            test.disconnect(a, "a");
         }
         test.clock.advance(Duration.ofSeconds(4));
         assertThat(test.broker.stats().sessions()).isEqualTo(1);
@@ -261,8 +260,7 @@ class BrokerConnectTest {
     private void offlineSubscriber(final String id) throws IOException {
         try (RawClient a = RawClient.connected(test.port(), RawClient.connect(id, true, 60))) {
             assertThat(a.subscribe(new Packet.Subscription("t", 1))).containsExactly(1);
-            a.send(new Packet.Disconnect(Packet.SUCCESS, null));
-            a.untilClosed();
+            test.disconnect(a, id);
         }
     }
 
