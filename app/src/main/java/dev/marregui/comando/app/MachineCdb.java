@@ -717,7 +717,7 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
      * {@link #prepare} when comando's own jar is gone (an install a {@code clean} removed): the newest copy in
      * {@code lib}, else {@code why}.
      */
-    private Prepared fromCopy(final Path lib, final IOException why) throws IOException {
+    Prepared fromCopy(final Path lib, final IOException why) throws IOException {
         final Path newest;
         try (final DirectoryStream<Path> copies = Files.newDirectoryStream(lib, "cdb-*.jar")) {
             Path best = null;
@@ -967,7 +967,7 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
     }
 
     /** What a start prepared: {@code start.sh} and the name of the cdb jar it runs. */
-    private record Prepared(Path script, String jar) {
+    record Prepared(Path script, String jar) {
     }
 
     /** A start's outcome: the live entry, or why there is none. */

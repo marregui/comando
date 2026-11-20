@@ -53,8 +53,6 @@ application {
     mainClass = "dev.marregui.comando.app.Main"
     applicationName = "comando"
     applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Dfile.encoding=UTF-8", "-Dapple.awt.application.name=comando",
-        // QuestDB 10's workers run on the JDK's internal continuations
-        "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED",
         // the live heap is about 50 MB: start small, and let G1 give back what an idle minute leaves unused
         "-Xms64m", "-Xmx4g", "-XX:G1PeriodicGCInterval=60000",
         // AppKit reads the appearance when it starts, before any Java code of ours: comando's palette is dark only
@@ -91,7 +89,7 @@ tasks.register<JavaExec>("snapshot") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass = "dev.marregui.comando.app.Snapshot"
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-snapshot",
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-snapshot",
         "-Dcomando.peers=false", "-Dcomando.metrics=false",
         // painted from its root pane, so the window opens on no screen and never takes the desktop's focus
         "-Dcomando.offScreen=true", "-Dapple.awt.UIElement=true")
@@ -194,7 +192,7 @@ val uiTest = tasks.register<Test>("uiTest") {
     systemProperty("comando.prefsNode", "dev/marregui/comando-test")
     // no window test reads the user's real Codex plan: the status bar would change under a test at the read's return
     environment("COMANDO_CODEX", layout.buildDirectory.file("no-codex").get().asFile.path)
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED")
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
     // never from the build cache: what it checks is the desktop and the windows it opens, which are no input
     outputs.cacheIf { false }
     // and never up to date: a second run without changes still opens the windows and checks them
@@ -257,7 +255,6 @@ fun jpackage(name: String, type: String, folder: String, summary: String) = task
         "--add-modules", "java.base,java.desktop,java.logging,java.naming,java.prefs,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr," +
                 "jdk.management,jdk.management.jfr,jdk.management.agent,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs",
         "--java-options", "--enable-native-access=ALL-UNNAMED",
-        "--java-options", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED",
         "--java-options", "-Xms64m",
         "--java-options", "-Xmx4g",
         "--java-options", "-XX:G1PeriodicGCInterval=60000",

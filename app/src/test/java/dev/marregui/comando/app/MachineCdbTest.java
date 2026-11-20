@@ -18,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -234,6 +235,31 @@ class MachineCdbTest {
             for (final ConnectionSpec spec : untouched) {
                 assertThat(db.withSecret(spec)).as(spec.host() + ":" + spec.port()).isEqualTo(spec);
             }
+        }
+    }
+
+    /// With comando's own jar gone, the start falls back to the newest `cdb-*.jar` in `lib/` by modification time and
+    /// writes `start.sh` to run it (the newest copy sorts neither first nor last by name, so a choice by name fails);
+    /// with no copy there, the error that made it fall back is thrown unchanged.
+    @Test
+    void aGoneJarStartsFromTheNewestCopyElseRethrows(@TempDir final Path dir) throws IOException {
+        final Path machine = Files.createDirectories(dir.resolve("machine"));
+        final Path lib = Files.createDirectories(machine.resolve("lib"));
+        final MachineCdb.Ports ports = new MachineCdb.Ports(19000, 19003, 18812, 19009);
+        final IOException why = new IOException("cannot locate cdb's jar");
+        try (final MachineCdb db = new MachineCdb(machine, dir.resolve("data"), "", new RecordingSink(), ports)) {
+            assertThatThrownBy(() -> db.fromCopy(lib, why)).isSameAs(why);
+            final Path first = Files.writeString(lib.resolve("cdb-000000000001.jar"), "a");
+            final Path middle = Files.writeString(lib.resolve("cdb-000000000002.jar"), "b");
+            final Path last = Files.writeString(lib.resolve("cdb-000000000003.jar"), "c");
+            Files.setLastModifiedTime(first, FileTime.fromMillis(2_000_000L));
+            Files.setLastModifiedTime(middle, FileTime.fromMillis(3_000_000L));
+            Files.setLastModifiedTime(last, FileTime.fromMillis(1_000_000L));
+            final MachineCdb.Prepared prepared = db.fromCopy(lib, why);
+            assertThat(prepared.jar()).isEqualTo("cdb-000000000002.jar");
+            assertThat(prepared.script()).isEqualTo(machine.resolve("bin").resolve("start.sh")).isExecutable();
+            assertThat(Files.readString(prepared.script())).contains("cdb-000000000002.jar")
+                    .doesNotContain("cdb-000000000001.jar").doesNotContain("cdb-000000000003.jar");
         }
     }
 
