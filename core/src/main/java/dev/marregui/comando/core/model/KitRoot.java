@@ -14,7 +14,7 @@ import java.util.Set;
  * The Claude Code folder comando starts its sessions on, and the kit in it, when it has one. A kit is the setup of a
  * Claude Code folder, declared by the {@code comando-kit.json} at its top: its name, its brain (the folder holding
  * memory, knowledge base and scratchpad), the folders the folder tabs (Kit, Brain, Scratchpad) show, and what it needs
- * outside the folder. What else comando reads of a kit is listed in the Kit and brain document, §2.1.
+ * outside the folder. What else comando reads of a kit is listed in the kit document, "What a kit is".
  *
  * <p>The root is {@code CLAUDE_CONFIG_DIR} when comando itself was started with it; else {@code ~/.claude} when it
  * holds a {@code comando-kit.json}; else {@code ~/comando-kit}, where a new install puts its kit, when that holds one;

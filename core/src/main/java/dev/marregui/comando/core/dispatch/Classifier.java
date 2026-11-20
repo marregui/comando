@@ -39,7 +39,7 @@ public final class Classifier {
             shape("REINDEX", "REINDEX\\s+TABLE\\s"),
             shape("SET", "SET\\s+\\w+\\s*(=|TO\\b)"),
             shape("CANCEL", "CANCEL\\s+QUERY\\s"),
-            shape("BACKUP", "BACKUP\\s+(TABLE|DATABASE)\\b"),
+            shape("BACKUP", "BACKUP\\s+((TABLE|DATABASE)\\b|TO\\s+')"),
             shape("CHECKPOINT", "CHECKPOINT\\s+(CREATE|RELEASE)\\b"),
             shape("SNAPSHOT", "SNAPSHOT\\s+(PREPARE|COMPLETE)\\b"),
             shape("DECLARE", "DECLARE\\s+@"),

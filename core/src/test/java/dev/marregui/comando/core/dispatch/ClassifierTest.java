@@ -31,6 +31,7 @@ class ClassifierTest {
             TRUNCATE TABLE t                                             | SQL
             EXPLAIN SELECT * FROM t                                      | SQL
             SHOW TABLES                                                  | SQL
+            backup to '/Users/you/comando-tutorial/backup'               | SQL
             -- daily volume\\nSELECT sum(amount) FROM trades SAMPLE BY 1d | SQL
             SELECT 'what is the price' FROM t                            | SQL
             SELECT * FROM my_table                                       | SQL
@@ -46,6 +47,7 @@ class ClassifierTest {
             select the best option for me                                | CLAUDE
             create a test for the classifier                             | CLAUDE
             drop it                                                      | CLAUDE
+            backup to the usual folder                                   | CLAUDE
             explain why the delay spikes every 300 s                     | CLAUDE
             SELECT * FROM trades?                                        | CLAUDE
             why is this slow                                             | CLAUDE

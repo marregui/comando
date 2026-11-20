@@ -115,7 +115,7 @@ final class Menus {
             Map.entry("server.stop", "Stop the machine's cdb this comando started; its data stays"),
             Map.entry("edge.start", "Start the comando Edge, one per machine: MQTT 18883, WebSocket 18800, UI 18080"),
             Map.entry("edge.stop", "Stop the comando Edge this comando started; its data stays"),
-            Map.entry("help.tutorial", "comando in ten minutes, as a document"),
+            Map.entry("help.tutorial", "A hands-on tour of comando and its database, as a document"),
             Map.entry("help.keys", "Every key, in the side pane"),
             Map.entry("help.markdown", "What a panel's Markdown may hold and how its preview shows it"),
             Map.entry("help.log", "comando's log, read-only, following its end"),

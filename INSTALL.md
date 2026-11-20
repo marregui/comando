@@ -149,7 +149,7 @@ then show the folders the manifest lists, the KIT and the BRAIN row with that se
 
 ## 6. Start comando
 
-Tell the user how to start it, and that **Help ▸ Tutorial** inside comando takes ten minutes:
+Tell the user how to start it, and that **Help ▸ Tutorial** inside comando is a hands-on tour of comando and its database:
 
 | System | Start |
 |---|---|
