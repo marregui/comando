@@ -167,7 +167,10 @@ public final class Reducer {
         return switch (intent) {
             case Intent.SaveSession i -> SessionRules.saveRefusal(s, i).map(SessionRules.Refusal::reason);
             case Intent.Checkpoint i -> TurnRules.commandRefusal(s, i.name(), s.session(i.name()).map(x -> x.spec().checkpoint()).orElse(""), i.from());
-            case Intent.SessionCommand i -> TurnRules.commandRefusal(s, i.name(), i.command(), i.from());
+            // a /compact held for the running checkpoint's end sends nothing now, so nothing about sending refuses it
+            case Intent.SessionCommand i -> TurnRules.locked(s, i.name()) && TurnRules.isCompact(i.command())
+                    ? Optional.empty()
+                    : TurnRules.commandRefusal(s, i.name(), i.command(), i.from());
             case Intent.RunText i -> QueryRules.promptRefusal(s, i);
             case Intent.PlacePanel i -> PanelRules.placeRefusal(s, i);
             case Intent.ClosePanel i -> PanelRules.closeRefusal(s, i);

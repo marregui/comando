@@ -453,9 +453,15 @@ class ActionToolsTest {
             assertThat(out.error()).as(tool).isTrue();
             assertThat(out.text()).as(tool).contains("record 130");
         }
-        assertThat(call("foreman", "session_command", "{\"session\":\"users\",\"command\":\"/compact\"}").text()).contains("record 130");
+        assertThat(call("foreman", "session_command", "{\"session\":\"users\",\"command\":\"/cost\"}").text())
+                .contains("record 130");
         assertThat(sink.of(Intent.Checkpoint.class)).isEmpty();
         assertThat(sink.of(Intent.SessionCommand.class)).isEmpty();
+        // a /compact is held for the checkpoint's end, not refused
+        final McpTools.Outcome held =
+                call("foreman", "session_command", "{\"session\":\"users\",\"command\":\"/compact\"}");
+        assertThat(held.error()).as("/compact").isFalse();
+        assertThat(sink.of(Intent.SessionCommand.class)).hasSize(1);
         assertThat(call("foreman", "session_interrupt", "{\"session\":\"users\"}").error()).as("interrupt goes through").isFalse();
         assertThat(call("foreman", "session_stop", "{\"session\":\"users\"}").error()).as("stop goes through").isFalse();
         state.set(state.get().withSession(state.get().session("work").orElseThrow().withStatus(Status.OPEN, "")));
