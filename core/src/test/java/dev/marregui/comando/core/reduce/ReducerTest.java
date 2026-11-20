@@ -1067,6 +1067,108 @@ class ReducerTest {
         }
     }
 
+    /// A reflect typed below the threshold whose own calls cross it is that crossing's checkpoint: its end sends
+    /// `/compact` alone, no `/reflect --auto` and, once the compaction ends, no carry-on (Miguel, 2026-11-20); one that
+    /// ends below compacts nothing.
+    @Test
+    void aReflectByHandThatCrossesTheThresholdIsFollowedByItsCompactionOnly() {
+        reducer = new Reducer(clock, () -> 40);
+        state = States.twoPanels();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionContext("work", 300_000L, 1_000_000L));
+        apply(new Intent.RunText(P1, "/reflect", Target.CLAUDE));
+        apply(new Intent.SessionContext("work", 350_000L, 1_000_000L));
+        apply(new Intent.SessionContext("work", 420_000L, 1_000_000L));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 430_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(List.of(sent("/reflect --auto"), sent(SessionSpec.COMPACT_COMMAND))).containsExactly(0, 1);
+        assertThat(state.session("work").orElseThrow().isCheckpointing()).isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", "", true));
+        assertThat(List.of(sent(Reducer.CONTINUE_PROMPT), sent(SessionSpec.COMPACT_COMMAND), sent("/reflect --auto")))
+                .containsExactly(0, 0, 0);
+        assertThat(state.session("work").orElseThrow().isCheckpointing()).isFalse();
+
+        apply(new Intent.SessionContext("work", 30_000L, 1_000_000L));
+        apply(new Intent.RunText(P1, "/reflect", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 200_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(List.of(sent("/reflect --auto"), sent(SessionSpec.COMPACT_COMMAND))).containsExactly(0, 0);
+    }
+
+    /// A Compact asked for while a reflect runs is held and sent once the reflect's turn ends, below the threshold
+    /// too; its compaction's end sends nothing more; a reflect that fails drops it (Miguel, 2026-11-20).
+    @Test
+    void aCompactionAskedForDuringAReflectRunsOnceTheReflectEnds() {
+        reducer = new Reducer(clock, () -> 40);
+        state = States.twoPanels();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "/reflect", Target.CLAUDE));
+        apply(new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND, ""));
+        assertThat(sent(SessionSpec.COMPACT_COMMAND)).isZero();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 200_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(sent(SessionSpec.COMPACT_COMMAND)).isEqualTo(1);
+        apply(new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND, ""));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", "", true));
+        assertThat(List.of(sent(SessionSpec.COMPACT_COMMAND), sent(Reducer.CONTINUE_PROMPT))).containsExactly(0, 0);
+        assertThat(state.session("work").orElseThrow().isCheckpointing()).isFalse();
+
+        apply(new Intent.RunText(P1, "/reflect", Target.CLAUDE));
+        apply(new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND, ""));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 200_000L, 1_000_000L, true, "boom", ""));
+        assertThat(sent(SessionSpec.COMPACT_COMMAND)).isZero();
+        assertThat(state.session("work").orElseThrow().checkpointCompacts()).isFalse();
+    }
+
+    /// A Compact asked for during the automatic checkpoint's own compaction ends with it: one `/compact`, then the
+    /// carry-on as always (Miguel, 2026-11-20).
+    @Test
+    void aCompactionAskedForDuringTheAutomaticCompactionEndsWithIt() {
+        reducer = new Reducer(clock, () -> 40);
+        state = States.twoPanels();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, "", "at it"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 430_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(sent(SessionSpec.COMPACT_COMMAND)).isEqualTo(1);
+        apply(new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND, ""));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", "Compacted", true));
+        assertThat(List.of(sent(SessionSpec.COMPACT_COMMAND), sent(Reducer.CONTINUE_PROMPT))).containsExactly(0, 1);
+    }
+
+    /// A reflect by hand that crosses the threshold with a prompt queued behind it is done: the queued prompt runs
+    /// instead of the compaction, as after the automatic checkpoint, and no second checkpoint follows it.
+    @Test
+    void aReflectByHandWithWorkQueuedBehindItGivesWayToThatWork() {
+        reducer = new Reducer(clock, () -> 40);
+        state = States.twoPanels();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionContext("work", 300_000L, 1_000_000L));
+        apply(new Intent.RunText(P1, "/reflect", Target.CLAUDE));
+        apply(new Intent.PromptSession("work", "and then this", "foreman"));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 430_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(List.of(sent("/reflect --auto"), sent(SessionSpec.COMPACT_COMMAND))).containsExactly(0, 0);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 440_000L, 1_000_000L, false, "", "done"));
+        assertThat(List.of(sent("/reflect --auto"), sent(SessionSpec.COMPACT_COMMAND))).containsExactly(0, 0);
+    }
+
+    /// A prompt that arrives while a held compaction waits drops it, and a warning says so (Miguel, 2026-11-20).
+    @Test
+    void aPromptThatArrivesBeforeTheCheckpointEndsDropsItsCompactionWithAWarning() {
+        reducer = new Reducer(clock, () -> 40);
+        state = States.twoPanels();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "/reflect", Target.CLAUDE));
+        apply(new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND, ""));
+        apply(new Intent.PromptSession("work", "and then this", "foreman"));
+        assertThat(state.notice().text())
+                .isEqualTo("work: a prompt arrived before the checkpoint ended; the conversation is not compacted");
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 200_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(sent(SessionSpec.COMPACT_COMMAND)).isZero();
+    }
+
     /// A reducer without a threshold arms nothing, whatever a model call read.
     @Test
     void aModelCallBelowNoThresholdArmsNothing() {
@@ -1233,7 +1335,7 @@ class ReducerTest {
         final SessionSpec spec = state.session("work").orElseThrow().spec();
         for (final Intent refused : List.of(new Intent.RunText(P1, "more", Target.CLAUDE),
                 new Intent.RunText(P1, "SELECT 1", Target.SQL), new Intent.Checkpoint("work"),
-                new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND), new Intent.StartFresh("work"),
+                new Intent.SessionCommand("work", "/cost"), new Intent.StartFresh("work"),
                 new Intent.SaveSession("work", spec.withModel("opus")), new Intent.SetSessionModel("work", "opus"),
                 new Intent.SetSessionEffort("work", "high"), new Intent.RemoveSession("work"),
                 new Intent.RemovePanel(P1), new Intent.ClearTranscript("work"))) {
@@ -2135,9 +2237,9 @@ class ReducerTest {
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.Checkpoint("work"));
         final Notice before = state.notice();
-        apply(new Intent.SessionCommand("work", "/compact"));
+        apply(new Intent.SessionCommand("work", "/cost"));
         assertThat(state.notice()).as("the window's").isEqualTo(before);
-        apply(new Intent.SessionCommand("work", "/compact", "foreman"));
+        apply(new Intent.SessionCommand("work", "/cost", "foreman"));
         assertThat(effects).isEmpty();
         assertThat(state.notice().text()).isEqualTo("foreman: SessionCommand not applied: the session is running its checkpoint (record 130)");
     }

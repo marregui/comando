@@ -73,6 +73,7 @@ final class TurnRules {
             session = session.withStatus(Status.OPENING, "");
         }
         final boolean checkpoint = Reducer.isCheckpoint(prompt, session.spec().checkpoint());
+        boolean dropsCompaction = false;
         final String carried = session.spec().carried();
         // a command (the checkpoint, /compact) leaves the carried summary for the next prompt that is not one
         final boolean carries = !carried.isEmpty() && !prompt.strip().startsWith("/");
@@ -88,6 +89,7 @@ final class TurnRules {
                     .withCheckpointTurns(session.pendingTurns());
         } else {
             // a prompt after the checkpoint: the user goes on in this conversation, which is not compacted
+            dropsCompaction = session.checkpointCompacts();
             session = session.withCheckpointCompacts(false);
         }
         // a prompt sent or queued meanwhile runs in place of the carry-on prompt; the automatic checkpoint, and its
@@ -101,6 +103,12 @@ final class TurnRules {
             session = session.withSpec(session.spec().withCarried(""));
         }
         AppState next = clear(s.withSession(session), subject);
+        if (dropsCompaction) {
+            // the compaction a checkpoint was to end with gives way to this prompt: say so, as the notice of a held
+            // compaction promised it
+            next = notice(clock, next, Notice.Level.WARN, session.name()
+                    + ": a prompt arrived before the checkpoint ended; the conversation is not compacted", subject);
+        }
         if (carries) {
             effects.add(new Effect.SaveSessions(sessionSpecs(next)));
         }
@@ -155,7 +163,8 @@ final class TurnRules {
             case Intent.RunText r -> s.panel(r.panel() != null && s.panel(r.panel()).isPresent() ? r.panel()
                     : s.focused()).map(p -> locked(s, p.session())).orElse(false);
             case Intent.Checkpoint c -> locked(s, c.name());
-            case Intent.SessionCommand c -> locked(s, c.name());
+            // a compaction asked for meanwhile is held for the checkpoint's end, not refused (see holdCompaction)
+            case Intent.SessionCommand c -> locked(s, c.name()) && !isCompact(c.command());
             case Intent.StartFresh f -> locked(s, f.name());
             case Intent.SaveSession v -> locked(s, v.previousName());
             case Intent.SetSessionModel m -> locked(s, m.name());
@@ -279,6 +288,21 @@ final class TurnRules {
         };
     }
 
+    static boolean isCompact(final String command) {
+        return SessionSpec.COMPACT_COMMAND.equals(command.strip());
+    }
+
+    /**
+     * {@code /compact} asked for while the session's checkpoint runs (the Compact action, the palette, an agent's
+     * session_command): held, and sent once the checkpoint's turn has ended, as the session_checkpoint tool's is; a
+     * checkpoint that fails, is interrupted or gives no summary drops it (Miguel, 2026-11-20).
+     */
+    static Transition holdCompaction(final Clock clock, final AppState s, final String name) {
+        final AppState held = s.withSession(name, x -> x.withCheckpointCompacts(true));
+        return Transition.of(notice(clock, held, Notice.Level.INFO, name + ": compacts once its checkpoint ends",
+                Notice.session(name)));
+    }
+
     static boolean locked(final AppState s, final String name) {
         return !name.isEmpty() && s.session(name).map(SessionState::isCheckpointing).orElse(false);
     }
@@ -374,13 +398,15 @@ final class TurnRules {
         // the checkpoint has finished once nothing runs, is queued or was handed to the background; a result that made
         // no model call and carries no text finished nothing
         final boolean checkpointDone = x.checkpointCompacts() && !x.isBusy() && !x.isAwaitingHandOff() && (ran || !i.result().isBlank());
-        final boolean compacts = checkpointDone && !i.error() && !i.result().isBlank();
+        // a turn whose end reads no context is a compaction's: one held while it ran ends with it, never a second one
+        final boolean compacts = checkpointDone && read && !i.error() && !i.result().isBlank();
         if (checkpointDone) {
             x = x.withCheckpointCompacts(false);
         }
         // the automatic checkpoint's /compact has ended once nothing runs: the session carries on when it ended
         // normally; an error or an interrupt keeps the session where it stopped (record 129's amendment)
-        final boolean compaction = found.get().checkpointContinues() && !found.get().checkpointCompacts() && !x.isBusy();
+        final boolean compaction = found.get().checkpointContinues() && (!found.get().checkpointCompacts() || !read)
+                && !x.isBusy();
         final boolean continues = compaction && ran && !i.error() && !x.isAwaitingHandOff() && x.status().isUsable();
         // the automatic origin goes on to the compaction only when it is sent; every other end of the checkpoint ends it
         final boolean compactionContinues = compacts && x.checkpointContinues();
@@ -401,14 +427,26 @@ final class TurnRules {
         // at the threshold, the session's own turn finished: nothing queued, no background work out, no checkpoint
         // under way, a checkpoint command to run, and since the last carry-on someone's prompt or a call below the
         // threshold
-        final boolean automatic = above && x.checkpointArmed() && !x.carriedOn() && !checkpointDone && !x.checkpointCompacts() && !i.error()
+        // a checkpoint command sent by hand (typed, Reflect, another session) whose own turn ended at or above the
+        // threshold, read by a model call: the crossing's checkpoint has run, so only its compaction follows, with no
+        // carry-on, as the user's reflect leaves the session waiting (Miguel, 2026-11-20). A compaction's own end reads
+        // no context, and the tool's and the automatic checkpoint already compact.
+        // work queued behind it runs instead, as it does after the automatic checkpoint: the reflect is done, nothing
+        // compacts and no second checkpoint follows that work
+        final boolean handCompacts = above && read && !i.error()
+                && found.get().checkpointTurns() > 0 && x.checkpointTurns() == 0
+                && !found.get().checkpointCompacts() && !found.get().checkpointContinues() && !checkpointDone
+                && !x.isBusy() && !x.isAwaitingHandOff() && x.status().isUsable();
+        final boolean automatic = !handCompacts && above && x.checkpointArmed() && !x.carriedOn() && !checkpointDone
+                && !x.checkpointCompacts() && !i.error()
                 && !x.isBusy() && !x.isAwaitingHandOff() && x.status().isUsable() && !x.spec().checkpoint().isBlank();
         next = next.withSession(x);
         if (interrupted) {
             next = notice(clock, next, Notice.Level.INFO, i.name() + ": interrupted", Notice.session(i.name()));
         } else if (i.error()) {
             next = notice(clock, next, Notice.Level.ERROR, i.name() + ": " + i.message(), Notice.session(i.name()));
-        } else if (checkpointDone && !compacts) {
+        } else if (checkpointDone && !compacts && read) {
+            // a compaction's own end reads no context: one held during it ends with it and warns of nothing
             next = notice(clock, next, Notice.Level.WARN, i.name() + ": the checkpoint ended without a summary; the conversation is kept",
                     Notice.session(i.name()));
         } else {
@@ -416,7 +454,8 @@ final class TurnRules {
         }
         // the compaction, or the automatic checkpoint, runs from the session's panel as the Compact and Checkpoint
         // buttons do: the Session tab shows it
-        final Transition follow = compacts ? sessionCommand(clock, next, i.name(), SessionSpec.COMPACT_COMMAND)
+        final Transition follow = compacts || handCompacts
+                ? sessionCommand(clock, next, i.name(), SessionSpec.COMPACT_COMMAND)
                 : continues ? sessionCommand(clock, next, i.name(), Reducer.CONTINUE_PROMPT)
                 : automatic ? checkpoint(clock, next, i.name(), true, "") : null;
         if (follow != null) {
@@ -431,6 +470,11 @@ final class TurnRules {
             if (continues) {
                 // sent or refused, the next automatic checkpoint waits for a prompt of the user's or another session's
                 x = x.withCarriedOn(true);
+                next = next.withSession(x);
+            }
+            if (handCompacts) {
+                // this crossing has had its checkpoint; the compaction locks the session until it ends
+                x = x.withCheckpointArmed(false).withCheckpointTurns(x.pendingTurns());
                 next = next.withSession(x);
             }
             if (compacts) {

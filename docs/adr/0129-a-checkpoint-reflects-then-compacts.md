@@ -125,3 +125,9 @@ at once, mid-turn too (`Intent.SessionContext`): it arms the session and ends `S
 that much real work; a compaction that cannot get below the threshold reads no such context, so the checkpoint and its
 carry-on still do not repeat. Tested in `ReducerTest` (`aCarryOnThatFillsTheContextAgainRunsTheNextCheckpoint`,
 `oneUserPromptLeadsToOneAutomaticCheckpointAndOneCarryOn`).
+
+2026-11-20 (Miguel): a checkpoint command sent by hand (typed, Reflect, another session) owns the crossing its own
+work makes. Its model calls no longer arm the automatic checkpoint, so its end runs no second `/reflect --auto`; when
+its turn ends at or above the threshold, read by a model call, comando sends `/compact` alone, with no carry-on prompt,
+and the session stays locked until it ends. Ending below, nothing is compacted, as before. The automatic checkpoint's
+sequence is unchanged. Tested in `ReducerTest.aReflectByHandThatCrossesTheThresholdIsFollowedByItsCompactionOnly`.

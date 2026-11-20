@@ -256,6 +256,7 @@ checkpoint continues by itself; after Reflect the session waits for your next pr
 |---|---|
 | Once per crossing | Any checkpoint command sent disarms the session. A model call that reads below the threshold, a fresh start or `/clear` arms it again. |
 | Only a measured size arms it | The count Claude Code reports after a compaction is shown but never arms it. |
+| A reflect already running | A checkpoint command you send, typed or by Reflect, owns the crossing its own work makes: its model calls arm nothing, and when its turn ends at or above the threshold comando sends `/compact` alone, with no `--auto` reflect and no continue prompt. Ending below, it compacts nothing. |
 | No loop | After the continue prompt, a turn that ends above the threshold starts no checkpoint. A prompt from you or another session, or a model call below the threshold, allows the next one. |
 | It waits | While a prompt is queued or background work is out. |
 | It does not run | After a failed or interrupted turn, for a session without a checkpoint command, or while the context window is not known. |
@@ -275,7 +276,8 @@ checkpoint runs its command alone ([record 86](adr/0086-a-checkpoint-clears-and-
 | The session's menu | keeps Open, Stop, Interrupt, Copy details and Clone |
 | Stop (⌘.) | interrupts the checkpoint: the lock lifts and nothing is compacted |
 | A prompt from another session or an agent | queues, and runs once the checkpoint's turn has ended |
-| Anything else that acts on the session | refused without a notice: a prompt from its panel, Fresh, Checkpoint, Compact, its settings, Remove |
+| Compact, from the palette or an agent's `session_command` | held: a notice says the session compacts once its checkpoint ends, and `/compact` follows that turn; a checkpoint that fails or is interrupted drops it |
+| Anything else that acts on the session | refused without a notice: a prompt from its panel, Fresh, Checkpoint, its settings, Remove |
 | A waiting approval card | lifts the veil from the Session tab, so the card looks as answerable as it is |
 
 A failed turn, a blank answer or a process that ends lifts the lock too. The lock is live state and is never

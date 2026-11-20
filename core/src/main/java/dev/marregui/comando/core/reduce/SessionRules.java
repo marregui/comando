@@ -549,7 +549,9 @@ final class SessionRules {
     static Transition sessionContext(final AppState s, final Intent.SessionContext i, final int percent) {
         return Transition.of(s.withSession(i.name(), x -> {
             final SessionState known = x.withContext(i.tokens(), i.window());
-            final boolean below = i.tokens() > 0
+            // a checkpoint command's own calls start below the threshold and may cross it: that crossing is the
+            // command's, so they arm nothing and the turn's end runs no second checkpoint (Miguel, 2026-11-20)
+            final boolean below = i.tokens() > 0 && !x.isCheckpointing()
                     && Reflection.below(known.contextTokens(), known.contextWindow(), percent);
             return below ? known.withCheckpointArmed(true).withCarriedOn(false) : known;
         }));

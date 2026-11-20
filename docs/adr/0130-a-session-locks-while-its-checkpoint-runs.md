@@ -78,3 +78,8 @@ otherwise it answers `sent: <intent>`. An agent's intent that the lock refuses a
 began meanwhile, posts a warning notice naming the agent and the intent not applied; the intent carries its caller
 (`from`) for that. A refusal from the window's own keys stays without a notice, as §4 decided. Tested in
 `ReducerTest`.
+
+2026-11-20 (Miguel): a `/compact` asked for while the checkpoint runs (`Intent.SessionCommand`, from the palette or an
+agent) is no longer refused: it is held, `checkpointCompacts` set, with an info notice, and sent once the checkpoint's
+turn has ended; a checkpoint that fails or is interrupted drops it. Every other refusal is unchanged. Tested in
+`ReducerTest.aCompactionAskedForDuringAReflectRunsOnceTheReflectEnds`.

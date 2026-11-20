@@ -268,7 +268,9 @@ public final class Reducer {
 
             case Intent.PromptSession i -> TurnRules.promptSession(clock, s, i);
             case Intent.Checkpoint i -> TurnRules.checkpoint(clock, s, i.name(), false, i.from());
-            case Intent.SessionCommand i -> TurnRules.sessionCommand(clock, s, i.name(), i.command(), i.from());
+            case Intent.SessionCommand i -> TurnRules.locked(s, i.name()) && TurnRules.isCompact(i.command())
+                    ? TurnRules.holdCompaction(clock, s, i.name())
+                    : TurnRules.sessionCommand(clock, s, i.name(), i.command(), i.from());
             case Intent.InterruptSession i -> TurnRules.interruptSession(clock, s, i.name());
             case Intent.ClearTranscript i -> TurnRules.clearTranscript(clock, s, i.name());
             case Intent.SessionActivity i -> TurnRules.sessionActivity(clock, s, i);
