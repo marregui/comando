@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -125,6 +126,37 @@ class FrontearLabAdapterTest {
             assertThat(f.node().up()).isFalse();
             assertThat(f.packets()).isEmpty();
             assertThat(f.last()).isZero();
+        }
+    }
+
+    /// A drain opened once, while no node runs, as the application opens it at launch: the node that starts after has
+    /// its watch turned on, and so has the node that takes its place after it stops, with nothing opened again; a
+    /// publish on the second node is in the drain's window.
+    @Test
+    void anOpenedDrainWatchesEachNodeThatStarts(@TempDir final Path dir) throws Exception {
+        final AtomicReference<Frontear> hosted = new AtomicReference<>();
+        try (LabDrain drain = new LabDrain(new FrontearSource(hosted::get), edt, PacketSink.off())) {
+            drain.open();
+            try (Frontear first = Frontear.start("a", 0, dir.resolve("a1"), Set.of(), InstantSource.system(), true)) {
+                hosted.set(first);
+                await().atMost(WAIT).until(() -> first.watch().on());
+            }
+            try (Frontear second = Frontear.start("a", 0, dir.resolve("a2"), Set.of(), InstantSource.system(), true);
+                    MqttClient subscriber = client(second.port(), "reader", new CopyOnWriteArrayList<>());
+                    MqttClient publisher = client(second.port(), "pub", new CopyOnWriteArrayList<>())) {
+                assertThat(second.watch().on()).isFalse();
+                hosted.set(second);
+                await().atMost(WAIT).until(() -> second.watch().on());
+                subscriber.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                subscriber.subscribe("t/#", 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                publisher.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                assertThat(publisher.publishAcknowledged(new Packet.Publish("t/after", "m".getBytes(
+                        StandardCharsets.UTF_8), 1, false, false, 0, null, null))
+                        .get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
+                        .isEqualTo(Packet.SUCCESS);
+                await().atMost(WAIT).until(() -> drain.read(0L, LabWindow.CAPACITY).packets().stream()
+                        .anyMatch(p -> p.kind() == Kind.PUBLISHED && p.topic().equals("t/after")));
+            }
         }
     }
 

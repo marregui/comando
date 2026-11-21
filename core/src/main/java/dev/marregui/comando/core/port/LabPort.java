@@ -5,7 +5,8 @@ import java.util.List;
 /**
  * What this instance's frontear node shows of itself (record 187): its links, their logs, and the packets that went
  * through it, read by the frontear tab and by the {@code frontear_read} tool. Watching costs the node an event per
- * packet, so nothing is watched until {@link #open} is first called; from then on it stays on.
+ * packet; nothing is watched until {@link #open} is first called, which the application does at launch, and from then
+ * on it stays on, for each node this instance hosts.
  */
 public interface LabPort {
 

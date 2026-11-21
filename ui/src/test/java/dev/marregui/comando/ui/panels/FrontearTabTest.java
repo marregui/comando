@@ -42,7 +42,7 @@ import dev.marregui.comando.ui.widget.WidgetRegistry;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [FrontearTab], off screen, from a fake [LabPort], and its place in [LowerPanel].
-/// - nothing is watched until the tab is shown; then each of the four views is filled
+/// - the tab opens its port only once shown; then each of the four views is filled
 /// - every column header of the four views says what its column means, and each view says what a row is
 /// - the packet log hides frontear's control traffic until asked, collapses presences, filters by topic and kind,
 ///   names each kind in a word, selects a publish's path and shows its payload, indented when it is JSON

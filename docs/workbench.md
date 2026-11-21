@@ -720,9 +720,9 @@ A header shows only while this instance is not connected, with **Start frontear*
 ### 4.4 The frontear tab
 
 The frontear tab of the lower panel shows this instance's frontear node: what crosses it, its links to the other
-instances' nodes, and each link's log ([why](adr/0187-frontear-lab-node-per-instance.md)). Nothing is watched until
-the tab is first shown. From then on the node keeps a record of every packet, and comando reads it four times a
-second; the tab is redrawn once per read at most, however much arrived.
+instances' nodes, and each link's log ([why](adr/0187-frontear-lab-node-per-instance.md)). comando starts watching
+the node within 250 ms of its start, and of a restart's, and from then on the node keeps a record of every packet,
+which comando reads four times a second; the tab is redrawn once per read at most, however much arrived.
 
 Each view says above its table what a row is, and each column's header says in its tooltip what the column means.
 

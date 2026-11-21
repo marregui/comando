@@ -254,15 +254,16 @@ public final class App implements AutoCloseable {
             ui.search(own(new Searcher(List.of(new FolderSearch(Searcher.SCANNERS, Searcher.MAX_HITS + 1),
                     new TranscriptSearch(root.projects())))));
             ui.checkpointThreshold(checkpointThreshold::set);
-            // the frontear tab and frontear_read read this node's watch, drained every 250 ms; the packets go to the
-            // machine cdb when this instance writes there; the drain closes first, then the sink, both before the
-            // fabric (record 187)
+            // the frontear tab and frontear_read read this node's watch, drained every 250 ms from launch, so the
+            // watch is on with each node, a restarted one too; the packets go to the machine cdb when this instance
+            // writes there; the drain closes first, then the sink, both before the fabric (record 187)
             final PacketSink packets = own(onPeers && machineCdb ? new PacketSink(new CdbWriter(cdb))
                     : PacketSink.off());
             final LabDrain lab = own(new LabDrain(new FrontearSource(fabric::node), SwingUtilities::invokeLater,
                     packets));
             ui.lab(lab);
             mcpTools.lab(lab);
+            lab.open();
             // agents reach the panels' Terminals through the window, which refuses them until it is built (record 148)
             mcpTools.terminals(ui.terminals());
             // the instances consult each other through frontear (record 123), each on its own node, whose links carry

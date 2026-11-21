@@ -50,8 +50,8 @@ import dev.marregui.comando.ui.panels.lab.TrafficRows.Row;
  * and kind, frontear's own control traffic hidden unless asked for, a run of one origin's presences as one row unless
  * every presence is asked for, the selected packet's payload beside them (indented when it is JSON), and the steps on
  * the links of a selected publish selected with it. Octopus: each link's figures. Store: each link's log, how far its
- * peer has read, and its force rounds. Nothing is watched until the tab is first shown; then the port's listener
- * refreshes it. EDT only.
+ * peer has read, and its force rounds. The tab opens the port when it is first shown (the application opens it at
+ * launch, so the node is watched before); then the port's listener refreshes it. EDT only.
  */
 final class FrontearTab {
 
@@ -162,7 +162,7 @@ final class FrontearTab {
         openWhenShown();
     }
 
-    /** The tab came on screen: the node is watched from now on. */
+    /** The tab came on screen: the port is opened, when not yet, and the tab follows it from now on. */
     void shown() {
         shown = true;
         openWhenShown();
