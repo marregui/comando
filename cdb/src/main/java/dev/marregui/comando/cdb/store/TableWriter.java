@@ -41,7 +41,7 @@ public interface TableWriter extends AutoCloseable {
 
     void putBoolean(int column, boolean value);
 
-    /** SYMBOL and VARCHAR columns; null for NULL. */
+    /** SYMBOL, VARCHAR and JSON columns, a JSON value checked; null for NULL. */
     void putText(int column, String value);
 
     /** Ends the row started by {@link #newRow}. */

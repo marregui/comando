@@ -759,9 +759,11 @@ public final class Parser {
     private Ast.Expr concat() {
         final int outer = depth;
         Ast.Expr left = additive();
-        while (acceptSymbol("||")) {
+        // PostgreSQL's JSON operators -> and ->> bind as || does: left to right, between + - and the comparisons
+        while (isSymbol("||") || isSymbol("->") || isSymbol("->>")) {
             deeper();
-            left = new Ast.Binary("||", left, additive(), start(left));
+            final String op = next().text();
+            left = new Ast.Binary(op, left, additive(), start(left));
         }
         depth = outer;
         return left;

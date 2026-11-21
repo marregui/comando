@@ -271,7 +271,7 @@ class AggSymbolKeyTest {
                             case LONG, TIMESTAMP -> v.getLong(r);
                             case DOUBLE -> Double.doubleToRawLongBits(v.getDouble(r));
                             case BOOLEAN -> v.getBoolean(r);
-                            case SYMBOL, VARCHAR -> v.textAt(r);
+                            case SYMBOL, VARCHAR, JSON -> v.textAt(r);
                         });
                     }
                     out.add(row);

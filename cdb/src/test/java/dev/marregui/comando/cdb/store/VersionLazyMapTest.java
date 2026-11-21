@@ -236,7 +236,7 @@ class VersionLazyMapTest {
             case LONG, TIMESTAMP -> a.getLong(i) == b.getLong(j);
             case DOUBLE -> Double.doubleToRawLongBits(a.getDouble(i)) == Double.doubleToRawLongBits(b.getDouble(j));
             case BOOLEAN -> a.getBoolean(i) == b.getBoolean(j);
-            case SYMBOL, VARCHAR -> a.isNull(i) ? b.isNull(j) : !b.isNull(j) && a.textEquals(i, b, j);
+            case SYMBOL, VARCHAR, JSON -> a.isNull(i) ? b.isNull(j) : !b.isNull(j) && a.textEquals(i, b, j);
         };
     }
 }

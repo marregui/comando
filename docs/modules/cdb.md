@@ -24,7 +24,7 @@ sub-folder. Rows sit in timestamp order, so "the last hour" is a short walk, not
 | `_wal` | The write-ahead log: every commit since that checkpoint. |
 | `<column>.sym` | The dictionary of a `SYMBOL` column: each distinct text once. |
 | `<partition>.<txn>/<column>.d` | The values: 8 bytes for `LONG`, `TIMESTAMP`, `DOUBLE`; 1 for `BOOLEAN`; a 4-byte key for `SYMBOL`. |
-| `<partition>.<txn>/<column>.i` | For `VARCHAR`: 8-byte end offsets into the `.d` file, which holds the UTF-8 text. |
+| `<partition>.<txn>/<column>.i` | For `VARCHAR` and `JSON`: 8-byte end offsets into the `.d` file, which holds the UTF-8 text. |
 
 Every number is little-endian. `PartitionBy` offers `NONE`, `HOUR`, `DAY`, `WEEK`, `MONTH` and `YEAR`. A store
 holds at most 1,000 tables, a table at most 1,024 columns, a name at most 127 characters.
@@ -63,13 +63,16 @@ them, and a test holds that line.
 | `plan` | Names, types and the shape of the work | `Planner`, `SelectPlanner`, `Binder`, `Plan`, `Pruning`, `ScanTerms`, `ColumnUse`, `PlanText` |
 | `exec` | Operators over pages of rows | `Executor`, `Cursor`, `Page`, `Vector`, `ScanCursor`, `GroupByCursor`, `SortCursor`, `JoinCursor`, `QueryPool`, `Frames` |
 | `exec.agg` | Aggregate functions | `Accumulator`, `Aggregates` and one accumulator per function |
-| `exec.expr` | Expressions and functions | `Arithmetic`, `Comparison`, `Cast`, `Like`, `TimeFns`, `TextFns`, `Functions` |
+| `exec.expr` | Expressions and functions | `Arithmetic`, `Comparison`, `Cast`, `Like`, `TimeFns`, `TextFns`, `JsonFns`, `Functions` |
+| `json` | JSON text over UTF-8 bytes | `Json` (the check and the path walk, one forward pass, no recursion), `JsonPath` |
 | `store` | Files, log, snapshots | `Store`, `TableState`, `Wal`, `Applier`, `Checkpoint`, `Version`, `PartitionReader`, `SymbolTable`, `ZoneMap`, `Retention` |
 | `catalog` | Listings that read no table data | `Catalog`, `Listings` (`tables()`, `SHOW COLUMNS`, `show_wal()`) |
 | `serve` | The two network listeners | `CdbServer`, `PgServer`, `PgSession`, `IlpParser`, `CommitQueue`, `Access`, `Secrets`, `Limits` |
 
-`CdbType` has six types: `BOOLEAN`, `LONG`, `DOUBLE`, `TIMESTAMP`, `SYMBOL`, `VARCHAR`. NULL is a reserved value
-of each type, not a separate flag.
+`CdbType` has seven types: `BOOLEAN`, `LONG`, `DOUBLE`, `TIMESTAMP`, `SYMBOL`, `VARCHAR`, `JSON`. NULL is a
+reserved value of each type, not a separate flag. `JSON` is stored, read and compared as `VARCHAR`
+(`CdbType.isVarchar()`); the writer checks each value in `DefaultWriter.putText`, the one door every write path takes
+(SQL, line protocol, log replay), and drops the row when it is not JSON.
 
 ## 3. How a query runs
 

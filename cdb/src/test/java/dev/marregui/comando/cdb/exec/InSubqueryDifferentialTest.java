@@ -168,7 +168,7 @@ class InSubqueryDifferentialTest {
                     case LONG -> Long.toString(result.getLong(row, 0));
                     case DOUBLE -> Double.toString(result.getDouble(row, 0));
                     case TIMESTAMP -> timestamp(result.getLong(row, 0));
-                    case SYMBOL, VARCHAR -> "'" + result.getText(row, 0) + "'";
+                    case SYMBOL, VARCHAR, JSON -> "'" + result.getText(row, 0) + "'";
                 });
             }
         }

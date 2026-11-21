@@ -76,7 +76,7 @@ final class RowsFakes {
             case LONG, TIMESTAMP -> v.setLong(i, (Long) value);
             case DOUBLE -> v.setDouble(i, (Double) value);
             case BOOLEAN -> v.setBoolean(i, (Boolean) value);
-            case SYMBOL, VARCHAR -> v.setText(i, (String) value);
+            case SYMBOL, VARCHAR, JSON -> v.setText(i, (String) value);
         }
     }
 
@@ -88,7 +88,7 @@ final class RowsFakes {
             case LONG, TIMESTAMP -> v.getLong(i);
             case DOUBLE -> v.getDouble(i);
             case BOOLEAN -> v.getBoolean(i);
-            case SYMBOL, VARCHAR -> v.textAt(i);
+            case SYMBOL, VARCHAR, JSON -> v.textAt(i);
         };
     }
 

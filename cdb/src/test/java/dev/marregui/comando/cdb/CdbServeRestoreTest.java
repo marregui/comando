@@ -153,7 +153,7 @@ class CdbServeRestoreTest {
                     case BOOLEAN -> String.valueOf(result.getBoolean(row, column));
                     case DOUBLE -> String.valueOf(result.getDouble(row, column));
                     case LONG, TIMESTAMP -> String.valueOf(result.getLong(row, column));
-                    case SYMBOL, VARCHAR -> result.getText(row, column);
+                    case SYMBOL, VARCHAR, JSON -> result.getText(row, column);
                 });
             }
         }

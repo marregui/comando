@@ -278,7 +278,7 @@ final class ScanCursor implements Cursor {
         return switch (types[term.column()]) {
             case LONG, TIMESTAMP -> p.selectLong(column, from, n, term.op(), term.longValue(), dst);
             case DOUBLE -> p.selectDouble(column, from, n, term.op(), term.doubleValue(), dst);
-            case SYMBOL, VARCHAR -> p.selectText(column, from, n, term.op(), term.textValue(), dst);
+            case SYMBOL, VARCHAR, JSON -> p.selectText(column, from, n, term.op(), term.textValue(), dst);
             case BOOLEAN -> {
                 for (int i = 0; i < n; i++) {
                     dst[i] = i;

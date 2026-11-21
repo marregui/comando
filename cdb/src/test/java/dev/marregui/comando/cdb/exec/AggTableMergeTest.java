@@ -214,7 +214,7 @@ class AggTableMergeTest {
             case LONG, TIMESTAMP -> v.getLong(0);
             case DOUBLE -> Double.doubleToRawLongBits(v.getDouble(0));
             case BOOLEAN -> v.getBoolean(0);
-            case SYMBOL, VARCHAR -> String.valueOf(v.textAt(0));
+            case SYMBOL, VARCHAR, JSON -> String.valueOf(v.textAt(0));
         };
     }
 

@@ -158,7 +158,7 @@ final class JsonWriter {
             }
             case TIMESTAMP -> dateTime(json.append('"'), rows.getLong(row, column), 'T').append("Z\"");
             case BOOLEAN -> json.append(rows.getBoolean(row, column));
-            case SYMBOL, VARCHAR -> string(json, rows.getText(row, column));
+            case SYMBOL, VARCHAR, JSON -> string(json, rows.getText(row, column));
         }
     }
 

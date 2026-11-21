@@ -42,7 +42,7 @@ final class LongCountDistinctAccumulator implements Accumulator {
                 }
             }
             case BOOLEAN -> insert(group, value.getBoolean(row) ? 1 : 0);
-            case SYMBOL, VARCHAR -> throw new IllegalStateException("cannot count text values as numbers");
+            case SYMBOL, VARCHAR, JSON -> throw new IllegalStateException("cannot count text values as numbers");
         }
     }
 

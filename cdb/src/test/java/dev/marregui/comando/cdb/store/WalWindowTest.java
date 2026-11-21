@@ -223,7 +223,7 @@ class WalWindowTest {
                     case LONG, TIMESTAMP -> rows.setLong(c, r, v);
                     case DOUBLE -> rows.setDouble(c, r, v / 4.0);
                     case BOOLEAN -> rows.setBoolean(c, r, v % 2L == 0L);
-                    case SYMBOL, VARCHAR -> rows.setText(c, r, r % 3 == 1 ? null
+                    case SYMBOL, VARCHAR, JSON -> rows.setText(c, r, r % 3 == 1 ? null
                             : "t" + v + (r % 5 == 0 ? "-".repeat(40) : ""));
                 }
             }
@@ -257,7 +257,7 @@ class WalWindowTest {
                         case LONG, TIMESTAMP -> rows.getLong(c, r);
                         case DOUBLE -> Double.doubleToRawLongBits(rows.getDouble(c, r));
                         case BOOLEAN -> rows.getBoolean(c, r);
-                        case SYMBOL, VARCHAR -> rows.textAt(c, r);
+                        case SYMBOL, VARCHAR, JSON -> rows.textAt(c, r);
                     });
                 }
             }

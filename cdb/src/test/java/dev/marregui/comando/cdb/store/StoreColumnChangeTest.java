@@ -462,7 +462,7 @@ class StoreColumnChangeTest {
                 case LONG, TIMESTAMP -> w.putLong(c, (Long) values[c]);
                 case DOUBLE -> w.putDouble(c, (Double) values[c]);
                 case BOOLEAN -> w.putBoolean(c, (Boolean) values[c]);
-                case SYMBOL, VARCHAR -> w.putText(c, (String) values[c]);
+                case SYMBOL, VARCHAR, JSON -> w.putText(c, (String) values[c]);
             }
         }
         w.endRow();

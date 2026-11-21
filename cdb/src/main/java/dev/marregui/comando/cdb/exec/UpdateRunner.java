@@ -250,7 +250,7 @@ final class UpdateRunner {
             case DOUBLE -> writer.putDouble(column, v.type == CdbType.DOUBLE ? v.getDouble(row)
                     : (double) v.getLong(row));
             case BOOLEAN -> writer.putBoolean(column, v.getBoolean(row));
-            case SYMBOL, VARCHAR -> writer.putText(column, v.textAt(row));
+            case SYMBOL, VARCHAR, JSON -> writer.putText(column, v.textAt(row));
         }
     }
 

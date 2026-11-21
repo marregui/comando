@@ -58,7 +58,7 @@ class ScanDifferentialTest {
                             case LONG, TIMESTAMP -> v.getLong(r);
                             case DOUBLE -> v.getDouble(r);
                             case BOOLEAN -> v.getBoolean(r);
-                            case SYMBOL, VARCHAR -> String.valueOf(v.textAt(r));
+                            case SYMBOL, VARCHAR, JSON -> String.valueOf(v.textAt(r));
                         });
                     }
                     out.add(row);

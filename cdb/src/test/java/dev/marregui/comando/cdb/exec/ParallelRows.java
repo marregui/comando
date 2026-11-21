@@ -54,7 +54,7 @@ final class ParallelRows {
                             case LONG, TIMESTAMP -> bits[c][at + i] = v.getLong(i);
                             case DOUBLE -> bits[c][at + i] = Double.doubleToRawLongBits(v.getDouble(i));
                             case BOOLEAN -> bits[c][at + i] = v.getBoolean(i) ? 1L : 0L;
-                            case SYMBOL, VARCHAR -> texts[c][at + i] = v.textAt(i);
+                            case SYMBOL, VARCHAR, JSON -> texts[c][at + i] = v.textAt(i);
                         }
                     }
                 }
@@ -106,7 +106,7 @@ final class ParallelRows {
             return switch (answer.fields.get(c).type()) {
                 case DOUBLE -> Double.longBitsToDouble(answer.bits[c][r]) + " (bits "
                         + Long.toHexString(answer.bits[c][r]) + ')';
-                case SYMBOL, VARCHAR -> String.valueOf(answer.texts[c][r]);
+                case SYMBOL, VARCHAR, JSON -> String.valueOf(answer.texts[c][r]);
                 case LONG, TIMESTAMP, BOOLEAN -> String.valueOf(answer.bits[c][r]);
             };
         }

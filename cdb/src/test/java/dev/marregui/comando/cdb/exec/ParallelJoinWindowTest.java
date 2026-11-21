@@ -389,7 +389,7 @@ class ParallelJoinWindowTest {
                 case LONG, TIMESTAMP -> v.getLong(r);
                 case DOUBLE -> Double.doubleToRawLongBits(v.getDouble(r));
                 case BOOLEAN -> v.getBoolean(r);
-                case SYMBOL, VARCHAR -> String.valueOf(v.textAt(r));
+                case SYMBOL, VARCHAR, JSON -> String.valueOf(v.textAt(r));
             });
         }
         return row;

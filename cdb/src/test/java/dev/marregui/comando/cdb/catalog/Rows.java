@@ -52,7 +52,7 @@ final class Rows {
             case LONG, TIMESTAMP -> column.getLong(row);
             case DOUBLE -> column.getDouble(row);
             case BOOLEAN -> column.getBoolean(row);
-            case SYMBOL, VARCHAR -> column.textAt(row);
+            case SYMBOL, VARCHAR, JSON -> column.textAt(row);
         };
     }
 

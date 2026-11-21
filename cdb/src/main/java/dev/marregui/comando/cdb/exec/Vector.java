@@ -9,8 +9,8 @@ import dev.marregui.comando.cdb.CdbType;
 
 /**
  * One column of a {@link Page}, read and written through its accessors: {@link #getLong} for LONG and TIMESTAMP,
- * {@link #getDouble} for DOUBLE, {@link #getBoolean} for BOOLEAN, the text accessors for SYMBOL and VARCHAR. NULL is
- * the type's sentinel ({@link CdbType}): {@link #NULL_LONG}, NaN, a null text. Values past the page's size are
+ * {@link #getDouble} for DOUBLE, {@link #getBoolean} for BOOLEAN, the text accessors for SYMBOL, VARCHAR and JSON.
+ * NULL is the type's sentinel ({@link CdbType}): {@link #NULL_LONG}, NaN, a null text. Values past the page's size are
  * unspecified. Text is held as UTF-8 bytes, and a SYMBOL value set by key as the key of the vector's one
  * {@link SymbolDictionary} ({@link TextColumn}); it compares and hashes as {@link String} does (the sign of
  * {@link String#compareTo}, {@link String#hashCode}).
@@ -62,7 +62,7 @@ public final class Vector {
             case LONG, TIMESTAMP -> longs.length;
             case DOUBLE -> doubles.length;
             case BOOLEAN -> booleans.length;
-            case SYMBOL, VARCHAR -> texts.capacity();
+            case SYMBOL, VARCHAR, JSON -> texts.capacity();
         };
     }
 
@@ -107,7 +107,7 @@ public final class Vector {
             case LONG, TIMESTAMP -> Arrays.fill(longs, 0, n, POISON_LONG);
             case DOUBLE -> Arrays.fill(doubles, 0, n, POISON_DOUBLE);
             case BOOLEAN -> Arrays.fill(booleans, 0, n, true);
-            case SYMBOL, VARCHAR -> texts.poison(n);
+            case SYMBOL, VARCHAR, JSON -> texts.poison(n);
         }
     }
 
@@ -146,6 +146,29 @@ public final class Vector {
     }
 
     /** Sets text value {@code i} to a copy of the {@code length} UTF-8 bytes of {@code data} at {@code start}. */
+    public void setText(final int i, final byte[] data, final int start, final int length) {
+        texts.setText(i, data, start, length);
+    }
+
+    /**
+     * The array holding text value {@code i}'s UTF-8 bytes, valid until this vector is next written; null when the
+     * value is NULL or held as a SYMBOL key, which {@link #textAt} reads.
+     */
+    public byte[] utf8(final int i) {
+        return texts.utf8(i);
+    }
+
+    /** The offset of text value {@code i}'s bytes in {@link #utf8}. */
+    public int utf8Start(final int i) {
+        return texts.utf8Start(i);
+    }
+
+    /** The length of text value {@code i}'s bytes in {@link #utf8}. */
+    public int utf8Length(final int i) {
+        return texts.utf8Length(i);
+    }
+
+    /** Sets text value {@code i} to a copy of {@code length} UTF-8 bytes of {@code data} at {@code start}. */
     public void setText(final int i, final MemorySegment data, final long start, final int length) {
         texts.setText(i, data, start, length);
     }
@@ -202,7 +225,7 @@ public final class Vector {
             case LONG, TIMESTAMP -> longs[i] == NULL_LONG;
             case DOUBLE -> Double.isNaN(doubles[i]);
             case BOOLEAN -> false;
-            case SYMBOL, VARCHAR -> texts.isNull(i);
+            case SYMBOL, VARCHAR, JSON -> texts.isNull(i);
         };
     }
 
@@ -225,7 +248,7 @@ public final class Vector {
                     booleans[i] = booleans[j];
                     booleans[j] = t;
                 }
-                case SYMBOL, VARCHAR -> texts.swap(i, j);
+                case SYMBOL, VARCHAR, JSON -> texts.swap(i, j);
             }
         }
     }
@@ -236,7 +259,7 @@ public final class Vector {
             case LONG, TIMESTAMP -> longs[to] = source.longs[from];
             case DOUBLE -> doubles[to] = source.doubles[from];
             case BOOLEAN -> booleans[to] = source.booleans[from];
-            case SYMBOL, VARCHAR -> texts.copy(source.texts, from, to);
+            case SYMBOL, VARCHAR, JSON -> texts.copy(source.texts, from, to);
         }
     }
 
@@ -249,7 +272,7 @@ public final class Vector {
             case LONG, TIMESTAMP -> System.arraycopy(source.longs, from, longs, to, n);
             case DOUBLE -> System.arraycopy(source.doubles, from, doubles, to, n);
             case BOOLEAN -> System.arraycopy(source.booleans, from, booleans, to, n);
-            case SYMBOL, VARCHAR -> texts.copy(source.texts, from, to, n);
+            case SYMBOL, VARCHAR, JSON -> texts.copy(source.texts, from, to, n);
         }
     }
 
@@ -259,7 +282,7 @@ public final class Vector {
             case LONG, TIMESTAMP -> longs[i] = NULL_LONG;
             case DOUBLE -> doubles[i] = Double.NaN;
             case BOOLEAN -> booleans[i] = false;
-            case SYMBOL, VARCHAR -> texts.setNull(i);
+            case SYMBOL, VARCHAR, JSON -> texts.setNull(i);
         }
     }
 }

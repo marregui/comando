@@ -98,14 +98,14 @@ final class CdbResultView implements ResultView {
         return result.getText(row, column);
     }
 
-    /** The storage class a column of {@code type} is read as: SYMBOL and VARCHAR as text. */
+    /** The storage class a column of {@code type} is read as: SYMBOL, VARCHAR and JSON as text. */
     static ColumnKind kindOf(final CdbType type) {
         return switch (type) {
             case BOOLEAN -> ColumnKind.BOOLEAN;
             case LONG -> ColumnKind.LONG;
             case DOUBLE -> ColumnKind.DOUBLE;
             case TIMESTAMP -> ColumnKind.TIMESTAMP;
-            case SYMBOL, VARCHAR -> ColumnKind.TEXT;
+            case SYMBOL, VARCHAR, JSON -> ColumnKind.TEXT;
         };
     }
 

@@ -135,6 +135,10 @@ public final class Functions {
             case "upper" -> TextFns.changeCase(arity(call, 1, 1).getFirst(), true, t, nowMicros);
             case "lower" -> TextFns.changeCase(arity(call, 1, 1).getFirst(), false, t, nowMicros);
             case "to_str" -> TextFns.toStr(arity(call, 2, 2), t, nowMicros);
+            case "json_extract" -> JsonFns.extract(arity(call, 2, 2), t, nowMicros);
+            case "json_exists" -> JsonFns.exists(arity(call, 2, 2), t, nowMicros);
+            case "->" -> JsonFns.field(arity(call, 2, 2), false, t, nowMicros);
+            case "->>" -> JsonFns.field(arity(call, 2, 2), true, t, nowMicros);
             case "now" -> TimeFns.now(t, nowMicros);
             case "dateadd" -> TimeFns.dateAdd(arity(call, 3, 3), t, nowMicros);
             case "datediff" -> TimeFns.dateDiff(arity(call, 3, 3), t, nowMicros);
@@ -179,7 +183,7 @@ public final class Functions {
                     case LONG, TIMESTAMP -> v.setLong(i, (Long) value);
                     case DOUBLE -> v.setDouble(i, (Double) value);
                     case BOOLEAN -> v.setBoolean(i, (Boolean) value);
-                    case SYMBOL, VARCHAR -> v.setText(i, (String) value);
+                    case SYMBOL, VARCHAR, JSON -> v.setText(i, (String) value);
                 }
             }
         }

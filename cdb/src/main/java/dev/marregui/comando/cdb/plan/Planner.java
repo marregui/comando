@@ -383,7 +383,10 @@ public final class Planner {
             }
             final CdbType to = def.columns().get(c).type();
             final Bound bound = binder.bind(a.value());
-            final Bound value = Binder.cast(bound, to, update.pos());
+            // a text assigned to a JSON column is checked by the writer, on the rows the condition hits only: a cast
+            // here would check every row the rewrite reads
+            final boolean checkedByWriter = to == CdbType.JSON && bound.type() != null && bound.type().isText();
+            final Bound value = checkedByWriter ? bound : Binder.cast(bound, to, update.pos());
             if (implicitCast(bound, value) && !castable(bound.type(), to)) {
                 throw new CdbException("cannot assign value of other type [column=" + a.column() + ", type="
                         + bound.type() + ", target=" + to + ']', update.pos());
@@ -500,7 +503,10 @@ public final class Planner {
         for (int i = 0; i < columns.length; i++) {
             final ColumnDef column = def.columns().get(columns[i]);
             final CdbType to = column.type();
-            final Bound value = Binder.cast(values.get(i), to, pos);
+            final CdbType from = values.get(i).type();
+            // a text inserted into a JSON column is checked once, by the writer, which names the table and column
+            final Bound value = to == CdbType.JSON && from != null && from.isText() ? values.get(i)
+                    : Binder.cast(values.get(i), to, pos);
             if (implicitCast(values.get(i), value) && !insertable(values.get(i).type(), to)) {
                 throw new CdbException("cannot insert value of other type [column=" + column.name() + ", type="
                         + values.get(i).type() + ", target=" + to + ']', pos);

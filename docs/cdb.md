@@ -21,7 +21,7 @@ its edges are. The SQL language has its own page, [cdb SQL](cdb-sql.md). The eng
 | every row carries a timestamp and rows arrive roughly in time order | rows are found by an id and updated in place all day |
 | your questions are about time: the last hour, per day, the latest per device | you need a transaction that spans statements or tables |
 | you want one process and one folder, with nothing to install | you need users and grants finer than "owner" and "reader" |
-| a QuestDB or PostgreSQL client must connect to it | you need more than six column types, or more than one machine |
+| a QuestDB or PostgreSQL client must connect to it | you need more than seven column types, or more than one machine |
 
 Why comando has a database of its own:
 [cdb, comando's own database](adr/0158-cdb-comandos-own-database.md).
@@ -187,7 +187,7 @@ rooms,room=kitchen temperature=22 1795122400'
 | tag | `room=kitchen` | a `SYMBOL` column |
 | field, whole number | `count=3i` | `LONG` |
 | field, number | `temperature=21.5` | `DOUBLE` |
-| field, text | `note="door open"` | `VARCHAR` |
+| field, text | `note="door open"` | `VARCHAR`; into an existing `JSON` column, the text must be JSON or the line is refused |
 | field, true or false | `ok=t` | `BOOLEAN` |
 | field, time | `seen=1795036000000000t` | `TIMESTAMP`, in microseconds |
 | trailing number | `1795036000` | the row's time; left out, cdb uses the arrival time |
@@ -227,7 +227,8 @@ jdbc:postgresql://127.0.0.1:8812/qdb
 ```
 
 Simple queries, prepared statements with `$1` parameters and query cancellation all work. There are no
-transactions: each statement applies when it runs, and `BEGIN`, `COMMIT` and `ROLLBACK` change nothing.
+transactions: each statement applies when it runs, and `BEGIN`, `COMMIT` and `ROLLBACK` change nothing. A `JSON`
+column is described as PostgreSQL's `json` (type OID 114), so a client shows it as JSON; its values are their text.
 
 A session has two settings of its own:
 
@@ -284,7 +285,7 @@ inside that, and each column is a file.
 A table names one `TIMESTAMP` column as its designated timestamp: `TIMESTAMP(ts)`. cdb keeps the rows sorted by it
 and splits the table by it. Rows may arrive out of order; cdb sorts them into place.
 
-### 5.2 Six column types
+### 5.2 Seven column types
 
 | Type | Holds | On disk, per row |
 |---|---|---|
@@ -294,6 +295,7 @@ and splits the table by it. Rows may arrive out of order; cdb sorts them into pl
 | `TIMESTAMP` | an instant, in microseconds, UTC | 8 bytes |
 | `SYMBOL` | a text that repeats: a room, a device, a status | a 4-byte key into the column's dictionary |
 | `VARCHAR` | any text | its UTF-8 bytes, plus an 8-byte offset |
+| `JSON` | one JSON text, checked when written | as `VARCHAR` |
 
 A `SYMBOL` column stores each distinct text once, in `<column>.sym`, and a small number per row. Ten million rows
 that say `kitchen` or `attic` cost four bytes each, and comparing them is comparing numbers.
@@ -526,7 +528,7 @@ own files, and it is much smaller.
 | Line protocol | the syntax, and how a missing table and a new column are created | over HTTP only; no TCP port `9009` |
 | PostgreSQL wire | port `8812` by convention; reports server version `11.3` as QuestDB does | the password is a cdb secret; user names mean nothing |
 | SQL | the time-series extensions cdb implements keep QuestDB's syntax | a subset; a statement outside it fails with a clear error ([cdb SQL](cdb-sql.md)) |
-| Types | `NULL` is stored as QuestDB stores it | six types; `INT`, `FLOAT`, `STRING` and `DATE` map onto them |
+| Types | `NULL` is stored as QuestDB stores it | seven types; `INT`, `FLOAT`, `STRING` and `DATE` map onto them; `JSON` is cdb's own: QuestDB keeps JSON in `VARCHAR` |
 | Listings | `tables()`, `wal_tables()`, `SHOW PARTITIONS`, `SHOW COLUMNS` use QuestDB's column names | `wal_apply_stats()` is cdb's own |
 | TTL | the same rule for which partition expires | |
 | Files on disk | | cdb's own format; neither database opens the other's folder |

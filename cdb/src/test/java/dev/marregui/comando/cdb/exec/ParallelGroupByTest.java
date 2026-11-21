@@ -376,7 +376,7 @@ class ParallelGroupByTest {
                             case LONG, TIMESTAMP -> v.getLong(r);
                             case DOUBLE -> bits(v.getDouble(r));
                             case BOOLEAN -> v.getBoolean(r);
-                            case SYMBOL, VARCHAR -> v.textAt(r) == null ? null : v.textAt(r).toString();
+                            case SYMBOL, VARCHAR, JSON -> v.textAt(r) == null ? null : v.textAt(r).toString();
                         });
                     }
                     out.add(row);

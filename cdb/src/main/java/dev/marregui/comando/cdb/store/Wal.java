@@ -32,8 +32,8 @@ import dev.marregui.comando.cdb.CdbType;
  * Every number is little-endian. Header: u32 magic {@code CWAL}, u32 version, u64 salt. Frame: u32 body length, u32
  * CRC32C of the salt's 8 bytes then the body. Body: u64 txn, u8 flags (bit 0 truncate, bit 1 definition follows), [u32
  * length and the UTF-8 of the definition as {@code _meta} holds it], u32 rows, u16 columns, then each column's
- * values: LONG and TIMESTAMP i64, DOUBLE its raw bits as i64, BOOLEAN u8, SYMBOL and VARCHAR an i32 length (-1 for
- * NULL) and the UTF-8 bytes.
+ * values: LONG and TIMESTAMP i64, DOUBLE its raw bits as i64, BOOLEAN u8, SYMBOL, VARCHAR and JSON an i32 length
+ * (-1 for NULL) and the UTF-8 bytes.
  * <p>
  * The salt is drawn anew when the log is created and at every cut, and forced with the header before a frame follows
  * it: after a power cut, bytes of an earlier generation that a new frame did not overwrite fail their CRC, so the scan
@@ -669,7 +669,7 @@ final class Wal {
                         frame.put((byte) (rows.getBoolean(c, r) ? 1 : 0));
                     }
                 }
-                case SYMBOL, VARCHAR -> {
+                case SYMBOL, VARCHAR, JSON -> {
                     for (final byte[] utf8 : texts[c]) {
                         if (utf8 == null) {
                             frame.putInt(-1);
@@ -760,7 +760,7 @@ final class Wal {
                         rows.setBoolean(c, r, b == 1);
                     }
                 }
-                case SYMBOL, VARCHAR -> {
+                case SYMBOL, VARCHAR, JSON -> {
                     for (int r = 0; r < size; r++) {
                         final int length = textLength(body, offset, txn);
                         if (length < -1) {

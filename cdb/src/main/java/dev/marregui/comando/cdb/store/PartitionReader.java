@@ -67,7 +67,7 @@ public interface PartitionReader {
                     dst.setBoolean(at + i, values[i]);
                 }
             }
-            case SYMBOL, VARCHAR -> {
+            case SYMBOL, VARCHAR, JSON -> {
                 final String[] values = new String[n];
                 texts(column, from, n, values);
                 for (int i = 0; i < n; i++) {

@@ -76,7 +76,7 @@ final class Exprs {
             case TIMESTAMP -> ISO.format(Instant.EPOCH.plus(v.getLong(i), ChronoUnit.MICROS));
             case DOUBLE -> Double.toString(v.getDouble(i));
             case BOOLEAN -> Boolean.toString(v.getBoolean(i));
-            case SYMBOL, VARCHAR -> v.textAt(i);
+            case SYMBOL, VARCHAR, JSON -> v.textAt(i);
         };
     }
 }

@@ -169,7 +169,7 @@ class VersionReadTest {
                     version.booleans(c, row, 1, one);
                     assertThat(dst.getBoolean(at + k)).as("column %d row %d", c, row).isEqualTo(one[0]);
                 }
-                case SYMBOL, VARCHAR -> {
+                case SYMBOL, VARCHAR, JSON -> {
                     final String[] one = new String[1];
                     version.texts(c, row, 1, one);
                     assertThat(dst.isNull(at + k)).as("column %d row %d", c, row).isEqualTo(one[0] == null);

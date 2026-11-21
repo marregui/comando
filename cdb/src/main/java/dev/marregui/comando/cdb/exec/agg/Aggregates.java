@@ -113,7 +113,7 @@ public final class Aggregates {
         return switch (in) {
             case LONG, TIMESTAMP -> new LongMinMaxAccumulator(max);
             case DOUBLE -> new DoubleMinMaxAccumulator(max);
-            case SYMBOL, VARCHAR -> new TextMinMaxAccumulator(max);
+            case SYMBOL, VARCHAR, JSON -> new TextMinMaxAccumulator(max);
             case BOOLEAN -> throw unsupported(function, in);
         };
     }

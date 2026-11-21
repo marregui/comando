@@ -204,7 +204,7 @@ final class Version implements PartitionReader {
                     if (firstAbsent < 0) {
                         firstAbsent = c;
                     }
-                    if (column.type() == CdbType.VARCHAR && Files.exists(dir.resolve(column.name() + ".i"))) {
+                    if (column.type().isVarchar() && Files.exists(dir.resolve(column.name() + ".i"))) {
                         throw missing(def, dir, d.getFileName().toString());
                     }
                     continue;
@@ -215,7 +215,7 @@ final class Version implements PartitionReader {
                 dataFiles[c] = d;
                 final long dataSize = Files.size(d);
                 mapped += dataSize;
-                if (column.type() == CdbType.VARCHAR) {
+                if (column.type().isVarchar()) {
                     final Path i = dir.resolve(column.name() + ".i");
                     final long indexSize = Files.size(i);
                     mapped += indexSize;
@@ -229,7 +229,7 @@ final class Version implements PartitionReader {
                         case LONG, TIMESTAMP, DOUBLE -> rowCount * Long.BYTES;
                         case BOOLEAN -> rowCount;
                         case SYMBOL -> rowCount * Integer.BYTES;
-                        case VARCHAR -> throw new IllegalStateException("unreachable");
+                        case VARCHAR, JSON -> throw new IllegalStateException("unreachable");
                     };
                 }
                 checkCommitted(d, dataSize, dataLength[c]);
@@ -466,7 +466,7 @@ final class Version implements PartitionReader {
                     }
                 }
                 case SYMBOL -> dst.readSymbols(at, segment, from * Integer.BYTES, n, symbols[column]);
-                case VARCHAR -> {
+                case VARCHAR, JSON -> {
                     final MemorySegment ends = m.index();
                     long start = from == 0L ? 0L : decodeEnd(ends.get(LONG_LE, (from - 1L) * Long.BYTES));
                     for (int i = 0; i < n; i++) {
@@ -517,7 +517,7 @@ final class Version implements PartitionReader {
                         setSymbol(dst, at + k, dictionary, segment.get(INT_LE, rows[from + k] * Integer.BYTES));
                     }
                 }
-                case VARCHAR -> {
+                case VARCHAR, JSON -> {
                     final MemorySegment ends = m.index();
                     for (int k = 0; k < n; k++) {
                         final long row = rows[from + k];
@@ -896,7 +896,7 @@ final class Version implements PartitionReader {
         return switch (type) {
             case LONG, TIMESTAMP -> acquire(column, CdbType.LONG, CdbType.TIMESTAMP);
             case DOUBLE, BOOLEAN -> acquire(column, type, type);
-            case SYMBOL, VARCHAR -> acquire(column, CdbType.SYMBOL, CdbType.VARCHAR);
+            case SYMBOL, VARCHAR, JSON -> acquire(column, CdbType.SYMBOL, CdbType.VARCHAR);
         };
     }
 
@@ -906,7 +906,8 @@ final class Version implements PartitionReader {
      */
     private Mapped acquire(final int column, final CdbType a, final CdbType b) {
         if (column < types.length) {
-            final CdbType type = types[column];
+            // a JSON column's files are a VARCHAR column's
+            final CdbType type = types[column] == CdbType.JSON ? CdbType.VARCHAR : types[column];
             if (type != a && type != b) {
                 throw new IllegalArgumentException("refuse read of column as another type [column=" + column
                         + ", type=" + type + ", asked=" + a + ']');
@@ -961,7 +962,7 @@ final class Version implements PartitionReader {
                 arena = Arena.ofShared();
             }
             try {
-                final MemorySegment index = types[column] == CdbType.VARCHAR
+                final MemorySegment index = types[column].isVarchar()
                         ? committed(indexFiles[column], mapFile(indexFiles[column]), rowCount * Long.BYTES)
                         : null;
                 final MemorySegment data = committed(dataFiles[column], mapFile(dataFiles[column]),

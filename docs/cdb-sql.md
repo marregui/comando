@@ -575,7 +575,7 @@ CREATE TABLE weather (
 ) TIMESTAMP(ts) PARTITION BY DAY;
 ```
 
-A column is a name and a type. cdb has six types:
+A column is a name and a type. cdb has seven types:
 
 | Type | Holds | Write a value as |
 |---|---|---|
@@ -585,10 +585,22 @@ A column is a name and a type. cdb has six types:
 | `TIMESTAMP` | an instant, to the microsecond, in UTC | `'2026-06-01T06:00:00Z'`, or a `LONG` of microseconds |
 | `SYMBOL` | a text that repeats: a city, a status | `'Oslo'` |
 | `VARCHAR` | any text | `'It''s fine'` |
+| `JSON` | one JSON text: an object, an array, a string, a number, `true`, `false` or `null` | `'{"status":"ok","busy":true}'` |
 
 Choose `SYMBOL` for a column with few different values and `VARCHAR` for free text. cdb stores each symbol's text
-once; [cdb](cdb.md) shows how each type is stored. Other type names map onto the six
+once; [cdb](cdb.md) shows how each type is stored. Other type names map onto the seven
 ([section 14.4](#144-types-and-casts)).
+
+A `JSON` column is a `VARCHAR` column that takes only JSON. cdb checks each value as it is written, by `INSERT`,
+`UPDATE` or a line-protocol string field, and refuses the statement or the line when a value is not JSON. It keeps
+the text as it was sent, spaces and key order included, and compares, sorts and groups it as text. Read inside it
+with `->`, `->>`, `json_extract` and `json_exists` ([section 14.6](#146-functions)):
+
+```sql
+SELECT ts, payload ->> 'activity' AS activity
+FROM frontear_packet
+WHERE payload ->> 'status' = 'ok';
+```
 
 The clauses after the columns:
 
@@ -895,7 +907,7 @@ A statement that parses can still be refused later: for an unknown table, column
 
 | You write | cdb stores |
 |---|---|
-| `BOOLEAN`, `LONG`, `DOUBLE`, `TIMESTAMP`, `SYMBOL`, `VARCHAR` | the type itself |
+| `BOOLEAN`, `LONG`, `DOUBLE`, `TIMESTAMP`, `SYMBOL`, `VARCHAR`, `JSON` | the type itself |
 | `INT`, `INTEGER`, `SHORT`, `BYTE` | `LONG` |
 | `FLOAT` | `DOUBLE` |
 | `DATE` | `TIMESTAMP` |
@@ -911,6 +923,9 @@ A cast changes a value's type. Write `x::TYPE` or `CAST(x AS TYPE)`.
 | `3.9::LONG` | `3`: the fraction is cut, not rounded |
 | `1::BOOLEAN`, `'true'::BOOLEAN` | `true` |
 | `42::VARCHAR` | `'42'` |
+| `'[1, 2]'::JSON`, `42::JSON` | the JSON text `[1, 2]`, `42` |
+| `'{oops'::JSON` | an error: `cannot cast value to JSON [type=VARCHAR, at=1]`, the byte where the text stops being JSON |
+| `payload::VARCHAR` | the JSON text as a `VARCHAR` |
 | `'2026-06-01'::TIMESTAMP` | the instant |
 | `ts::LONG` | microseconds since 1970: `1780293600000000` |
 | `sum(rain)::DOUBLE / count(*)` | a division with a fraction: `0.9166666666666666` |
@@ -925,7 +940,7 @@ From tightest to loosest. Brackets override the order.
 | `-x` | negation |
 | `*` `/` `%` | `LONG` with `LONG` stays `LONG`: `7 / 2` is `3`; `%` is the remainder, signed like its left side |
 | `+` `-` | a `DOUBLE` on either side makes the answer a `DOUBLE` |
-| `||` | joins texts |
+| `||`, `->`, `->>` | `||` joins texts; `->` and `->>` read inside JSON, left to right: `p -> 'a' ->> 'b'` |
 | `=` `!=` `<>` `<` `<=` `>` `>=`, `IS [NOT] NULL`, `[NOT] IN`, `[NOT] BETWEEN`, `[NOT] LIKE`, `[NOT] ILIKE` | `1 = 1.0` is true; `BETWEEN` accepts its bounds in either order |
 | `NOT` | |
 | `AND` | |
@@ -945,8 +960,17 @@ From tightest to loosest. Brackets override the order.
 | `substring(s, start, n)` | `n` characters from position `start`, counted from 1 | `substring('comando', 3, 4)`: `mand` |
 | `replace(s, old, new)` | every `old` swapped for `new` | `replace('aaa', 'a', 'bb')`: `bbbbbb` |
 | `concat(a, b, …)` | all arguments as one text, of any type | `concat('x', 1, 2.5, true)`: `x12.5true` |
+| `json_extract(j, path)` | the value at `path` as `VARCHAR`: a string's text, any other value's JSON text; `NULL` for JSON `null`, a path that names nothing, or a text that is not JSON | `json_extract('{"a":{"b":[1,"x"]}}', '.a.b[1]')`: `x` |
+| `j ->> key` | `json_extract` of one step: `key` a member's name, or a whole number for an array's element | `'{"s":"ok"}' ->> 's'`: `ok` |
+| `j -> key` | the value at one step as `JSON`, a string with its quotes | `'{"s":"ok"}' -> 's'`: `"ok"` |
+| `json_exists(j, path)` | `true` when `path` names a value, JSON `null` included | `json_exists('{"n":null}', '.n')`: `true` |
 | `now()`, `hour`, `date_trunc`, `timestamp_floor`, `dateadd`, `datediff`, `to_str` | time: [section 10.3](#103-time-functions) | |
 | `rnd_double()`, `rnd_symbol(a, b, …)`, `timestamp_sequence(start, step)` | practice data: [section 13.1](#131-show-and-the-catalogue-functions) | |
+
+A JSON path is the one QuestDB's `json_extract` takes: `.name` for a member, `["name"]` for a member whose name
+holds a dot, a bracket or an escape, `[n]` for an array's element from 0, after an optional `$`. A member that occurs
+twice answers its first value. The JSON functions take any text, so they also read JSON kept in a `VARCHAR`; the
+path is a constant. Each row's text is read once, from the start to the value, and nothing past it.
 
 **Aggregate functions** answer one value per group.
 
@@ -989,7 +1013,7 @@ cdb refuses these with a clear error. Each has a way round.
 | `SAMPLE BY 1w`, `ALIGN TO FIRST OBSERVATION` | `GROUP BY timestamp_floor('w', ts)`; buckets align to the calendar |
 | `CREATE TABLE … AS SELECT` | `CREATE TABLE`, then `INSERT INTO … SELECT` |
 | several statements in one request | one request each |
-| types beyond the six and their aliases | the nearest of the six |
+| types beyond the seven and their aliases | the nearest of the seven |
 
 ### 14.8 Limits and access
 

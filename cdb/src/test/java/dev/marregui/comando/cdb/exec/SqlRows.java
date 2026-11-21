@@ -29,7 +29,7 @@ final class SqlRows {
                         case LONG -> String.valueOf(result.getLong(row, column));
                         case DOUBLE -> String.valueOf(result.getDouble(row, column));
                         case TIMESTAMP -> Instant.EPOCH.plus(result.getLong(row, column), ChronoUnit.MICROS).toString();
-                        case SYMBOL, VARCHAR -> result.getText(row, column);
+                        case SYMBOL, VARCHAR, JSON -> result.getText(row, column);
                     });
                 }
             }

@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.CdbType;
+import dev.marregui.comando.cdb.json.Json;
 
 /**
  * Rows of one partition held in native memory by column while a commit merges them, NULL as in {@link CdbType}; {@link
@@ -18,8 +19,8 @@ import dev.marregui.comando.cdb.CdbType;
  * which first points every column at a one-byte segment of a closed arena, so a read or write after the close throws
  * ({@link IllegalStateException}, or {@link IndexOutOfBoundsException} for an offset past that byte) rather than reach
  * bytes given back, which the epoch hands to its next block. Fixed-width columns are one segment each; a text column
- * (SYMBOL, VARCHAR) holds the UTF-8 bytes of its values in one segment that grows by doubling, the outgrown one given
- * back, and per row their start, their byte length ({@code -1} for NULL) and their UTF-16 length. Not safe for
+ * (SYMBOL, VARCHAR, JSON) holds the UTF-8 bytes of its values in one segment that grows by doubling, the outgrown one
+ * given back, and per row their start, their byte length ({@code -1} for NULL) and their UTF-16 length. Not safe for
  * concurrent use: one thread uses a block at a time, and none while another closes it.
  * <p>
  * A segment the epoch reuses is not zeroed: a row not yet set reads NULL in a text column, and in a fixed-width column
@@ -49,6 +50,8 @@ final class RowBlock implements AutoCloseable {
     private final MemorySegment[] chars;
     // per text column: the bytes of values used
     private final long[] used;
+    // the writer's scanner for setJson, made at its first JSON value
+    private Json json;
     private long bytes;
     private boolean closed;
 
@@ -77,7 +80,7 @@ final class RowBlock implements AutoCloseable {
                 switch (t) {
                     case LONG, TIMESTAMP, DOUBLE -> values[c] = allocate((long) capacity * Long.BYTES, Long.BYTES);
                     case BOOLEAN -> values[c] = allocate(capacity, 1L);
-                    case SYMBOL, VARCHAR -> {
+                    case SYMBOL, VARCHAR, JSON -> {
                         values[c] = allocate(capacity * TEXT_BYTES_PER_ROW, 1L);
                         starts[c] = allocate((long) capacity * Long.BYTES, Long.BYTES);
                         lengths[c] = allocate((long) capacity * Integer.BYTES, Integer.BYTES);
@@ -190,18 +193,41 @@ final class RowBlock implements AutoCloseable {
         return h;
     }
 
+    /**
+     * Sets a JSON column's value as {@link #setText} does, when {@code value} is one JSON text: returns
+     * {@link Json#VALID}, else the UTF-8 offset that breaks it, the row's value left unset.
+     */
+    int setJson(final int column, final int row, final String value) {
+        if (value == null) {
+            setText(column, row, null);
+            return Json.VALID;
+        }
+        final byte[] utf8 = value.getBytes(StandardCharsets.UTF_8);
+        if (json == null) {
+            json = new Json();
+        }
+        final int invalidAt = json.invalidAt(utf8, 0, utf8.length);
+        if (invalidAt == Json.VALID) {
+            setUtf8(column, row, utf8, value.length());
+        }
+        return invalidAt;
+    }
+
     void setText(final int column, final int row, final String value) {
         if (value == null) {
             lengths[column].setAtIndex(ValueLayout.JAVA_INT, row, NULL_LENGTH);
             chars[column].setAtIndex(ValueLayout.JAVA_INT, row, 0);
             return;
         }
-        final byte[] utf8 = value.getBytes(StandardCharsets.UTF_8);
+        setUtf8(column, row, value.getBytes(StandardCharsets.UTF_8), value.length());
+    }
+
+    private void setUtf8(final int column, final int row, final byte[] utf8, final int chars) {
         final long start = reserveText(column, utf8.length);
         MemorySegment.copy(utf8, 0, values[column], ValueLayout.JAVA_BYTE, start, utf8.length);
         starts[column].setAtIndex(ValueLayout.JAVA_LONG, row, start);
         lengths[column].setAtIndex(ValueLayout.JAVA_INT, row, utf8.length);
-        chars[column].setAtIndex(ValueLayout.JAVA_INT, row, value.length());
+        this.chars[column].setAtIndex(ValueLayout.JAVA_INT, row, chars);
     }
 
     /** Copies row {@code from} of {@code source}, of the same columns, to row {@code to} of this block. */
@@ -219,7 +245,7 @@ final class RowBlock implements AutoCloseable {
                 case LONG, TIMESTAMP, DOUBLE -> MemorySegment.copy(source.values[c], (long) from * Long.BYTES,
                         values[c], (long) to * Long.BYTES, (long) n * Long.BYTES);
                 case BOOLEAN -> MemorySegment.copy(source.values[c], from, values[c], to, n);
-                case SYMBOL, VARCHAR -> {
+                case SYMBOL, VARCHAR, JSON -> {
                     for (int i = 0; i < n; i++) {
                         copyTextRow(source, c, from + i, to + i);
                     }

@@ -71,6 +71,9 @@ public final class Signatures {
             case "replace" -> replace(function, args);
             case "length" -> text(function, args, CdbType.LONG);
             case "upper", "lower" -> text(function, args, CdbType.VARCHAR);
+            case "json_extract", "->>" -> json(function, args, CdbType.VARCHAR);
+            case "->" -> json(function, args, CdbType.JSON);
+            case "json_exists" -> json(function, args, CdbType.BOOLEAN);
             case "lag", "lead" -> windowValue(function, args);
             case "first_value", "last_value" -> unary(function, args, null);
             case "row_number" -> arity(function, args, 0, CdbType.LONG);
@@ -361,6 +364,20 @@ public final class Signatures {
     private static CdbType text(final String function, final List<CdbType> args, final CdbType out) {
         expect(function, args, 1);
         if (!args.getFirst().isText()) {
+            throw mismatch(function, args);
+        }
+        return out;
+    }
+
+    /**
+     * A JSON function: a text and a path text, or for {@code ->} and {@code ->>} a member's name or an element's LONG
+     * index.
+     */
+    private static CdbType json(final String function, final List<CdbType> args, final CdbType out) {
+        expect(function, args, 2);
+        final CdbType key = args.get(1);
+        final boolean operator = function.startsWith("-");
+        if (!args.getFirst().isText() || !key.isText() && !(operator && key == CdbType.LONG)) {
             throw mismatch(function, args);
         }
         return out;

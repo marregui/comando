@@ -285,7 +285,7 @@ class AnswerDigestTest {
                 }
             }
             case DOUBLE -> line.append(Long.toHexString(Double.doubleToLongBits(result.getDouble(r, c))));
-            case SYMBOL, VARCHAR -> {
+            case SYMBOL, VARCHAR, JSON -> {
                 final String text = result.getText(r, c);
                 if (text == null) {
                     line.append("NULL");

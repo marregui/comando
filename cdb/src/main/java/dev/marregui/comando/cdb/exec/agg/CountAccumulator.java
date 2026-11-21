@@ -59,7 +59,7 @@ final class CountAccumulator implements Accumulator {
                 }
             }
             case BOOLEAN -> n = to - from;
-            case SYMBOL, VARCHAR -> {
+            case SYMBOL, VARCHAR, JSON -> {
                 for (int i = from; i < to; i++) {
                     if (!value.isNull(i)) {
                         n++;

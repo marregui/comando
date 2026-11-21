@@ -316,7 +316,7 @@ class WalTest {
                     case LONG, TIMESTAMP -> rows.setLong(c, r, isNull ? Long.MIN_VALUE : Long.MIN_VALUE + 1L + c * r);
                     case DOUBLE -> rows.setDouble(c, r, isNull ? Double.longBitsToDouble(NAN_BITS) : -0.5 * r);
                     case BOOLEAN -> rows.setBoolean(c, r, !isNull && r % 2 == 0);
-                    case SYMBOL, VARCHAR -> rows.setText(c, r, switch (r) {
+                    case SYMBOL, VARCHAR, JSON -> rows.setText(c, r, switch (r) {
                         case 0 -> "";
                         case 1 -> null;
                         case 2 -> "Grüße, 東京 ✓";
@@ -337,7 +337,7 @@ class WalTest {
                 case LONG, TIMESTAMP -> assertThat(longs(actual, c, n)).containsExactly(longs(expected, c, n));
                 case DOUBLE -> assertThat(rawBits(actual, c, n)).containsExactly(rawBits(expected, c, n));
                 case BOOLEAN -> assertThat(booleans(actual, c, n)).containsExactly(booleans(expected, c, n));
-                case SYMBOL, VARCHAR -> assertThat(texts(actual, c, n)).containsExactly(texts(expected, c, n));
+                case SYMBOL, VARCHAR, JSON -> assertThat(texts(actual, c, n)).containsExactly(texts(expected, c, n));
             }
         }
     }

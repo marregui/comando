@@ -14,7 +14,8 @@ import dev.marregui.comando.cdb.CdbException;
 final class Lexer {
 
     private static final String ONE_CHARACTER_SYMBOLS = "=<>+-*/%(),.;";
-    private static final List<String> TWO_CHARACTER_SYMBOLS = List.of("<=", ">=", "!=", "<>", "||", "::");
+    private static final List<String> TWO_CHARACTER_SYMBOLS = List.of("<=", ">=", "!=", "<>", "||", "::", "->");
+    private static final String JSON_TEXT_OPERATOR = "->>";
 
     private final String sql;
     private final List<Token> tokens = new ArrayList<>();
@@ -166,6 +167,10 @@ final class Lexer {
 
     private Token symbol() {
         final int start = offset;
+        if (sql.startsWith(JSON_TEXT_OPERATOR, offset)) {
+            offset += JSON_TEXT_OPERATOR.length();
+            return new Token(Kind.SYMBOL, JSON_TEXT_OPERATOR, start, offset);
+        }
         if (offset + 1 < sql.length()) {
             final String pair = sql.substring(offset, offset + 2);
             if (TWO_CHARACTER_SYMBOLS.contains(pair)) {

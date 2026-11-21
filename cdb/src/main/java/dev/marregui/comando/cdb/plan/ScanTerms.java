@@ -92,7 +92,7 @@ final class ScanTerms {
                     out.add(new Plan.ScanTerm(column, op, Long.MIN_VALUE, v, null));
                 }
             }
-            case SYMBOL, VARCHAR -> {
+            case SYMBOL, VARCHAR, JSON -> {
                 final String text = exactText(value);
                 if ((op == Compare.EQ || op == Compare.NE) && text != null) {
                     out.add(new Plan.ScanTerm(column, op, Long.MIN_VALUE, Double.NaN, text));
@@ -164,7 +164,7 @@ final class ScanTerms {
                     out.add(new Plan.ScanTerm(column, Compare.LE, Long.MIN_VALUE, Math.max(a, b), null));
                 }
             }
-            case BOOLEAN, SYMBOL, VARCHAR -> {
+            case BOOLEAN, SYMBOL, VARCHAR, JSON -> {
             }
         }
     }

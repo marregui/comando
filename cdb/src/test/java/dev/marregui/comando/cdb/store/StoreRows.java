@@ -86,7 +86,7 @@ final class StoreRows {
                     out[r] = Boolean.toString(booleans[r]);
                 }
             }
-            case SYMBOL, VARCHAR -> {
+            case SYMBOL, VARCHAR, JSON -> {
                 final String[] texts = new String[n];
                 partition.texts(c, 0L, n, texts);
                 for (int r = 0; r < n; r++) {

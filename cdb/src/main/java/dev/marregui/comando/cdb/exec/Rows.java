@@ -47,7 +47,7 @@ final class Rows {
                 yield d == 0.0 ? 0 : Double.hashCode(d);
             }
             case BOOLEAN -> v.getBoolean(i) ? 1231 : 1237;
-            case SYMBOL, VARCHAR -> v.isNull(i) ? 0 : v.textHash(i);
+            case SYMBOL, VARCHAR, JSON -> v.isNull(i) ? 0 : v.textHash(i);
         };
     }
 
@@ -80,7 +80,7 @@ final class Rows {
                 yield x == y || Double.isNaN(x) && Double.isNaN(y);
             }
             case BOOLEAN -> a.getBoolean(ia) == b.getBoolean(ib);
-            case SYMBOL, VARCHAR -> sameText(a, ia, b, ib);
+            case SYMBOL, VARCHAR, JSON -> sameText(a, ia, b, ib);
         };
     }
 
@@ -103,7 +103,7 @@ final class Rows {
                 yield x < y ? -1 : x > y ? 1 : 0;
             }
             case BOOLEAN -> Boolean.compare(a.getBoolean(ia), b.getBoolean(ib));
-            case SYMBOL, VARCHAR -> {
+            case SYMBOL, VARCHAR, JSON -> {
                 if (a.isNull(ia)) {
                     yield b.isNull(ib) ? 0 : -1;
                 }
@@ -179,7 +179,7 @@ final class Rows {
             case LONG, TIMESTAMP -> 0;
             case DOUBLE -> 1;
             case BOOLEAN -> 2;
-            case SYMBOL, VARCHAR -> 3;
+            case SYMBOL, VARCHAR, JSON -> 3;
         };
     }
 }

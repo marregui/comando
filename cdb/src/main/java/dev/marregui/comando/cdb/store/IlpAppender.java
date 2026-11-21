@@ -152,7 +152,7 @@ final class IlpAppender implements CdbAppender {
                 case LONG, TIMESTAMP -> writer.putLong(c, longs[f]);
                 case DOUBLE -> writer.putDouble(c, types[f] == CdbType.DOUBLE ? doubles[f] : (double) longs[f]);
                 case BOOLEAN -> writer.putBoolean(c, longs[f] != 0L);
-                case SYMBOL, VARCHAR -> writer.putText(c, texts[f]);
+                case SYMBOL, VARCHAR, JSON -> writer.putText(c, texts[f]);
             }
         }
         writer.endRow();
@@ -363,7 +363,8 @@ final class IlpAppender implements CdbAppender {
                 || column == CdbType.LONG && field == CdbType.BOOLEAN
                 || column == CdbType.TIMESTAMP && field == CdbType.LONG && c != writer.def().timestampIndex()
                 || column == CdbType.VARCHAR && field == CdbType.SYMBOL
-                || column == CdbType.SYMBOL && field == CdbType.VARCHAR;
+                || column == CdbType.SYMBOL && field == CdbType.VARCHAR
+                || column == CdbType.JSON && (field == CdbType.VARCHAR || field == CdbType.SYMBOL);
         if (!fits) {
             throw new CdbException("refuse field of another type than its column [table=" + writer.def().name()
                     + ", column=" + names[f] + ", columnType=" + column + ", fieldType=" + field + ']', -1);

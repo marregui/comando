@@ -242,6 +242,31 @@ final class TextColumn {
         return keyAt(i);
     }
 
+    /** The array holding value {@code i}'s UTF-8 bytes; null when it is NULL or held as a dictionary key. */
+    byte[] utf8(final int i) {
+        return isNull(i) || keyAt(i) != Vector.NO_KEY ? null : bytes;
+    }
+
+    /** The offset of value {@code i}'s bytes in {@link #utf8}. */
+    int utf8Start(final int i) {
+        return starts[i];
+    }
+
+    /** The length of value {@code i}'s bytes in {@link #utf8}. */
+    int utf8Length(final int i) {
+        return lengths[i];
+    }
+
+    /** Sets value {@code i} to a copy of the {@code length} UTF-8 bytes of {@code data} at {@code start}. */
+    void setText(final int i, final byte[] data, final int start, final int length) {
+        setNull(i);
+        final int at = reserve(length);
+        // data may be this column's own array: a compaction in reserve fills a new array and leaves data as it was
+        System.arraycopy(data, start, bytes, at, length);
+        starts[i] = at;
+        lengths[i] = length;
+    }
+
     /** Value {@code i} as a String, null when NULL; decodes, so call it at output. */
     String textAt(final int i) {
         if (isNull(i)) {

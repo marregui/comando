@@ -33,6 +33,7 @@ final class PgTypes {
     static final int INT2 = 21;
     static final int INT4 = 23;
     static final int TEXT = 25;
+    static final int JSON = 114;
     static final int OID = 26;
     static final int FLOAT4 = 700;
     static final int FLOAT8 = 701;
@@ -67,6 +68,7 @@ final class PgTypes {
             case DOUBLE -> FLOAT8;
             case TIMESTAMP -> TIMESTAMP;
             case SYMBOL, VARCHAR -> VARCHAR;
+            case JSON -> JSON;
         };
     }
 
@@ -75,7 +77,7 @@ final class PgTypes {
         return switch (type) {
             case BOOLEAN -> 1;
             case LONG, DOUBLE, TIMESTAMP -> 8;
-            case SYMBOL, VARCHAR -> -1;
+            case SYMBOL, VARCHAR, JSON -> -1;
         };
     }
 
@@ -100,7 +102,7 @@ final class PgTypes {
                 // StringBuilder.append(double) writes what Double.toString does
                 case DOUBLE -> out.text(out.scratch().append(result.getDouble(row, column)));
                 case TIMESTAMP -> out.text(timestampText(out.scratch(), result.getLong(row, column)));
-                case SYMBOL, VARCHAR -> out.text(result.getText(row, column));
+                case SYMBOL, VARCHAR, JSON -> out.text(result.getText(row, column));
             };
         }
         return switch (result.type(column)) {
@@ -108,7 +110,7 @@ final class PgTypes {
             case LONG -> out.int32(Long.BYTES).int64(result.getLong(row, column));
             case DOUBLE -> out.int32(Double.BYTES).float8(result.getDouble(row, column));
             case TIMESTAMP -> out.int32(Long.BYTES).int64(result.getLong(row, column) - PG_EPOCH_MICROS);
-            case SYMBOL, VARCHAR -> out.text(result.getText(row, column));
+            case SYMBOL, VARCHAR, JSON -> out.text(result.getText(row, column));
         };
     }
 
@@ -124,7 +126,7 @@ final class PgTypes {
             // PostgreSQL spells the non-finite values Infinity and -Infinity, as Java does; NaN is cdb's NULL
             case DOUBLE -> Double.toString(result.getDouble(row, column));
             case TIMESTAMP -> timestampText(result.getLong(row, column));
-            case SYMBOL, VARCHAR -> result.getText(row, column);
+            case SYMBOL, VARCHAR, JSON -> result.getText(row, column);
         };
         return text.getBytes(StandardCharsets.UTF_8);
     }
@@ -141,7 +143,7 @@ final class PgTypes {
             case DOUBLE -> ByteBuffer.allocate(Double.BYTES).putDouble(result.getDouble(row, column)).array();
             case TIMESTAMP -> ByteBuffer.allocate(Long.BYTES)
                     .putLong(result.getLong(row, column) - PG_EPOCH_MICROS).array();
-            case SYMBOL, VARCHAR -> result.getText(row, column).getBytes(StandardCharsets.UTF_8);
+            case SYMBOL, VARCHAR, JSON -> result.getText(row, column).getBytes(StandardCharsets.UTF_8);
         };
     }
 
@@ -202,7 +204,7 @@ final class PgTypes {
             case FLOAT4, FLOAT8, NUMERIC -> "0.0";
             case BOOL -> "false";
             case TIMESTAMP, TIMESTAMPTZ, DATE -> timestamp(0);
-            case TEXT, VARCHAR, BPCHAR, NAME, UUID_OID -> "''";
+            case TEXT, VARCHAR, BPCHAR, NAME, UUID_OID, JSON -> "''";
             default -> "null";
         };
     }
@@ -253,7 +255,7 @@ final class PgTypes {
                 final ByteBuffer uuid = fixed(buffer, 2 * Long.BYTES, oid);
                 yield quoted(new UUID(uuid.getLong(), uuid.getLong()).toString());
             }
-            case TEXT, VARCHAR, BPCHAR, NAME, UNSPECIFIED -> quoted(new String(value, StandardCharsets.UTF_8));
+            case TEXT, VARCHAR, BPCHAR, NAME, UNSPECIFIED, JSON -> quoted(new String(value, StandardCharsets.UTF_8));
             default -> throw new CdbException("unsupported binary parameter [oid=" + oid + ']', -1);
         };
     }

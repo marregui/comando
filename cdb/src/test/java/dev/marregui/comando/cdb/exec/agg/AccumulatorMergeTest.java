@@ -312,7 +312,7 @@ class AccumulatorMergeTest {
             case LONG, TIMESTAMP -> v.getLong(row);
             case DOUBLE -> Double.doubleToRawLongBits(v.getDouble(row));
             case BOOLEAN -> v.getBoolean(row);
-            case SYMBOL, VARCHAR -> String.valueOf(v.textAt(row));
+            case SYMBOL, VARCHAR, JSON -> String.valueOf(v.textAt(row));
         };
     }
 
@@ -372,7 +372,7 @@ class AccumulatorMergeTest {
                 default -> pick < 60 ? random.nextInt(20) / 4.0 : random.nextGaussian() * 1e6;
             });
             case BOOLEAN -> v.setBoolean(i, random.nextBoolean());
-            case SYMBOL, VARCHAR -> v.setText(i, pick < 10 ? null : "s" + random.nextInt(12));
+            case SYMBOL, VARCHAR, JSON -> v.setText(i, pick < 10 ? null : "s" + random.nextInt(12));
         }
     }
 

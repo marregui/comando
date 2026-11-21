@@ -61,6 +61,7 @@ final class Ddl {
             case "TIMESTAMP", "DATE" -> CdbType.TIMESTAMP;
             case "SYMBOL" -> CdbType.SYMBOL;
             case "VARCHAR", "STRING", "CHAR" -> CdbType.VARCHAR;
+            case "JSON" -> CdbType.JSON;
             default -> throw new CdbException("cannot map unsupported type [type=" + name + ']', pos);
         };
     }

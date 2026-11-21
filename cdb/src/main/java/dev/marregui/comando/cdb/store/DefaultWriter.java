@@ -13,6 +13,7 @@ import java.util.List;
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.Vector;
+import dev.marregui.comando.cdb.json.Json;
 
 /**
  * The writer of one table. Pending rows are held by column in a {@link RowBlock}. A commit appends them to the table's
@@ -244,7 +245,17 @@ final class DefaultWriter implements TableWriter {
     @Override
     public void putText(final int column, final String value) {
         check(column, CdbType.SYMBOL, CdbType.VARCHAR);
-        pending.setText(column, pending.size, value);
+        if (pending.types[column] != CdbType.JSON) {
+            pending.setText(column, pending.size, value);
+            return;
+        }
+        final int invalidAt = pending.setJson(column, pending.size, value);
+        if (invalidAt != Json.VALID) {
+            // the row is dropped whole: a refused value leaves the writer as it was before the row began
+            inRow = false;
+            throw new CdbException("refuse invalid JSON [table=" + def.name() + ", column="
+                    + def.columns().get(column).name() + ", at=" + invalidAt + ']', -1);
+        }
     }
 
     @Override
@@ -554,7 +565,7 @@ final class DefaultWriter implements TableWriter {
         for (final Version v : current.partitions()) {
             rows = Math.max(rows, v.rowCount());
             for (int c = 0; c < committedColumns; c++) {
-                if (columns.get(c).type() == CdbType.VARCHAR) {
+                if (columns.get(c).type().isVarchar()) {
                     text[c] = Math.max(text[c], v.dataBytes(c));
                 }
             }
@@ -566,7 +577,7 @@ final class DefaultWriter implements TableWriter {
                     + rows + ", limit=" + Integer.MAX_VALUE + ']', -1);
         }
         for (int c = 0; c < columns.size(); c++) {
-            if (columns.get(c).type() != CdbType.VARCHAR) {
+            if (!columns.get(c).type().isVarchar()) {
                 continue;
             }
             long bytes = text[c] + queuedText;
@@ -771,7 +782,7 @@ final class DefaultWriter implements TableWriter {
         long bytes = 0L;
         for (int c = 0; c < pending.types.length; c++) {
             final CdbType type = pending.types[c];
-            if (type == CdbType.SYMBOL || type == CdbType.VARCHAR) {
+            if (type.isText()) {
                 for (int r = 0; r < n; r++) {
                     bytes += Integer.BYTES + 3L * pending.textChars(c, r);
                 }
@@ -791,7 +802,7 @@ final class DefaultWriter implements TableWriter {
         long bytes = 0L;
         for (int c = 0; c < pending.types.length; c++) {
             final CdbType type = pending.types[c];
-            if (type == CdbType.SYMBOL || type == CdbType.VARCHAR) {
+            if (type.isText()) {
                 for (int r = 0; r < n; r++) {
                     bytes += Integer.BYTES + (pending.textLength(c, r) < 0 ? 0L : 48L + 2L * pending.textChars(c, r));
                 }
@@ -949,7 +960,7 @@ final class DefaultWriter implements TableWriter {
         for (int c = 0; c < columns.size(); c++) {
             final String name = columns.get(c).name();
             if (!Files.exists(old.dir.resolve(name + ".d"))
-                    || columns.get(c).type() == CdbType.VARCHAR && !Files.exists(old.dir.resolve(name + ".i"))) {
+                    || columns.get(c).type().isVarchar() && !Files.exists(old.dir.resolve(name + ".i"))) {
                 return false;
             }
         }
@@ -976,7 +987,7 @@ final class DefaultWriter implements TableWriter {
         final List<ColumnDef> columns = def.columns();
         for (int c = 0; c < columns.size(); c++) {
             final Path data = old.dir.resolve(columns.get(c).name() + ".d");
-            if (rows.types[c] == CdbType.VARCHAR) {
+            if (rows.types[c].isVarchar()) {
                 final Path indexFile = old.dir.resolve(columns.get(c).name() + ".i");
                 final long end = Version.decodeEnd(StoreFiles.readLong(indexFile, (committed - 1L) * Long.BYTES));
                 final Text text = varchar(data, rows, c, order, end);
@@ -1025,7 +1036,7 @@ final class DefaultWriter implements TableWriter {
                     case LONG, TIMESTAMP -> block.setLong(c, at + i, chunk.getLong(i));
                     case DOUBLE -> block.setDouble(c, at + i, chunk.getDouble(i));
                     case BOOLEAN -> block.setBoolean(c, at + i, chunk.getBoolean(i));
-                    case SYMBOL, VARCHAR -> block.setText(c, at + i, chunk.textAt(i));
+                    case SYMBOL, VARCHAR, JSON -> block.setText(c, at + i, chunk.textAt(i));
                 }
             }
         }
@@ -1039,7 +1050,7 @@ final class DefaultWriter implements TableWriter {
         final List<ColumnDef> columns = def.columns();
         for (int c = 0; c < columns.size(); c++) {
             final Path data = dir.resolve(columns.get(c).name() + ".d");
-            if (block.types[c] == CdbType.VARCHAR) {
+            if (block.types[c].isVarchar()) {
                 final Text text = varchar(data, block, c, order, 0L);
                 StoreFiles.writeNew(dir.resolve(columns.get(c).name() + ".i"), text.ends(), false);
                 StoreFiles.writeNew(data, text.bytes(), false);
@@ -1076,7 +1087,7 @@ final class DefaultWriter implements TableWriter {
                     buffer.putInt(symbols.intern(block.textAt(c, r)));
                 }
             }
-            case VARCHAR -> throw new IllegalArgumentException("refuse VARCHAR as fixed width [column=" + c + ']');
+            case VARCHAR, JSON -> throw new IllegalArgumentException("refuse text as fixed width [column=" + c + ']');
         }
         return buffer.flip();
     }
@@ -1156,7 +1167,8 @@ final class DefaultWriter implements TableWriter {
         if (column < 0 || column >= pending.types.length) {
             throw new CdbException("refuse unknown column index [table=" + def.name() + ", column=" + column + ']', -1);
         }
-        final CdbType type = pending.types[column];
+        // a JSON column takes text as a VARCHAR column does; putText checks the text
+        final CdbType type = pending.types[column] == CdbType.JSON ? CdbType.VARCHAR : pending.types[column];
         if (type != a && type != b) {
             throw new CdbException("refuse value of another type [table=" + def.name() + ", column="
                     + def.columns().get(column).name() + ", type=" + type + ", value=" + a + ']', -1);
@@ -1201,7 +1213,7 @@ final class DefaultWriter implements TableWriter {
                 case LONG, TIMESTAMP -> block.setLong(c, r, Long.MIN_VALUE);
                 case DOUBLE -> block.setDouble(c, r, Double.NaN);
                 case BOOLEAN -> block.setBoolean(c, r, false);
-                case SYMBOL, VARCHAR -> block.setText(c, r, null);
+                case SYMBOL, VARCHAR, JSON -> block.setText(c, r, null);
             }
         }
     }

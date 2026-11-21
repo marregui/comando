@@ -6,6 +6,7 @@ import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.Page;
 import dev.marregui.comando.cdb.exec.Vector;
+import dev.marregui.comando.cdb.json.Json;
 import dev.marregui.comando.cdb.plan.Bound;
 
 /**
@@ -72,6 +73,13 @@ final class Cast {
         }
         final Vector out = Vector.of(to, Page.CAPACITY);
         final StringBuilder sink = new StringBuilder();
+        if (to == CdbType.JSON) {
+            final Json json = new Json();
+            return page -> {
+                JsonFns.castInto(source.eval(page), out, page.size, json, sink);
+                return out;
+            };
+        }
         return page -> {
             final Vector in = source.eval(page);
             final int n = page.size;
@@ -96,7 +104,8 @@ final class Cast {
                         out.setBoolean(i, asBoolean(in, i));
                     }
                 }
-                case SYMBOL, VARCHAR -> {
+                case SYMBOL, VARCHAR, JSON -> {
+                    // JSON returned above
                     for (int i = 0; i < n; i++) {
                         out.setText(i, asText(in, i, sink));
                     }
@@ -154,7 +163,7 @@ final class Cast {
             case LONG, TIMESTAMP -> in.getLong(i);
             case DOUBLE -> doubleToLong(in.getDouble(i));
             case BOOLEAN -> in.getBoolean(i) ? 1 : 0;
-            case SYMBOL, VARCHAR -> {
+            case SYMBOL, VARCHAR, JSON -> {
                 final String text = in.textAt(i);
                 if (text == null) {
                     yield Vector.NULL_LONG;
@@ -169,7 +178,7 @@ final class Cast {
             case LONG, TIMESTAMP -> in.getLong(i) == Vector.NULL_LONG ? Double.NaN : in.getLong(i);
             case DOUBLE -> in.getDouble(i);
             case BOOLEAN -> in.getBoolean(i) ? 1 : 0;
-            case SYMBOL, VARCHAR -> parseDouble(in.textAt(i));
+            case SYMBOL, VARCHAR, JSON -> parseDouble(in.textAt(i));
         };
     }
 
@@ -178,7 +187,7 @@ final class Cast {
             case LONG, TIMESTAMP -> in.getLong(i) != 0 && in.getLong(i) != Vector.NULL_LONG;
             case DOUBLE -> in.getDouble(i) != 0 && !Double.isNaN(in.getDouble(i));
             case BOOLEAN -> in.getBoolean(i);
-            case SYMBOL, VARCHAR -> "true".equalsIgnoreCase(in.textAt(i));
+            case SYMBOL, VARCHAR, JSON -> "true".equalsIgnoreCase(in.textAt(i));
         };
     }
 
@@ -196,7 +205,7 @@ final class Cast {
             }
             case DOUBLE -> Double.isNaN(in.getDouble(i)) ? null : Double.toString(in.getDouble(i));
             case BOOLEAN -> in.getBoolean(i) ? "true" : "false";
-            case SYMBOL, VARCHAR -> in.textAt(i);
+            case SYMBOL, VARCHAR, JSON -> in.textAt(i);
         };
     }
 
@@ -219,7 +228,7 @@ final class Cast {
                 }
             }
             case BOOLEAN -> sink.append(in.getBoolean(i));
-            case SYMBOL, VARCHAR -> {
+            case SYMBOL, VARCHAR, JSON -> {
                 if (!in.isNull(i)) {
                     sink.append(in.textAt(i));
                 }

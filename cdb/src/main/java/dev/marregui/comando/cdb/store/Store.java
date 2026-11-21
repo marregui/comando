@@ -1117,7 +1117,7 @@ public final class Store implements AutoCloseable {
                     case LONG, TIMESTAMP -> writer.putLong(c, rows.getLong(c, r));
                     case DOUBLE -> writer.putDouble(c, rows.getDouble(c, r));
                     case BOOLEAN -> writer.putBoolean(c, rows.getBoolean(c, r));
-                    case SYMBOL, VARCHAR -> writer.putText(c, rows.textAt(c, r));
+                    case SYMBOL, VARCHAR, JSON -> writer.putText(c, rows.textAt(c, r));
                 }
             }
             writer.endRow();
@@ -1136,7 +1136,7 @@ public final class Store implements AutoCloseable {
             if (!Files.exists(data)) {
                 continue;
             }
-            if (column.type() == CdbType.VARCHAR) {
+            if (column.type().isVarchar()) {
                 final Path index = partition.resolve(column.name() + ".i");
                 if (Files.exists(index) && Files.size(index) >= rows * Long.BYTES) {
                     cut(index, rows * Long.BYTES);

@@ -37,7 +37,7 @@ public final class Values {
             case LONG, TIMESTAMP -> Long.compare(v.getLong(a), v.getLong(b));
             case DOUBLE -> compareDoubles(v.getDouble(a), v.getDouble(b));
             case BOOLEAN -> Boolean.compare(v.getBoolean(a), v.getBoolean(b));
-            case SYMBOL, VARCHAR -> compareTexts(v, a, b);
+            case SYMBOL, VARCHAR, JSON -> compareTexts(v, a, b);
         };
     }
 
@@ -75,7 +75,7 @@ public final class Values {
             case LONG, TIMESTAMP -> v.getLong(a) == v.getLong(b);
             case DOUBLE -> sameDouble(v.getDouble(a), v.getDouble(b));
             case BOOLEAN -> v.getBoolean(a) == v.getBoolean(b);
-            case SYMBOL, VARCHAR -> sameText(v, a, v, b);
+            case SYMBOL, VARCHAR, JSON -> sameText(v, a, v, b);
         };
     }
 
@@ -122,7 +122,7 @@ public final class Values {
             case LONG, TIMESTAMP -> Long.hashCode(v.getLong(row));
             case DOUBLE -> Double.hashCode(v.getDouble(row));
             case BOOLEAN -> Boolean.hashCode(v.getBoolean(row));
-            case SYMBOL, VARCHAR -> v.isNull(row) ? 0 : v.textHash(row);
+            case SYMBOL, VARCHAR, JSON -> v.isNull(row) ? 0 : v.textHash(row);
         };
     }
 
@@ -139,7 +139,7 @@ public final class Values {
             case LONG, TIMESTAMP -> longValues[index] == source.getLong(row);
             case DOUBLE -> sameDouble(doubleValues[index], source.getDouble(row));
             case BOOLEAN -> booleanValues[index] == source.getBoolean(row);
-            case SYMBOL, VARCHAR -> sameText(textValues[index], source, row);
+            case SYMBOL, VARCHAR, JSON -> sameText(textValues[index], source, row);
         };
     }
 
@@ -152,7 +152,7 @@ public final class Values {
             case LONG, TIMESTAMP -> longValues[index] == source.longValues[sourceIndex];
             case DOUBLE -> sameDouble(doubleValues[index], source.doubleValues[sourceIndex]);
             case BOOLEAN -> booleanValues[index] == source.booleanValues[sourceIndex];
-            case SYMBOL, VARCHAR -> sameText(textValues[index], source.textValues[sourceIndex]);
+            case SYMBOL, VARCHAR, JSON -> sameText(textValues[index], source.textValues[sourceIndex]);
         };
     }
 
@@ -163,7 +163,7 @@ public final class Values {
             case DOUBLE -> doubleValues[index] = source.getDouble(row);
             case BOOLEAN -> booleanValues[index] = source.getBoolean(row);
             // a String of its own, as the page's backing may be bytes it does not keep
-            case SYMBOL, VARCHAR -> textValues[index] = source.textAt(row);
+            case SYMBOL, VARCHAR, JSON -> textValues[index] = source.textAt(row);
         }
     }
 
@@ -176,7 +176,7 @@ public final class Values {
             case LONG, TIMESTAMP -> longValues[index] = source.longValues[sourceIndex];
             case DOUBLE -> doubleValues[index] = source.doubleValues[sourceIndex];
             case BOOLEAN -> booleanValues[index] = source.booleanValues[sourceIndex];
-            case SYMBOL, VARCHAR -> textValues[index] = source.textValues[sourceIndex];
+            case SYMBOL, VARCHAR, JSON -> textValues[index] = source.textValues[sourceIndex];
         }
     }
 
@@ -190,7 +190,7 @@ public final class Values {
             case LONG, TIMESTAMP -> out.setLong(row, longValues[index]);
             case DOUBLE -> out.setDouble(row, doubleValues[index]);
             case BOOLEAN -> out.setBoolean(row, booleanValues[index]);
-            case SYMBOL, VARCHAR -> out.setText(row, textValues[index]);
+            case SYMBOL, VARCHAR, JSON -> out.setText(row, textValues[index]);
         }
     }
 
@@ -214,7 +214,7 @@ public final class Values {
             case BOOLEAN -> booleanValues = booleanValues == null
                     ? new boolean[newCapacity]
                     : Arrays.copyOf(booleanValues, newCapacity);
-            case SYMBOL, VARCHAR -> textValues = textValues == null
+            case SYMBOL, VARCHAR, JSON -> textValues = textValues == null
                     ? new String[newCapacity]
                     : Arrays.copyOf(textValues, newCapacity);
         }

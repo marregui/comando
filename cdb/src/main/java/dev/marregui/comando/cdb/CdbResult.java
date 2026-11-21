@@ -159,7 +159,7 @@ public final class CdbResult {
         return pages.get(p).columns[column].getBoolean(row - starts[p]);
     }
 
-    /** SYMBOL and VARCHAR; null for NULL. */
+    /** SYMBOL, VARCHAR and JSON; null for NULL. */
     public String getText(final int row, final int column) {
         final int p = pageOf(row);
         return pages.get(p).columns[column].textAt(row - starts[p]);

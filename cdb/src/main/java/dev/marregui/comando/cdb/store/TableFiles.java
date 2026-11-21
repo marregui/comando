@@ -287,7 +287,7 @@ final class TableFiles {
             case LONG, TIMESTAMP, DOUBLE -> Long.BYTES;
             case BOOLEAN -> 1;
             case SYMBOL -> Integer.BYTES;
-            case VARCHAR -> -1;
+            case VARCHAR, JSON -> -1;
         };
     }
 

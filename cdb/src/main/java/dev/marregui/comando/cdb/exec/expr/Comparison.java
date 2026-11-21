@@ -171,7 +171,7 @@ final class Comparison {
             case LONG, TIMESTAMP -> Long.compare(a.getLong(i), b.getLong(i));
             case DOUBLE -> a.getDouble(i) < b.getDouble(i) ? -1 : a.getDouble(i) == b.getDouble(i) ? 0 : 1;
             case BOOLEAN -> Boolean.compare(a.getBoolean(i), b.getBoolean(i));
-            case SYMBOL, VARCHAR -> Integer.signum(a.textCompare(i, b, i));
+            case SYMBOL, VARCHAR, JSON -> Integer.signum(a.textCompare(i, b, i));
         };
     }
 

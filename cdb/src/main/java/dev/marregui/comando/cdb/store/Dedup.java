@@ -188,7 +188,7 @@ final class Dedup {
                 case LONG, TIMESTAMP -> block.getLong(c, row);
                 case DOUBLE -> Double.doubleToLongBits(block.getDouble(c, row));
                 case BOOLEAN -> block.getBoolean(c, row) ? 1L : 0L;
-                case SYMBOL, VARCHAR -> block.textHash(c, row);
+                case SYMBOL, VARCHAR, JSON -> block.textHash(c, row);
             };
             h = h * 0x9E3779B97F4A7C15L + v;
         }
@@ -203,7 +203,7 @@ final class Dedup {
                 case DOUBLE -> Double.doubleToLongBits(block.getDouble(c, a))
                         == Double.doubleToLongBits(block.getDouble(c, b));
                 case BOOLEAN -> block.getBoolean(c, a) == block.getBoolean(c, b);
-                case SYMBOL, VARCHAR -> block.textEquals(c, a, b);
+                case SYMBOL, VARCHAR, JSON -> block.textEquals(c, a, b);
             };
             if (!same) {
                 return false;
