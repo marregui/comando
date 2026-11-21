@@ -17,9 +17,12 @@ import java.util.stream.Stream;
 
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.frontear.gateway.Broker;
+import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Topics;
 import dev.marregui.comando.frontear.store.LogOptions;
 import dev.marregui.comando.frontear.store.WholeFile;
+import dev.marregui.comando.frontear.watch.LogView;
+import dev.marregui.comando.frontear.watch.Watch;
 
 /**
  * A broker's links to its peers, each with its log in a folder of {@code dataDir} named by its id. Any thread may
@@ -47,6 +50,7 @@ public final class Links implements Mesh, AutoCloseable {
     private final LogOptions log;
     private final LinkOptions options;
     private final InstantSource clock;
+    private final Watch watch;
     private final Object lock = new Object();
     /** Written under {@link #lock}; read from any thread by {@link #state}. */
     private final Map<String, Link> links = new ConcurrentHashMap<>();
@@ -67,6 +71,12 @@ public final class Links implements Mesh, AutoCloseable {
         this(broker, localId, dataDir, log, options, InstantSource.system());
     }
 
+    /** As the first, each link and its log keeping its steps in {@code watch} while that is on. */
+    public Links(final Broker broker, final String localId, final Path dataDir, final LogOptions log,
+            final Watch watch) {
+        this(broker, localId, dataDir, log, LinkOptions.defaults(), InstantSource.system(), watch);
+    }
+
     /**
      * As above, with {@code clock} to time how long a message waited in a log.
      *
@@ -74,6 +84,17 @@ public final class Links implements Mesh, AutoCloseable {
      */
     Links(final Broker broker, final String localId, final Path dataDir, final LogOptions log,
             final LinkOptions options, final InstantSource clock) {
+        this(broker, localId, dataDir, log, options, clock, new Watch(1));
+    }
+
+    /**
+     * As above, each link and its log keeping its steps in {@code watch} while that is on.
+     *
+     * @throws UncheckedIOException when {@code dataDir} exists and cannot be listed; the links it started are closed
+     */
+    Links(final Broker broker, final String localId, final Path dataDir, final LogOptions log,
+            final LinkOptions options, final InstantSource clock, final Watch watch) {
+        this.watch = Objects.requireNonNull(watch, "watch");
         this.broker = Objects.requireNonNull(broker, "broker");
         this.localId = Objects.requireNonNull(localId, "localId");
         this.dataDir = Objects.requireNonNull(dataDir, "dataDir");
@@ -182,6 +203,24 @@ public final class Links implements Mesh, AutoCloseable {
         return states;
     }
 
+    /** Every link's log now, by link id; from any thread, as {@link #state}. */
+    public List<LogView> logs() {
+        final List<LogView> views = new ArrayList<>();
+        for (final Link link : links.values()) {
+            views.add(link.logView());
+        }
+        views.sort(Comparator.comparing(LogView::link));
+        return views;
+    }
+
+    /**
+     * The hops {@code message} has made between brokers, as a link counts them: 0 when it carries no count, -1 when
+     * its count is not one decimal number.
+     */
+    public static int hops(final Packet.Publish message) {
+        return Forwarding.hops(message);
+    }
+
     /** Stops every link, each even when one before it failed; the first failure is thrown with the others on it. */
     @Override
     public void close() {
@@ -281,7 +320,7 @@ public final class Links implements Mesh, AutoCloseable {
     private void start(final LinkSpec spec) {
         final Link added;
         try {
-            added = Link.open(spec.id(), localId, broker, dataDir.resolve(spec.id()), log, options, clock);
+            added = Link.open(spec.id(), localId, broker, dataDir.resolve(spec.id()), log, options, clock, watch);
         } catch (final IOException e) {
             throw new UncheckedIOException("link log not opened [link=" + spec.id() + ", dir="
                     + dataDir.resolve(spec.id()) + ']', e);

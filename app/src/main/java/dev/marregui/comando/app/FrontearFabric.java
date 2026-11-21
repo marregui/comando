@@ -8,7 +8,7 @@ import java.net.Socket;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
-import java.nio.file.FileAlreadyExistsException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -26,14 +26,25 @@ import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Objects;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
@@ -41,6 +52,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonException;
 import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.InstanceName;
@@ -49,53 +61,68 @@ import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.frontear.Frontear;
 import dev.marregui.comando.frontear.alexander.Signer;
+import dev.marregui.comando.frontear.gateway.InternalSubscriber;
+import dev.marregui.comando.frontear.protocol.Names;
+import dev.marregui.comando.frontear.protocol.Packet;
+import dev.marregui.comando.mcp.Peers;
 import dev.marregui.comando.ui.shell.ServerToggle;
 
 /**
- * frontear, comando's fabric between instances (records 184, 185): a node hosted in this process on MQTT port
- * {@value #PORT} on {@code 127.0.0.1}, where every instance connects. One node runs on the machine whichever instance
- * started it: a registry file in the user's home ({@code ~/.comando-fabric.json}, versioned as record 133 says) names
- * the process that hosts it and that instance's data root, and only that instance stops it; the others see it running
- * and connect as clients. The node lives as long as the instance that hosts it: its close stops the node and clears the
- * registry, and the next instance whose peer link finds no live host starts one ({@link #runningOrHost}).
+ * frontear, comando's fabric between instances (records 184, 185, 187): every instance hosts a node of its own in this
+ * process, named after its slug, on a port of its own on {@code 127.0.0.1}, and its peer link connects to that node
+ * alone. A registry file in the user's home ({@code ~/.comando-fabric.json}, versioned as record 133 says) holds every
+ * slug's node: its port, kept for good so a peer that restarts is found where it was, and the process that runs it,
+ * pid 0 once it is down.
+ * <p>
+ * Node X keeps one link per other slug Y in the registry, id {@code Y}, to Y's port: it forwards what Y reads (Y's
+ * inbox and reply topics and X's presence) and, with a hop limit of 1, nothing it got from a link. The links are put
+ * through X's own control plane, signed with this instance's key, at every look of the peer link
+ * ({@link #runningOrHost}). A link to a peer that is down stays: the messages for it queue in its log, and the peer's
+ * restart on the same port drains them.
  * <p>
  * The node's data folder is {@code fabric/} in the instance's data root (the links' logs). The one control key it
  * trusts is this instance's own, an Ed25519 pair made at the first start and kept beside them ({@code pod.key},
  * readable by the user alone, and {@code pod.pub}, base64 of the X.509 encoding as {@code Frontear.main} reads a key):
- * this comando is the control pod of the node it hosts.
+ * this comando is the control pod of its node.
  * <p>
- * It answers to the name {@code frontear}: the window's toggle and an agent's {@code server_start frontear}.
+ * It answers to the name {@code frontear}: the window's toggle and an agent's {@code server_start frontear}, which
+ * start and stop this instance's node only.
  */
 final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(FrontearFabric.class.getName());
 
-    /** The registry's schema version this comando reads and writes; a later one is read by no instance of this one. */
-    static final int REGISTRY_VERSION = 1;
+    /**
+     * The registry's schema version this comando writes; version 1, one node for the machine, is replaced at the next
+     * start, and a later one is read by no instance of this comando.
+     */
+    static final int REGISTRY_VERSION = 2;
     /** The registry every comando instance on this machine reads. */
     static final Path REGISTRY = Path.of(System.getProperty("user.home"), ".comando-fabric.json");
     /**
-     * The node's MQTT port: the one the instances' broker has had since record 123, so an instance of an older comando
-     * still finds the node, and whatever holds it refuses a start.
+     * The lowest MQTT port a node takes on the machine: the one the instances' broker has had since record 123. Each
+     * slug takes the lowest from here that no other slug holds and no process listens on (record 187).
      */
     static final int PORT = 18883;
-    /** The node's name, one topic level: control messages go to {@code $frontear/control/comando/<Method>}. */
-    static final String NODE = "comando";
     /** The control pod's private key, PKCS#8 in base64, readable by the user alone. */
     static final String PRIVATE_KEY = "pod.key";
     /** The control pod's public key, X.509 in base64, the form {@code Frontear.main} reads. */
     static final String PUBLIC_KEY = "pod.pub";
+    /** A link's hop limit: each node pushes to a peer what that peer reads, and nothing it got from a link goes on. */
+    static final int HOP_LIMIT = 1;
     private static final String ALGORITHM = "Ed25519";
     private static final Set<PosixFilePermission> READABLE = PosixFilePermissions.fromString("rw-r--r--");
-    /** How long {@link #isRunning} trusts its last read of the registry: the window asks once a second. */
-    private static final Duration CHECK_EVERY = Duration.ofSeconds(1);
     /**
      * A process whose start differs from the recorded one by more than this is another process on a reused pid; the
      * margin comando's instance registries have kept since the first of them.
      */
     private static final Duration SAME_PROCESS = Duration.ofSeconds(2);
     private static final long PID = ProcessHandle.current().pid();
+    /** This process's start as the registry records it: the {@code started} its presence says, so the two match. */
+    private static final String STARTED = Peers.PROCESS_STARTED;
     private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
+    private static final String HOST = "127.0.0.1";
+    private static final int LAST_PORT = 65_535;
     /** How long the port probe waits for a listener's answer on loopback, where one answers at once. */
     private static final int PROBE_MILLIS = 200;
     /**
@@ -107,6 +134,13 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     /** How often a held lock is tried again; a start under way ends in tens of milliseconds. */
     private static final Duration POLL_EVERY = Duration.ofMillis(50);
     /**
+     * How long a control request waits for the node's answer: its control strand answers in milliseconds, so one not
+     * answered by then is a node closing, and the next look tries again.
+     */
+    private static final Duration CONTROL_WITHIN = Duration.ofSeconds(5);
+    /** The internal subscriber that takes the control plane's answers, and the origin of the requests. */
+    private static final String CONTROLLER = "comando-fabric";
+    /**
      * This JVM's holds of a registry's lock, by lock file: a file lock is the process's, so the instances of one
      * process take turns here first.
      */
@@ -115,39 +149,46 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     private final Path root;
     private final String owner;
     private final String name;
+    /** The node's name and this instance's key in the registry. */
+    private final String slug;
     private final IntentSink intents;
     private final Path registry;
     /**
      * The registry's lock file beside it, never removed: whoever holds its lock alone reads and writes the registry to
-     * start or stop.
+     * start, stop or forget.
      */
     private final Path lock;
-    private final int port;
-    /** The starts, stops and registry reads under way, each on a virtual thread; closed with the fabric. */
+    /** The lowest port a start may take; 0 for one the OS picks at each start. */
+    private final int base;
+    /** The starts, stops, reconciles and forgets under way, each on a virtual thread; closed with the fabric. */
     private final Errands errands = new Errands("fabric");
     /** A start or stop is under way; a toggle meanwhile does nothing but say so. */
     private final AtomicBoolean busy = new AtomicBoolean();
-    private final AtomicBoolean checking = new AtomicBoolean();
-    /** Written by the errands that read the registry, read by the window every second: a live host, as last read. */
-    private volatile boolean running;
-    /** Written by the errands that read the registry, read by {@link #isRunning} on its callers' threads. */
-    private volatile long checkedAtNanos = System.nanoTime() - CHECK_EVERY.toNanos();
-    /** The live entry the registry named at its last read, or null; written by every read, read by the window. */
-    private volatile Entry seen;
+    /** A reconcile of the links is under way; a look meanwhile starts none. */
+    private final AtomicBoolean linking = new AtomicBoolean();
     /** What a start or stop under way does; written by its errand, read by the window and by agents' calls. */
     private volatile String doing = "";
     /**
-     * This instance's user or agent stopped the node it hosted: it starts one again only when asked, not on its own.
-     * Written by the errands that start and stop and by {@link #want}, read by the peer link's strand.
+     * This instance's user or agent stopped its node: it starts one again only when asked, not on its own. Written by
+     * the errands that start and stop and by {@link #want}, read by the peer link's strand.
      */
     private volatile boolean stoppedByHand;
     /**
-     * The last start failed because another process holds the port; written by the errands that start, read by the
-     * window every second.
+     * The node this instance hosts, or null. Written under this by the starts, stops and the close; read by the window,
+     * the peer link's strand, the reconciles and whoever watches the node through {@link #node()}.
      */
-    private volatile boolean portHeld;
-    /** The node this instance hosts, or null. Guarded by this. */
-    private Hosting hosting;
+    private volatile Hosted hosted;
+    /**
+     * The port this instance's peer link last finished subscribing on, or -1 since the node last stopped, so a
+     * subscribe that completes before a start publishes {@link #hosted} still opens the node's links. Written by the
+     * peer link's strand ({@link #openLinks}) and the stops, read by the starts. Each side writes its own field before
+     * it reads the other's, both volatile, so of a subscribe and a start that race at least one sees the other.
+     */
+    private volatile int subscribedOn = -1;
+    /** Told of a peer whose registry entry names a process that is gone; set at wiring, read by the reconciles. */
+    private volatile BiConsumer<String, String> gone = (_, _) -> { };
+    /** Run when a link to a peer connects or a peer restarted; set at wiring, read by the reconciles. */
+    private volatile Runnable linkUp = () -> { };
     /**
      * The last notice a start of this instance's own posted, so one repeated at every look of the peer link is said
      * once; empty after a start that hosts. Guarded by this.
@@ -156,24 +197,25 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
 
     /**
      * The fabric with its data in {@code root}, for the instance on data root {@code owner} named {@code name}, on
-     * {@code registry} and {@code port}.
+     * {@code registry}; its node takes the lowest port from {@code port} up that is free, or, for 0, one the OS picks.
      */
     FrontearFabric(final Path root, final Path owner, final String name, final IntentSink intents, final Path registry,
             final int port) {
         this.root = root.toAbsolutePath().normalize();
         this.owner = owner.toAbsolutePath().normalize().toString();
         this.name = name == null ? "" : name;
+        this.slug = InstanceName.slug(this.name);
         this.intents = intents;
         this.registry = registry;
         this.lock = lockFile(registry);
-        this.port = port;
+        this.base = port;
     }
 
     /**
      * The fabric of the instance on data root {@code home} named {@code name}, its data in {@code fabric/} there. On
-     * the machine's ({@code machine}), it uses {@link #REGISTRY} and {@link #PORT}; off it, as {@code -Dcomando.peers}
-     * false keeps every test and picture tool, a registry in the data root and a port the OS picks, so neither the
-     * toggle nor {@code server_start frontear} touches the machine's.
+     * the machine's ({@code machine}), it uses {@link #REGISTRY} and ports from {@link #PORT}; off it, as
+     * {@code -Dcomando.peers} false keeps every test and picture tool, a registry in the data root and a port the OS
+     * picks, so neither the toggle nor {@code server_start frontear} touches the machine's.
      */
     static FrontearFabric of(final Path home, final String name, final IntentSink intents, final boolean machine) {
         return machine ? new FrontearFabric(home.resolve("fabric"), home, name, intents, REGISTRY, PORT)
@@ -186,26 +228,16 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         return "frontear";
     }
 
-    /**
-     * Whether the registry names a live host, whichever instance it is. Returns at once: a read older than a second is
-     * redone on a virtual thread, so the answer may be a second late.
-     */
+    /** Whether this instance's node runs. */
     @Override
     public boolean isRunning() {
-        if (System.nanoTime() - checkedAtNanos >= CHECK_EVERY.toNanos() && checking.compareAndSet(false, true)) {
-            final Thread t = errands.start("fabric-check", () -> {
-                try {
-                    running = running();
-                } finally {
-                    checkedAtNanos = System.nanoTime();
-                    checking.set(false);
-                }
-            });
-            if (t == null) {
-                checking.set(false);
-            }
-        }
-        return running;
+        return hosted != null;
+    }
+
+    /** The node this instance runs now, or null; safe from any thread, as it takes no lock. */
+    Frontear node() {
+        final Hosted h = hosted;
+        return h == null ? null : h.node();
     }
 
     @Override
@@ -213,32 +245,39 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         return busy.get();
     }
 
-    /**
-     * The node's state for the toggle's tooltip, always said, as last read: a start or stop under way, running and
-     * which comando hosts it, or stopped and, when another process holds the port, that.
-     */
+    /** The node's state for the toggle's tooltip: a start or stop under way, running on its port, or stopped. */
     @Override
     public String status() {
         if (busy.get()) {
             return doing.isEmpty() ? "busy" : doing;
         }
-        final Entry e = seen;
-        if (running && e != null) {
-            return ours(e) ? "running, hosted here" : "running, hosted by " + host(e) + "; only that comando stops it";
-        }
-        return portHeld ? "stopped; port " + port + " on 127.0.0.1 is in use by another process" : "stopped";
+        final Hosted h = hosted;
+        return h == null ? "stopped" : "running on " + HOST + ':' + h.node().port() + " as node " + slug;
     }
 
     /**
-     * Whether the registry names a live host, read now; when it names none, this instance starts one on a virtual
-     * thread and returns at once (record 185). The peer link asks it at its first look and at every one after, so
-     * frontear starts at launch, and when its host quits, the next instance to look hosts it; when several look at
-     * once, the registry's claim leaves one host and the others connect to it. After this instance's own stop by hand,
-     * it starts none until asked. A start that fails says so once, not at every look.
+     * Whether this instance's node runs. When it does, the links to the registry's other nodes are reconciled on a
+     * virtual thread; when it does not, a start begins on one, unless this instance stopped it by hand; either way it
+     * returns at once. The peer link asks it at its first look and at every one after (record 187), so the node starts
+     * at launch and the links follow the registry. A start that fails says so once, not at every look.
      */
     boolean runningOrHost() {
-        final boolean live = running();
-        if (!live && !stoppedByHand && busy.compareAndSet(false, true)) {
+        if (hosted != null) {
+            if (linking.compareAndSet(false, true)) {
+                final Thread t = errands.start("fabric-links", () -> {
+                    try {
+                        reconcile();
+                    } finally {
+                        linking.set(false);
+                    }
+                });
+                if (t == null) {
+                    linking.set(false);
+                }
+            }
+            return true;
+        }
+        if (!stoppedByHand && busy.compareAndSet(false, true)) {
             final Thread t = errands.start("fabric-host", () -> {
                 try {
                     flip(Boolean.TRUE, true);
@@ -250,18 +289,23 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
                 busy.set(false);
             }
         }
-        return live;
-    }
-
-    /** Whether this instance hosts the fabric that runs, as last read; what its presence says (record 124). */
-    public boolean startedHere() {
-        final Entry e = seen;
-        return isRunning() && e != null && ours(e);
+        return false;
     }
 
     /**
-     * Starts the fabric when none runs, stops it when this instance hosts it, and says who does otherwise; on a virtual
-     * thread. While one start or stop is under way, a second toggle changes nothing and says what is happening.
+     * Who hears of the peers: {@code goneTo} is told the slug and start of each peer whose registry entry names a
+     * process that is gone, at every reconcile, and {@code linkUpTo} runs when a link to a peer connected, or a peer's
+     * node started again, since the reconcile before. Both are called on the reconcile's thread, outside its lock,
+     * and must not block.
+     */
+    void onPeers(final BiConsumer<String, String> goneTo, final Runnable linkUpTo) {
+        gone = goneTo;
+        linkUp = linkUpTo;
+    }
+
+    /**
+     * Starts this instance's node when it does not run and stops it when it does; on a virtual thread. While one start
+     * or stop is under way, a second toggle changes nothing and says what is happening.
      */
     @Override
     public void toggle() {
@@ -283,24 +327,20 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     /**
-     * An agent's start or stop (record 121): the registry is read now, so the answer says whether there is anything to
-     * do, and the start or stop re-checks under the monitor, so a change meanwhile turns it into nothing.
+     * An agent's start or stop of this instance's node (record 121): the answer says whether there is anything to do,
+     * and the start or stop re-checks under the monitor, so a change meanwhile turns it into nothing.
      */
     @Override
     public String want(final boolean up) {
         if (up) {
             stoppedByHand = false;
         }
-        final boolean live = running();
-        final Entry e = seen;
+        final boolean live = hosted != null;
         if (up && live) {
-            return "frontear already runs" + (e != null && !ours(e) ? ", " + startedBy(e) : "");
+            return "frontear already runs";
         }
         if (!up && !live) {
             return "frontear is not running";
-        }
-        if (!up && e != null && !ours(e)) {
-            return "refused: frontear was " + startedBy(e) + ", and only that comando stops it";
         }
         if (!busy.compareAndSet(false, true)) {
             return "frontear is " + (doing.isEmpty() ? "busy" : doing) + "; try again when that ends";
@@ -330,21 +370,164 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         }
     }
 
-    /** The node's MQTT port on {@code 127.0.0.1}. */
-    int mqttPort() {
-        return port;
+    /**
+     * Lets the other nodes' links into this instance's node, once its peer link has subscribed there: the listener of
+     * {@link MqttPeerBroker#onSubscribed}, with the port it subscribed on. Nothing when the node now runs on another
+     * port, as a node started since then waits for the peer link's subscriptions to it; a node not yet published
+     * opens once its start publishes it on this port. Safe from any thread.
+     */
+    void openLinks(final int port) {
+        // written before hosted is read: the start writes hosted before it reads this
+        subscribedOn = port;
+        final Hosted h = hosted;
+        if (h != null && h.node().port() == port) {
+            h.node().openLinks();
+        }
     }
 
-    /** Whether the registry names a live host, read now; a registry it cannot read names none. */
-    boolean running() {
+    /** This instance's node's MQTT port on {@code 127.0.0.1}; before it runs, the lowest port a start may take. */
+    int mqttPort() {
+        final Hosted h = hosted;
+        return h == null ? base : h.node().port();
+    }
+
+    /**
+     * Brings this node's links in line with the registry: a link to each other slug, put when it is missing or the
+     * slug's port changed, and none to a slug the registry no longer holds; a peer that is merely down keeps its link.
+     * Then tells {@link #onPeers}'s listeners of the peers whose process is gone, and whether a link connected or a
+     * peer's node started again (its entry's {@code started} changed), since the reconcile before: a peer that
+     * restarted between two reconciles is never seen disconnected, and its new node holds none of this one's retained
+     * messages. Does nothing while the node does not run or the registry is not of this version.
+     */
+    void reconcile() {
+        final Hosted h = hosted;
+        if (h == null) {
+            return;
+        }
+        final List<Map.Entry<String, String>> down = new ArrayList<>();
+        boolean resend = false;
         try {
-            final Entry e = read();
-            final boolean live = e != null && live(e).isPresent();
-            seen = live ? e : null;
-            return live;
-        } catch (final IOException _) {
-            seen = null;
+            // the registry is read under h too, so of two reconciles under way the later acts on the later registry,
+            // and none removes a link the other put for a slug its older read did not hold
+            synchronized (h) {
+                final Map<String, Entry> nodes;
+                try {
+                    nodes = readCurrent();
+                } catch (final IOException e) {
+                    LOG.log(System.Logger.Level.DEBUG, "links not reconciled: the registry does not read [registry="
+                            + registry + ", cause=" + e.getMessage() + ']');
+                    return;
+                }
+                if (nodes == null) {
+                    return;
+                }
+                for (final Map.Entry<String, Entry> n : nodes.entrySet()) {
+                    final String peer = n.getKey();
+                    final Entry e = n.getValue();
+                    if (peer.equals(slug)) {
+                        continue;
+                    }
+                    if (live(e).isEmpty() && e.started() != null) {
+                        down.add(Map.entry(peer, e.started()));
+                    }
+                    resend |= restarted(h, peer, e.started());
+                    put(h, peer, e.port());
+                }
+                resend |= links(h, nodes.keySet());
+            }
+        } catch (final InterruptedException _) {
+            // the fabric is closing: its errands are interrupted
+            Thread.currentThread().interrupt();
+            return;
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, "links not read [node=" + slug + ", cause=" + e.getMessage() + ']');
+        }
+        final BiConsumer<String, String> toGone = gone;
+        down.forEach(d -> toGone.accept(d.getKey(), d.getValue()));
+        if (resend) {
+            linkUp.run();
+        }
+    }
+
+    /**
+     * Puts this node's link to peer {@code peer} now, by a reconcile on the caller's thread, when it has put none: the
+     * link is the only subscriber here of the peer's inbox, so a question to a peer first seen present would otherwise
+     * reach no one until the next look's reconcile. Blocks for the registry's read and the links' control requests,
+     * each bounded; nothing while the node does not run.
+     */
+    void linkTo(final String peer) {
+        final Hosted h = hosted;
+        if (h == null || peer == null || peer.equals(slug)) {
+            return;
+        }
+        synchronized (h) {
+            if (h.ports.containsKey(peer)) {
+                return;
+            }
+        }
+        reconcile();
+    }
+
+    /**
+     * Whether peer {@code peer}'s node started again since the reconcile before: its entry names a start other than
+     * the one last read. A peer first read is not, as its link is new and its connect is the edge {@link #links} sees.
+     * Under {@code h}.
+     */
+    private static boolean restarted(final Hosted h, final String peer, final String started) {
+        if (started == null) {
             return false;
+        }
+        final String before = h.started.put(peer, started);
+        return before != null && !before.equals(started);
+    }
+
+    /**
+     * Forgets peer {@code peer} on a virtual thread: its registry entry goes, unless its node runs, and with it this
+     * node's link to it; the link's log stays (record 184).
+     */
+    void forget(final String peer) {
+        if (errands.start("fabric-forget", () -> forgetNow(peer)) == null) {
+            LOG.log(System.Logger.Level.DEBUG, "peer not forgotten: comando is closing [peer=" + peer + ']');
+        }
+    }
+
+    /** {@link #forget}'s work, on the caller's thread. */
+    void forgetNow(final String peer) {
+        if (peer == null || peer.equals(slug)) {
+            return;
+        }
+        final AtomicBoolean dropped = new AtomicBoolean();
+        try {
+            if (!underLock(() -> dropped.set(drop(peer)))) {
+                LOG.log(System.Logger.Level.WARNING, "peer not forgotten: the registry's lock stays held [peer=" + peer
+                        + ", lock=" + lock + ", waited=" + LOCK_WITHIN.toSeconds() + " s]");
+                return;
+            }
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "peer not forgotten: cannot lock the registry [peer=" + peer
+                    + ", lock=" + lock + ']', e);
+            return;
+        } catch (final InterruptedException _) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        final Hosted h = hosted;
+        if (!dropped.get() || h == null) {
+            return;
+        }
+        try {
+            synchronized (h) {
+                h.ports.remove(peer);
+                h.up.remove(peer);
+                h.started.remove(peer);
+                control(h, "RemoveLink", Json.object().put("id", peer));
+            }
+            LOG.log(System.Logger.Level.INFO, "link removed [node=" + slug + ", peer=" + peer + ']');
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, "no link removed [node=" + slug + ", peer=" + peer + ", cause="
+                    + e.getMessage() + ']');
+        } catch (final InterruptedException _) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -393,15 +576,6 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         return Base64.getDecoder().decode(Mapped.text(file).strip());
     }
 
-    private static String startedBy(final Entry e) {
-        return "started by " + host(e);
-    }
-
-    /** The instance that hosts the node {@code e} names, as the user knows it: its name and its data root. */
-    private static String host(final Entry e) {
-        return InstanceName.display(e.name()) + " (" + e.owner() + ")";
-    }
-
     /**
      * Something listens on {@code port} on loopback, or the port cannot be bound there as a listener binds it, with
      * {@code SO_REUSEADDR}: a connection a stopped node closed lingers in TIME_WAIT for up to a minute, and a bind
@@ -430,16 +604,11 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         return r.resolveSibling(r.getFileName() + ".lock");
     }
 
-    /** The entry {@code tree} holds, null for a JSON {@code null}; an empty file holds none and does not read. */
-    private static Entry entry(final JsonNode tree) {
-        if (tree.isMissingNode()) {
-            throw new JsonException("cannot read an empty registry", "");
-        }
-        return JsonFile.BINDER.fromTree(tree, Entry.class);
-    }
-
-    /** The entry's process when it lives and is the one recorded, not another on its pid. */
+    /** The entry's process when it lives and is the one recorded, not another on its pid; none for a node down. */
     private static Optional<ProcessHandle> live(final Entry e) {
+        if (e.pid() <= 0) {
+            return Optional.empty();
+        }
         final Optional<ProcessHandle> h = ProcessHandle.of(e.pid()).filter(ProcessHandle::isAlive);
         if (h.isEmpty() || e.started() == null) {
             return h;
@@ -457,14 +626,14 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     /**
-     * Starts or stops as the registry finds it; {@code want}, when given, is the only direction it may go.
+     * Starts or stops this instance's node; {@code want}, when given, is the only direction it may go.
      * {@code onItsOwn} is a start no one asked for ({@link #runningOrHost}): it says nothing before it starts, and a
      * failure it met at its last try it does not say again.
      * <p>
      * All of it runs under the registry's lock, taken within {@link #LOCK_WITHIN}: the registry is a file no write to
-     * can be fenced, so the lock is what makes the read, a stale entry's removal, the port's probe, the claim and the
-     * node's bind one step no other comando's start or stop can come between. A start that does not get the lock
-     * starts nothing: asked, it says so; a look's tries again at the next look.
+     * can be fenced, so the lock is what makes the read, the port's choice and probe, the node's bind and the write one
+     * step no other comando's start or stop can come between. A start that does not get the lock starts nothing:
+     * asked, it says so; a look's tries again at the next look.
      */
     private synchronized void flip(final Boolean want, final boolean onItsOwn) {
         final boolean held;
@@ -493,112 +662,127 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
 
     /** {@link #flip}'s work, under the registry's lock. */
     private void flipHeld(final Boolean want, final boolean onItsOwn) {
-        Entry e;
-        try {
-            e = read();
-        } catch (final IOException ex) {
-            say(onItsOwn, Notice.Level.WARN, "Cannot read the frontear registry; remove it if no frontear runs"
-                    + " [registry=" + registry + ", cause=" + ex.getMessage() + ']', null);
-            return;
-        }
-        if (e != null && live(e).isEmpty()) {
-            // its process is gone, or the pid is another process's now: the entry is stale
-            LOG.log(System.Logger.Level.INFO, "stale fabric registry removed [pid=" + e.pid() + ", owner=" + e.owner()
-                    + ']');
-            remove(e);
-            e = null;
-        }
-        if (want != null && want != (e == null)) {
-            // what was asked for holds already: running when it wanted a start, gone when it wanted a stop
-            running = e != null;
-            checkedAtNanos = System.nanoTime();
+        final boolean up = hosted != null;
+        if (want != null && want == up) {
+            // what was asked for holds already
             return;
         }
         try {
-            if (e == null) {
+            if (up) {
+                doing = "stopping";
+                stoppedByHand = true;
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Stopping frontear…", false));
+                stop();
+            } else {
                 doing = "starting";
                 if (!onItsOwn) {
                     stoppedByHand = false;
                     intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Starting frontear…", false));
                 }
                 start(onItsOwn);
-            } else if (ours(e)) {
-                doing = "stopping";
-                stoppedByHand = true;
-                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Stopping frontear…", false));
-                stop(e);
-            } else {
-                say(false, Notice.Level.WARN, "Cannot stop frontear: only the comando that started it stops it [name="
-                        + e.name() + ", owner=" + e.owner() + ", pid=" + e.pid() + ']', null);
             }
         } finally {
             doing = "";
         }
-        running = running();
-        checkedAtNanos = System.nanoTime();
     }
 
     /**
-     * Claims the registry, then starts the node; a node that does not start gives the claim back. A port held by
-     * another process refuses the start: that process is only probed, never signalled. Under the registry's lock, so
-     * no other comando's start probes or binds the port meanwhile, and a probe that finds it held finds a node that
-     * runs or another process.
+     * Starts this instance's node on its port, then records it in the registry; a node whose entry does not write is
+     * closed again. A live entry of another process under this slug refuses the start. Under the registry's lock, so
+     * no other comando's start takes or binds the port meanwhile.
      */
     private void start(final boolean onItsOwn) {
-        if (taken(port)) {
-            if (running()) {
-                // another instance claimed and bound it since the registry was read: it hosts, this one connects
-                LOG.log(System.Logger.Level.INFO, "frontear started by another comando meanwhile [port=" + port + ']');
-                return;
-            }
-            portHeld = true;
-            say(onItsOwn, Notice.Level.WARN, "Cannot start frontear: another process holds its port; comando leaves"
-                    + " it alone, and the instances reach each other once it is free [host=127.0.0.1, port=" + port
+        final Map<String, Entry> nodes;
+        try {
+            nodes = readForWrite();
+        } catch (final IOException ex) {
+            say(onItsOwn, Notice.Level.WARN, "Cannot read the frontear registry; remove it if no frontear runs"
+                    + " [registry=" + registry + ", cause=" + ex.getMessage() + ']', null);
+            return;
+        }
+        final Entry mine = nodes.get(slug);
+        if (mine != null && !ours(mine) && live(mine).isPresent()) {
+            say(onItsOwn, Notice.Level.WARN, "Cannot start frontear: another comando named " + slug + " runs its node"
+                    + " [owner=" + mine.owner() + ", pid=" + mine.pid() + ", port=" + mine.port() + ']', null);
+            return;
+        }
+        final int port = port(nodes, mine);
+        if (port < 0) {
+            say(onItsOwn, Notice.Level.WARN, "Cannot start frontear: no port on 127.0.0.1 is free [from=" + base
                     + ']', null);
             return;
         }
-        portHeld = false;
-        final PublicKey pod;
+        final KeyPair pair;
         try {
-            pod = keys(OwnerOnly.folder(root)).getPublic();
+            pair = keys(OwnerOnly.folder(root));
         } catch (final IOException | RuntimeException e) {
             say(onItsOwn, Notice.Level.ERROR, "Cannot start frontear [root=" + root + ", cause=" + e.getMessage()
                     + ']', e);
             return;
         }
-        final Entry entry = new Entry(PID, owner, name, port, ProcessHandle.current().info().startInstant()
-                .map(Instant::toString).orElse(null));
-        try {
-            if (!claim(entry)) {
-                if (onItsOwn) {
-                    LOG.log(System.Logger.Level.INFO, "frontear started by another comando meanwhile [port=" + port
-                            + ']');
-                } else {
-                    intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Another comando started frontear"
-                            + " meanwhile; this one connects to it", false));
-                }
-                return;
-            }
-        } catch (final IOException e) {
-            say(onItsOwn, Notice.Level.ERROR, "Cannot write the frontear registry [registry=" + registry + ", cause="
-                    + e.getMessage() + ']', e);
-            return;
-        }
         final Frontear node;
         try {
-            node = Frontear.start(NODE, port, root, Set.of(pod), InstantSource.system());
+            // link ids are slugs, as node names are, so the node refuses a link aimed at another's port; the others'
+            // links wait until this instance's peer link has subscribed here (openLinks), so what they queued for it
+            // while it was down finds its subscribers rather than none
+            node = Frontear.start(slug, port, root, Set.of(pair.getPublic()), InstantSource.system(), true, true);
         } catch (final IOException | RuntimeException e) {
-            remove(entry);
             say(onItsOwn, Notice.Level.ERROR, "Cannot start frontear [port=" + port + ", root=" + root + ", cause="
                     + e.getMessage() + ']', e);
             return;
         }
-        hosting = new Hosting(node, entry);
-        running = true;
+        final Hosted h;
+        try {
+            h = Hosted.of(node, new Signer(pair.getPrivate(), Signer.keyId(pair.getPublic())), slug);
+            final Map<String, Entry> next = new TreeMap<>(nodes);
+            next.put(slug, new Entry(node.port(), PID, STARTED, name, owner));
+            write(next);
+        } catch (final IOException | RuntimeException e) {
+            closeNode(node);
+            say(onItsOwn, Notice.Level.ERROR, "Cannot write the frontear registry [registry=" + registry + ", cause="
+                    + e.getMessage() + ']', e);
+            return;
+        }
+        hosted = h;
+        // the peer link may have subscribed here between the bind and now, its openLinks finding no node
+        if (subscribedOn == node.port()) {
+            node.openLinks();
+        }
         saidOnItsOwn = "";
-        LOG.log(System.Logger.Level.INFO, "fabric up [node=" + NODE + ", port=" + node.port() + ", root=" + root
-                + ", key=" + Signer.keyId(pod) + ", asked=" + !onItsOwn + ']');
-        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is up: MQTT 127.0.0.1:" + node.port(), false));
+        LOG.log(System.Logger.Level.INFO, "fabric up [node=" + slug + ", port=" + node.port() + ", root=" + root
+                + ", key=" + Signer.keyId(pair.getPublic()) + ", asked=" + !onItsOwn + ']');
+        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is up: MQTT " + HOST + ':' + node.port(),
+                false));
+    }
+
+    /**
+     * The port this slug's node takes: 0 when the OS picks; else the one the registry kept for it, unless another
+     * process holds it, and otherwise the lowest from {@link #base} up that no other slug holds and no process listens
+     * on; -1 when none is free.
+     */
+    private int port(final Map<String, Entry> nodes, final Entry mine) {
+        if (base == 0) {
+            return 0;
+        }
+        if (mine != null && mine.port() > 0 && !taken(mine.port())) {
+            return mine.port();
+        }
+        final Set<Integer> held = new HashSet<>();
+        nodes.forEach((peer, e) -> {
+            if (!peer.equals(slug)) {
+                held.add(e.port());
+            }
+        });
+        for (int p = base; p <= LAST_PORT; p++) {
+            if (!held.contains(p) && !taken(p)) {
+                if (mine != null && mine.port() > 0) {
+                    LOG.log(System.Logger.Level.INFO, "kept port held by another process; this node takes another"
+                            + " [node=" + slug + ", kept=" + mine.port() + ", port=" + p + ']');
+                }
+                return p;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -617,87 +801,230 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
                 : Intent.Notify.logged(LOG, level, text, cause));
     }
 
-    /** Stops the node this instance hosts and gives the registry back. */
-    private void stop(final Entry e) {
-        final Hosting h = hosting;
-        hosting = null;
+    /** Stops this instance's node and marks it down in the registry, its port kept; under the registry's lock. */
+    private void stop() {
+        final Hosted h = hosted;
+        hosted = null;
         try {
-            if (h != null) {
-                h.node().close();
-            }
+            h.node().close();
         } catch (final RuntimeException ex) {
             intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "frontear did not close cleanly [cause="
                     + ex.getMessage() + ']', ex));
         } finally {
-            remove(e);
+            // once the node is closed, so a subscribe to it does not open the next node's links
+            subscribedOn = -1;
+            markDown();
         }
-        LOG.log(System.Logger.Level.INFO, "fabric stopped [pid=" + e.pid() + ", port=" + e.port() + ']');
+        LOG.log(System.Logger.Level.INFO, "fabric stopped [node=" + slug + ", port=" + h.node().port() + ']');
         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is down", false));
     }
 
-    /** Whether {@code e} names this instance in this process, the only one that holds the node it names. */
+    /** Closes {@code node}, which this instance started and will not keep; a failure is logged. */
+    private static void closeNode(final Frontear node) {
+        try {
+            node.close();
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "frontear did not close cleanly [port=" + node.port() + ']', e);
+        }
+    }
+
+    /** Whether {@code e} names this instance in this process. */
     private boolean ours(final Entry e) {
         return owner.equals(e.owner()) && e.pid() == PID;
     }
 
-    /** The registry's entry, or null when there is none; throws when it does not read or is of a later version. */
-    private Entry read() throws IOException {
-        final Entry e;
+    /**
+     * Marks this slug's entry down, pid 0, its port and start kept, when it still names this instance's process; under
+     * the registry's lock.
+     */
+    private void markDown() {
         try {
-            e = Files.isRegularFile(registry) ? Mapped.read(registry, m -> entry(Json.readFirst(m.stream()))) : null;
-        } catch (final JsonException ex) {
-            throw new IOException(ex.getMessage(), ex);
+            final Map<String, Entry> nodes = readForWrite();
+            final Entry mine = nodes.get(slug);
+            if (mine != null && ours(mine)) {
+                nodes.put(slug, new Entry(mine.port(), 0L, mine.started(), mine.name(), mine.owner()));
+                write(nodes);
+            }
+        } catch (final IOException ex) {
+            LOG.log(System.Logger.Level.WARNING, "cannot mark the node down in the registry [file=" + registry
+                    + ", node=" + slug + ']', ex);
         }
-        if (e != null && e.version() > REGISTRY_VERSION) {
-            throw new IOException("written by a later comando [version=" + e.version() + ", supported="
-                    + REGISTRY_VERSION + ']');
-        }
-        return e;
     }
 
     /**
-     * Writes {@code e} unless an entry exists: a temporary file of its own, so two instances of one process never
-     * share one, linked into place fails when another came first.
+     * Removes {@code peer}'s entry unless its node runs; under the registry's lock. Whether the registry holds no
+     * entry for it now.
      */
-    private boolean claim(final Entry e) throws IOException {
-        final Path tmp = Files.createTempFile(registry.toAbsolutePath().getParent(), "." + registry.getFileName()
-                + ".", ".tmp");
+    private boolean drop(final String peer) {
         try {
-            Files.write(tmp, JsonFile.pretty(JsonFile.BINDER.toTree(e)));
-            Files.createLink(registry, tmp);
-            return true;
-        } catch (final FileAlreadyExistsException _) {
-            return false;
-        } finally {
-            Files.deleteIfExists(tmp);
-        }
-    }
-
-    /** Removes the registry when it still names {@code e}'s process and instance. */
-    private void remove(final Entry e) {
-        try {
-            final Entry now = read();
-            if (now != null && now.pid() == e.pid() && Objects.equals(now.owner(), e.owner())) {
-                Files.deleteIfExists(registry);
+            final Map<String, Entry> nodes = readForWrite();
+            final Entry e = nodes.get(peer);
+            if (e == null) {
+                return true;
             }
+            if (live(e).isPresent()) {
+                LOG.log(System.Logger.Level.INFO, "peer kept in the registry: its node runs [peer=" + peer + ", pid="
+                        + e.pid() + ']');
+                return false;
+            }
+            nodes.remove(peer);
+            write(nodes);
+            LOG.log(System.Logger.Level.INFO, "peer forgotten [peer=" + peer + ", port=" + e.port() + ']');
+            return true;
         } catch (final IOException ex) {
-            LOG.log(System.Logger.Level.WARNING, "cannot remove the registry [file=" + registry + ']', ex);
+            LOG.log(System.Logger.Level.WARNING, "cannot forget the peer in the registry [file=" + registry + ", peer="
+                    + peer + ']', ex);
+            return false;
         }
     }
 
-    /** Stops the node this instance hosts; one another instance hosts is left running. Idempotent. */
+    /**
+     * The registry's nodes by slug, to change and write back: none when there is no registry, or one of version 1,
+     * which this write replaces; throws when it does not read or is of a later version.
+     */
+    private Map<String, Entry> readForWrite() throws IOException {
+        final Map<String, Entry> nodes = readCurrent();
+        if (nodes != null) {
+            return nodes;
+        }
+        if (Files.isRegularFile(registry)) {
+            LOG.log(System.Logger.Level.INFO, "registry of version 1 replaced [registry=" + registry + ']');
+        }
+        return new TreeMap<>();
+    }
+
+    /**
+     * The registry's nodes by slug when it is of this version; null when there is none or it is of version 1. Throws
+     * when it does not read or is of a later version. Read without the lock: every write replaces the file whole.
+     */
+    private Map<String, Entry> readCurrent() throws IOException {
+        if (!Files.isRegularFile(registry)) {
+            return null;
+        }
+        final JsonNode tree;
+        try {
+            tree = Mapped.read(registry, m -> Json.readFirst(m.stream()));
+        } catch (final JsonException ex) {
+            throw new IOException(ex.getMessage(), ex);
+        }
+        if (!(tree instanceof ObjectNode)) {
+            throw new IOException("not a registry [registry=" + registry + ']');
+        }
+        final int version = tree.path("version").asInt(1);
+        if (version > REGISTRY_VERSION) {
+            throw new IOException("written by a later comando [version=" + version + ", supported="
+                    + REGISTRY_VERSION + ']');
+        }
+        if (version < REGISTRY_VERSION) {
+            return null;
+        }
+        final Map<String, Entry> nodes = new TreeMap<>();
+        for (final Map.Entry<String, JsonNode> n : tree.path("nodes").properties()) {
+            final JsonNode e = n.getValue();
+            nodes.put(n.getKey(), new Entry(e.path("port").asInt(0), e.path("pid").asLong(0L),
+                    e.hasNonNull("started") ? e.path("started").asString() : null, e.path("name").asString(""),
+                    e.path("owner").asString("")));
+        }
+        return nodes;
+    }
+
+    /** Writes {@code nodes} as the registry, replacing it whole; under the registry's lock. */
+    private void write(final Map<String, Entry> nodes) throws IOException {
+        final ObjectNode tree = Json.object().put("version", REGISTRY_VERSION);
+        final ObjectNode all = tree.putObject("nodes");
+        nodes.forEach((peer, e) -> all.putObject(peer).put("port", e.port()).put("pid", e.pid())
+                .put("started", e.started()).put("name", e.name()).put("owner", e.owner()));
+        AtomicFiles.write(registry, JsonFile.pretty(tree));
+    }
+
+    /** Puts the link to {@code peer} on {@code port} when this node has not put it there yet; under {@code h}. */
+    private void put(final Hosted h, final String peer, final int port) throws InterruptedException {
+        final Integer put = h.ports.get(peer);
+        if (port <= 0 || (put != null && put == port)) {
+            return;
+        }
+        final ObjectNode spec = Json.object().put("id", peer).put("host", HOST).put("port", port);
+        spec.putArray("out").add(Peers.inboxTopic(peer)).add(Peers.replyTopic(peer)).add(Peers.presenceTopic(slug));
+        spec.putArray("in");
+        spec.put("hopLimit", HOP_LIMIT);
+        try {
+            control(h, "PutLink", spec);
+            h.ports.put(peer, port);
+            LOG.log(System.Logger.Level.INFO, "link put [node=" + slug + ", peer=" + peer + ", port=" + port + ']');
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot put the link to a peer [node=" + slug + ", peer=" + peer
+                    + ", port=" + port + ", cause=" + e.getMessage() + ']');
+        }
+    }
+
+    /**
+     * Reads the node's links, removes those to a slug not in {@code slugs}, and says whether one connected since the
+     * last read; under {@code h}.
+     */
+    private boolean links(final Hosted h, final Set<String> slugs) throws IOException, InterruptedException {
+        boolean connected = false;
+        for (final JsonNode link : control(h, "GetState", Json.object()).path("links")) {
+            final String id = link.path("id").asString("");
+            if (!slugs.contains(id)) {
+                h.ports.remove(id);
+                h.up.remove(id);
+                h.started.remove(id);
+                control(h, "RemoveLink", Json.object().put("id", id));
+                LOG.log(System.Logger.Level.INFO, "link removed: its peer left the registry [node=" + slug + ", peer="
+                        + id + ']');
+                continue;
+            }
+            final boolean now = link.path("connected").asBoolean(false);
+            final Boolean before = h.up.put(id, now);
+            connected |= now && !Boolean.TRUE.equals(before);
+        }
+        return connected;
+    }
+
+    /**
+     * Sends control request {@code method} with {@code body} to this node, signed with its pod key as a control client
+     * would, and returns the answer once it came, within {@link #CONTROL_WITHIN}.
+     *
+     * @throws IOException when the node refuses it or does not answer in time
+     */
+    private JsonNode control(final Hosted h, final String method, final ObjectNode body)
+            throws IOException, InterruptedException {
+        final String id = Long.toString(h.calls.incrementAndGet());
+        final CompletableFuture<JsonNode> reply = new CompletableFuture<>();
+        h.replies.put(id, reply);
+        try {
+            h.node().broker().publish(h.signer().sign(Names.CONTROL + slug + '/' + method, Json.writeBytes(body),
+                    h.replyTopic(), id.getBytes(StandardCharsets.UTF_8)), CONTROLLER);
+            final JsonNode r = reply.get(CONTROL_WITHIN.toNanos(), TimeUnit.NANOSECONDS);
+            if (!r.path("ok").asBoolean(false)) {
+                throw new IOException("control request refused [node=" + slug + ", method=" + method + ", reason="
+                        + r.path("reason").asString("") + ", detail=" + r.path("detail").asString("") + ']');
+            }
+            return r;
+        } catch (final ExecutionException e) {
+            throw new IOException("control answer does not read [node=" + slug + ", method=" + method + ']',
+                    e.getCause());
+        } catch (final TimeoutException e) {
+            throw new IOException("no control answer [node=" + slug + ", method=" + method + ", waited="
+                    + CONTROL_WITHIN.toSeconds() + " s]", e);
+        } finally {
+            h.replies.remove(id);
+        }
+    }
+
+    /** Stops this instance's node and marks it down in the registry, its port kept. Idempotent. */
     private synchronized void closeFabric() {
-        final Hosting h = hosting;
+        final Hosted h = hosted;
         if (h == null) {
             return;
         }
-        hosting = null;
+        hosted = null;
         try {
             h.node().close();
         } finally {
-            // under the registry's lock, as a start's claim is; one that stays held leaves the entry to go stale
+            // under the registry's lock, as a start's write is; one that stays held leaves the entry to go stale
             try {
-                if (!underLock(() -> remove(h.entry()))) {
+                if (!underLock(this::markDown)) {
                     LOG.log(System.Logger.Level.WARNING, "registry left to go stale with this process: its lock stays"
                             + " held [lock=" + lock + ", waited=" + LOCK_WITHIN.toSeconds() + " s]");
                 }
@@ -709,7 +1036,8 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
                 LOG.log(System.Logger.Level.WARNING, "registry left to go stale with this process: interrupted"
                         + " [lock=" + lock + ']');
             }
-            LOG.log(System.Logger.Level.INFO, "fabric stopped with comando [port=" + h.entry().port() + ']');
+            LOG.log(System.Logger.Level.INFO, "fabric stopped with comando [node=" + slug + ", port="
+                    + h.node().port() + ']');
         }
     }
 
@@ -766,21 +1094,68 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     /**
-     * The registry's content: its schema's version (record 133; an entry without one is version 1), the hosting
-     * process, when it started, the instance that hosts the node and its MQTT port.
+     * A slug's node in the registry: its MQTT port, kept for good; the process that runs it, 0 while it is down; that
+     * process's start, the {@code started} of its presence; and the instance's name and data root.
      */
-    record Entry(int version, long pid, String owner, String name, int port, String started) {
-        Entry {
-            version = version <= 0 ? 1 : version;
-        }
-
-        /** An entry of the schema this comando writes. */
-        Entry(final long pid, final String owner, final String name, final int port, final String started) {
-            this(REGISTRY_VERSION, pid, owner, name, port, started);
-        }
+    record Entry(int port, long pid, String started, String name, String owner) {
     }
 
-    /** The node this instance hosts, and the registry entry that names it. */
-    private record Hosting(Frontear node, Entry entry) {
+    /**
+     * The node this instance hosts, the signer of its control requests and the answers they wait for. {@link #ports},
+     * {@link #up} and {@link #started} are guarded by the instance: the links put, whether each was connected and the
+     * start its peer's entry named, at the last read.
+     */
+    private static final class Hosted implements InternalSubscriber {
+
+        private final Frontear node;
+        private final Signer signer;
+        private final String replyTopic;
+        private final Map<String, CompletableFuture<JsonNode>> replies = new ConcurrentHashMap<>();
+        private final AtomicLong calls = new AtomicLong();
+        private final Map<String, Integer> ports = new HashMap<>();
+        private final Map<String, Boolean> up = new HashMap<>();
+        private final Map<String, String> started = new HashMap<>();
+
+        private Hosted(final Frontear node, final Signer signer, final String slug) {
+            this.node = node;
+            this.signer = signer;
+            // under comando's own topics, so the control plane answers it; no link's filter covers it
+            this.replyTopic = "comando/v1/local/fabric/" + slug + "/control";
+        }
+
+        /** The node with its answers' subscriber in place. */
+        static Hosted of(final Frontear node, final Signer signer, final String slug) {
+            final Hosted h = new Hosted(node, signer, slug);
+            node.broker().subscribe(CONTROLLER, h.replyTopic, 1, false, h);
+            return h;
+        }
+
+        Frontear node() {
+            return node;
+        }
+
+        Signer signer() {
+            return signer;
+        }
+
+        String replyTopic() {
+            return replyTopic;
+        }
+
+        /** An answer of the control plane, on its strand: handed to the request that waits for it. */
+        @Override
+        public CompletionStage<Integer> deliver(final Packet.Publish message, final String origin) {
+            final byte[] correlation = message.correlation();
+            final CompletableFuture<JsonNode> waiting = correlation == null ? null
+                    : replies.get(new String(correlation, StandardCharsets.UTF_8));
+            if (waiting != null) {
+                try {
+                    waiting.complete(Json.readTree(message.payload()));
+                } catch (final JsonException e) {
+                    waiting.completeExceptionally(e);
+                }
+            }
+            return CompletableFuture.completedFuture(Packet.SUCCESS);
+        }
     }
 }

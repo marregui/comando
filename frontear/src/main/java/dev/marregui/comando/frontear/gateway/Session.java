@@ -9,6 +9,7 @@ import java.util.Map;
 import dev.marregui.comando.frontear.protocol.Codec;
 import dev.marregui.comando.frontear.protocol.MqttException;
 import dev.marregui.comando.frontear.protocol.Packet;
+import dev.marregui.comando.frontear.watch.ConnectionView;
 
 /**
  * One client's session (§4.1), held in memory while it is connected and, offline, until its expiry: the QoS 1 messages
@@ -155,6 +156,20 @@ final class Session {
         synchronized (lock) {
             return connection;
         }
+    }
+
+    /**
+     * Connection {@code c} of this session as a watch shows it: its QoS 1 messages in flight beside the receive maximum
+     * its CONNECT allowed, read under the lock for as long as two counts take.
+     */
+    ConnectionView view(final Connection c) {
+        final int sending;
+        final int allowed;
+        synchronized (lock) {
+            sending = inFlight();
+            allowed = receiveMaximum;
+        }
+        return new ConnectionView(clientId, c.acceptedMillis(), c.keepAliveSeconds(), sending, allowed);
     }
 
     /** The bytes the session holds for its client, in flight and queued. */

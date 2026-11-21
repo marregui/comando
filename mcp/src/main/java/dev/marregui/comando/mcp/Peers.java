@@ -27,6 +27,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import dev.marregui.comando.core.files.Mapped;
@@ -115,8 +116,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /** How long a new consult session may take to appear in the state after it was asked for. */
     private static final Duration MAKE_WITHIN = Duration.ofSeconds(5);
     static final String FABRIC_DOWN = "this instance is not connected to frontear, so it reaches no other instance: "
-            + "start frontear with its toggle at the top of the workspace, right of cdb's, in any comando instance; "
+            + "start frontear with its toggle at the top of the workspace, right of cdb's; "
             + "presence resumes within seconds once it runs";
+    /**
+     * This process's start, as the presence's {@code started} says it and the fabric's registry records it, so a
+     * registry entry whose process is gone names the presence it left ({@link #gone}).
+     */
+    public static final String PROCESS_STARTED = ProcessHandle.current().info().startInstant().orElseGet(Instant::now)
+            .toString();
 
     /** This instance: its name as the Dock shows it, its id in the topics, its version, what it is for. */
     public record Me(String name, String slug, String version, String role) {
@@ -215,7 +222,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private final Duration answerWithin;
     /** How long a question this instance asked waits for its reply before it expires: the answer's bound and margins. */
     private final Duration expireWithin;
-    private final String started = Instant.now().toString();
+    private final String started = PROCESS_STARTED;
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
     private final Map<String, Asked> asked = new ConcurrentHashMap<>();
     /** The questions asked and answered, oldest first, at most {@link InstancesState#CONSULTS}; guarded by itself. */
@@ -226,8 +233,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private volatile String kit = "";
     /** What this instance is for; part of the presence, changed from the Instances tab. */
     private volatile String role;
-    /** Whether this instance hosts frontear; part of the presence. */
+    /** Whether this instance's frontear node runs; part of the presence. Set at wiring, read by the ticks' strand. */
     private volatile BooleanSupplier host = () -> false;
+    /** Told each instance forgotten, so its fabric link and registry entry go too; set at wiring, read by forget. */
+    private volatile Consumer<String> forgotten = _ -> { };
+    /**
+     * Puts this instance's frontear link to an instance now, so a question to it finds its subscriber; set at wiring,
+     * read by the asks and by the errands of the presences first seen.
+     */
+    private volatile Consumer<String> linker = _ -> { };
     /**
      * This instance's sessions blocked now in an {@code instance_ask} or {@code instance_reply} wait, with how many
      * waits each: a question to one of them could not be taken before both waits ran out, so it is refused at once.
@@ -327,9 +341,24 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
     }
 
-    /** Whether this instance hosts frontear, asked at each tick; part of the presence. */
+    /** Whether this instance's frontear node runs, asked at each tick; part of the presence. */
     public void host(final BooleanSupplier hostedHere) {
         host = hostedHere == null ? () -> false : hostedHere;
+    }
+
+    /** Who is told the id of each instance {@link #forget} forgets, on the caller's thread; it must not block. */
+    public void onForget(final Consumer<String> to) {
+        forgotten = to == null ? _ -> { } : to;
+    }
+
+    /**
+     * Who puts this instance's frontear link to an instance by its id, when it has none yet: the link is the only
+     * subscriber of that instance's inbox on this node. Run on an errand for each other instance whose presence comes
+     * while it is not present here, and on the asker's thread before each question to it, so a question asked in the
+     * seconds after it appeared does not reach no one; it may block, bounded.
+     */
+    public void linkTo(final Consumer<String> link) {
+        linker = link == null ? _ -> { } : link;
     }
 
     /** An instance's id in the topics: its name in lowercase letters, digits and dashes; {@code main} when unnamed. */
@@ -337,15 +366,18 @@ public final class Peers implements AutoCloseable, InstancesPort {
         return InstanceName.slug(instanceName);
     }
 
-    static String presenceTopic(final String slug) {
+    /** The topic of instance {@code slug}'s presence, retained. */
+    public static String presenceTopic(final String slug) {
         return TOPICS + slug + "/presence";
     }
 
-    static String inboxTopic(final String slug) {
+    /** The topic instance {@code slug} takes questions on. */
+    public static String inboxTopic(final String slug) {
         return TOPICS + slug + "/inbox";
     }
 
-    static String replyTopic(final String slug) {
+    /** The topic instance {@code slug} takes the replies to its questions on. */
+    public static String replyTopic(final String slug) {
         return TOPICS + slug + "/reply";
     }
 
@@ -368,10 +400,34 @@ public final class Peers implements AutoCloseable, InstancesPort {
      */
     private void connected() {
         peers.clear();
+        resendPresence();
+    }
+
+    /**
+     * Sends this instance's presence again at the next tick, changed or not: a peer's node that restarted holds no
+     * retained copy of it, so the fabric calls this when its link to a peer connects.
+     */
+    public void resendPresence() {
         synchronized (presenceLock) {
             lastPresence = null;
         }
         onTicks();
+    }
+
+    /**
+     * Instance {@code slug}'s process, which started at {@code started}, is gone: the presence it left retained is
+     * dropped, and the instance remembered as last seen now, when that presence is of the same process. A presence of
+     * another process, one that started since, stays. The questions asked of it wait: its peer link queues them.
+     */
+    public void gone(final String slug, final String started) {
+        final Peer p = peers.get(slug);
+        if (p == null || slug.equals(me.slug()) || !p.started().equals(started) || !peers.remove(slug, p)) {
+            return;
+        }
+        remember(p, System.currentTimeMillis());
+        LOG.log(System.Logger.Level.INFO, "peer dropped: its process is gone [instance=" + slug + ", started="
+                + started + ']');
+        show();
     }
 
     /** Runs a {@link #tick} on the ticks' strand, unless this has closed. */
@@ -549,9 +605,22 @@ public final class Peers implements AutoCloseable, InstancesPort {
             if (!slug.equals(me.slug()) && (before == null || !sameIdentity(before, p))) {
                 remember(p, 0L);
             }
+            if (before == null && !slug.equals(me.slug())
+                    && errands.start("peer-link", () -> link(slug)) == null) {
+                LOG.log(System.Logger.Level.DEBUG, "no link put: closing [instance=" + slug + ']');
+            }
             show();
         } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + slug + ", cause=" + e.getMessage() + ']');
+        }
+    }
+
+    /** {@link #linkTo}'s listener for instance {@code slug}, on the caller's thread; a failure is logged. */
+    private void link(final String slug) {
+        try {
+            linker.accept(slug);
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot put the link to an instance [instance=" + slug + ']', e);
         }
     }
 
@@ -869,6 +938,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return McpTools.Outcome.fail("no instance '" + to + "' is connected to frontear; instances: " + names());
         }
         final Peer p = peer.get();
+        // the link to it subscribes its inbox here: put now when the presence's errand has not put it yet
+        link(p.slug());
         final String id = UUID.randomUUID().toString();
         final String target = args.path("session").asString("").strip();
         final Asked a = new Asked(p.slug(), p.name(), target, new CompletableFuture<>(), System.nanoTime());
@@ -1030,6 +1101,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, who + " is present; only an instance that left can be forgotten", false));
             return;
         }
+        forgotten.accept(who);
         synchronized (seen) {
             if (seen.remove(who) == null) {
                 return;

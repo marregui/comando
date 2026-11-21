@@ -342,6 +342,7 @@ ask them as ordinary question cards. Reflect and a typed command carry no argume
 | `instances_list` | none | the other comando instances on frontear: name, id, version, busy, and their sessions ([record 123](adr/0123-instances-consult-each-other.md)) |
 | `instance_ask` | `instance`, `text`, `wait_seconds` | asks another instance; the reply is Claude's text in the turn that answers; waits 300 s by default, at most 600 s, else returns an id |
 | `instance_reply` | `id`, `wait_seconds` | the reply to an earlier `instance_ask`, read once |
+| `frontear_read` | `view`, `since`, `max` | this instance's frontear node as its frontear tab shows it ([record 187](adr/0187-frontear-lab-node-per-instance.md)): `overview`, `octopus`, `store`, or `traffic`, the packets after `since`, 200 by default, at most 2 000, with how many were missed and the next `since` |
 
 **Every action you have, an agent has** ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)). `core`
 keeps one registry of actions, `Actions`. Each entry is a tool named `<area>_<verb>`, with a schema built from the
@@ -355,7 +356,7 @@ window sends an intent that has no action.
 | approvals | `approval_answer`: allow with a scope, deny with a message, or answer a question card |
 | connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`\* |
 | views and the window | `view_pin`, `view_place`, `view_close`, `notice_dismiss` |
-| servers | `server_start`, `server_stop` for `frontear` or `cdb`; a frontear another instance hosts is not stopped |
+| servers | `server_start`, `server_stop` for `frontear` or `cdb`; `frontear` is this instance's own node |
 | commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
 | terminals | `terminal_list`, `terminal_start`, `terminal_send`, `terminal_read`, `terminal_interrupt`, `terminal_stop`\* ([record 148](adr/0148-agents-drive-a-panel-terminal.md)) |
 

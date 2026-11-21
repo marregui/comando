@@ -51,6 +51,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.LabPort;
 import dev.marregui.comando.core.port.SearchPort;
 import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.core.port.TopicPort;
@@ -167,6 +168,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private volatile TopicPort topics = TopicPort.NONE;
     /** The other comando instances, for the sidebar's Instances tab. */
     private volatile InstancesPort instances = InstancesPort.NONE;
+    /** What the frontear tab reads (record 187); null until set, and then the tab shows nothing. */
+    private volatile LabPort lab;
     /**
      * Where the checkpoint threshold goes, in percent of a session's context window (record 129); nowhere until
      * {@link #checkpointThreshold} sets it.
@@ -295,6 +298,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         instances = port == null ? InstancesPort.NONE : port;
     }
 
+    /** What the frontear tab reads (record 187); set before {@link #start}, as the build reads it. */
+    public void lab(final LabPort port) {
+        lab = port;
+    }
+
     /** The panels' Terminals for agents (record 148): any thread but the EDT; refused until the window is built. */
     public TerminalPort terminals() {
         return terminals;
@@ -412,6 +420,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         final LowerPanel lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
+        final LabPort labPort = lab;
+        if (labPort != null) {
+            lower.lab(labPort);
+        }
         workspace.onThemeChosen(this::themeChosen);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
         final SidePane side = new SidePane(ctx, widgets);

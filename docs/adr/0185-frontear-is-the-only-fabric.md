@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-21 | accepted; built in task 218; supersedes the broker of [record 122](0122-instances-name-kit-brain-data-root-edge.md) §2.4 and the selection of [record 184](0184-frontear-comandos-own-mqtt-fabric.md) §3 | Miguel and Claude |
+| 2026-11-21 | accepted; built in task 218; superseded in part by [record 187](0187-frontear-lab-node-per-instance.md) (one node per instance, linked); supersedes the broker of [record 122](0122-instances-name-kit-brain-data-root-edge.md) §2.4 and the selection of [record 184](0184-frontear-comandos-own-mqtt-fabric.md) §3 | Miguel and Claude |
 
 ## 1. Context
 

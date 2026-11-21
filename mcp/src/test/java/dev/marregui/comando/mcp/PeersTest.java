@@ -413,6 +413,95 @@ class PeersTest {
                 i -> i.instances().others().stream().anyMatch(o -> o.slug().equals("main") && o.role().equals("comando specialist")), WAIT);
     }
 
+    /// A peer whose process is gone, its presence left retained on a node, is dropped when that presence is of the
+    /// same process, and remembered as last seen; one of another start stays, and so does this instance itself. Its
+    /// next tick, unchanged, sends nothing; a resend sends it again, and it is present once more.
+    @Test
+    void aGonePeerIsDroppedOnlyWhenItsStartMatchesAndAResendBringsItBack() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        assertThat(present(main)).containsExactly("b");
+
+        main.peers.gone("b", "2000-01-01T00:00:00Z");
+        main.peers.gone("main", Peers.PROCESS_STARTED);
+
+        assertThat(present(main)).as("another start's presence stays").containsExactly("b");
+        assertThat(call(main, "instances_list", "{}").text()).contains("this one is comando (instance main)");
+
+        main.peers.gone("b", Peers.PROCESS_STARTED);
+
+        assertThat(present(main)).as("the same start's presence goes").isEmpty();
+        assertThat(main.peers.instances().others()).singleElement().satisfies(o -> {
+            assertThat(o.slug()).isEqualTo("b");
+            assertThat(o.lastSeen()).isPositive();
+        });
+        b.peers.tick();
+        assertThat(present(main)).as("an unchanged presence is not sent again").isEmpty();
+
+        b.peers.resendPresence();
+
+        Awaitility.await().atMost(WAIT).until(() -> present(main).equals(List.of("b")));
+    }
+
+    /// Forgetting an instance that left tells the fabric, so its link and registry entry go too; an instance present
+    /// is not forgotten, and the fabric is not told.
+    @Test
+    void forgettingAnInstanceTellsTheFabric() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final List<String> forgotten = new CopyOnWriteArrayList<>();
+        main.peers.onForget(forgotten::add);
+
+        main.peers.forget("b");
+        assertThat(forgotten).as("b is present").isEmpty();
+
+        b.peers.close();
+        Awaitility.await().atMost(WAIT).until(() -> present(main).isEmpty());
+        main.peers.forget("b");
+
+        assertThat(forgotten).containsExactly("b");
+        assertThat(main.peers.instances().others()).isEmpty();
+    }
+
+    /// An instance whose presence first comes has its link put at once, on an errand, not at the fabric's next look; a
+    /// presence of it again puts nothing, and this instance's own never does. A question to it puts the link first, on
+    /// the asker's thread, before the question leaves.
+    @Test
+    void aPeerFirstSeenAndEveryQuestionToItHaveTheLinkPutFirst() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final List<String> linked = new CopyOnWriteArrayList<>();
+        final List<Boolean> beforeTheQuestion = new CopyOnWriteArrayList<>();
+        final AtomicReference<Node> b = new AtomicReference<>();
+        main.peers.linkTo(slug -> {
+            final Node asked = b.get();
+            if (asked != null) {
+                beforeTheQuestion.add(asked.window.recorded.of(Intent.PromptSession.class).isEmpty());
+            }
+            linked.add(slug);
+        });
+        b.set(node("b", Peers.ANSWER_WITHIN));
+        Awaitility.await().atMost(WAIT).until(() -> linked.equals(List.of("b")));
+
+        b.get().peers.resendPresence();
+        b.get().peers.tick();
+        main.peers.resendPresence();
+        main.peers.tick();
+        Awaitility.await().during(Duration.ofMillis(300)).atMost(WAIT).until(() -> linked.equals(List.of("b")));
+
+        beforeTheQuestion.clear();
+        final McpTools.Outcome asked = call(main, "foreman", "instance_ask",
+                "{\"instance\":\"b\",\"text\":\"what is X?\",\"wait_seconds\":0}");
+        assertThat(asked.error()).as(asked.text()).isFalse();
+        assertThat(linked).containsExactly("b", "b");
+        assertThat(beforeTheQuestion).as("put before the question reached b").containsExactly(true);
+    }
+
+    /// The slugs of the instances `n` holds present, in its order.
+    private static List<String> present(final Node n) {
+        return n.peers.instances().others().stream().filter(InstancesState.Instance::present)
+                .map(InstancesState.Instance::slug).toList();
+    }
+
     /// Every question is in the state on both sides: the asker's, waiting, then answered with the reply's text; the
     /// answering instance's, naming the session that answered it. A question asked from the tab has no session.
     @Test

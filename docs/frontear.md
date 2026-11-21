@@ -481,38 +481,42 @@ The file format is in [the frontear module page](modules/frontear.md).
 
 ## 8. frontear inside comando
 
-comando hosts a frontear node as the broker its instances share, the only one it has [record 185](adr/0185-frontear-is-the-only-fabric.md).
+Every comando instance hosts a frontear node of its own, and the nodes are linked; it is the only broker comando has
+([record 185](adr/0185-frontear-is-the-only-fabric.md), [record 187](adr/0187-frontear-lab-node-per-instance.md)).
 
 | Fact | Value |
 |---|---|
-| When | At launch when no live instance hosts it; when its host quits, the next instance to look (every 5 s) hosts it. `-Dcomando.peers=false` keeps an instance off it. |
-| Node name | `comando`. Control topics are `$frontear/control/comando/<Method>`. |
-| Address | `127.0.0.1`, port 18883. |
-| Data folder | `fabric/` in the hosting instance's data folder. |
+| When | At launch, and at each later look (every 5 s) while it is down, unless stopped by hand. `-Dcomando.peers=false` keeps an instance off the others: its node runs on a port the OS picks, with a registry in its data folder. |
+| Node name | The instance's id, `main` for the main instance. Control topics are `$frontear/control/<id>/<Method>`. A link client named `<other>~<name>` is refused unless `<name>` is this node's. Until comando's own client of the node has its subscriptions acknowledged, every link client is refused with `0x88` (Server unavailable); the link tries again after its backoff, at most 30 s later. |
+| Address | `127.0.0.1`, the lowest port from 18883 up that is free and no other instance holds; the instance keeps it from then on. |
+| Data folder | `fabric/` in the instance's data folder. |
 | Control keys | `pod.key` and `pod.pub` in `fabric/`, made at the first start. `pod.key` is readable by its owner only. |
-| How many | One node per machine. The instance that creates the registry hosts it; the other instances connect as clients. |
-| Start and stop | The window's frontear toggle, or an agent's `server_start frontear` and `server_stop frontear`. Only the hosting instance stops it. |
-| Registry | `~/.comando-fabric.json` names the hosting process. |
+| How many | One node per instance. Each instance's client connects to its own node only. |
+| Links | At each look comando puts a link to every other node in the registry, with id the other instance's id: out that instance's `inbox` and `reply` topics and this one's `presence`, nothing in, hop limit 1. It removes a link whose id is not in the registry, so a link you add by hand lasts until the next look. A link to an instance first seen present is put at once, and checked before each question to it, so a question asked in its first seconds is not lost. A link to a node that is down queues until it starts again, and drains once that node lets the links in. |
+| Start and stop | The window's frontear toggle, or an agent's `server_start frontear` and `server_stop frontear`, for this instance's node. The other nodes keep running. |
+| Registry | `~/.comando-fabric.json`, version 2: every instance's node by id, with its port, its process while it runs and 0 once down, its start, its name and its data folder. A file of version 1 is replaced. |
 
-comando makes the key pair and gives the node its public key. comando sends no control requests itself: you
-configure the node's links with `pod.key`. `pod.pub` has the form of §2. `pod.key` is the private key as one
-line, the base64 of its PKCS#8 encoding. `ftsign` takes a PEM file, so wrap that line first. Run this in the
-`fabric/` folder, with `ftsign` and `ftctl` of §3 beside you:
+comando makes the key pair, gives the node its public key and signs its own control requests with it. `pod.pub`
+has the form of §2. `pod.key` is the private key as one line, the base64 of its PKCS#8 encoding. `ftsign` takes a
+PEM file, so wrap that line first. Run this in the `fabric/` folder of the instance `main`, its node on the port the
+toggle's tooltip names (18883 here), with `ftsign` and `ftctl` of §3 beside you:
 
 ```sh
 umask 077
 { echo '-----BEGIN PRIVATE KEY-----'; cat pod.key; echo '-----END PRIVATE KEY-----'; } > comando.pem
-./ftctl 18883 comando.pem comando GetState '{}'
+./ftctl 18883 comando.pem main GetState '{}'
 ```
 
 `umask 077` keeps `comando.pem` readable by you alone. Every method of §4 then works the same way, for example
-`./ftctl 18883 comando.pem comando PutLink '{…}'`.
+`./ftctl 18883 comando.pem main GetState '{}'` to read each link's `connected`, `queued` and `sent`.
 
 | Message | Meaning |
 |---|---|
-| `The fabric is up: MQTT 127.0.0.1:18883, frontear node comando` | The node serves. |
-| `The fabric is down` | The node stopped. |
-| `Cannot start the fabric: port … on 127.0.0.1 is in use by another process` | Another program holds the port. Stop it, then start the fabric again. |
+| `frontear is up: MQTT 127.0.0.1:<port>` | The node serves. |
+| `frontear is down` | The node stopped. |
+| `Cannot start frontear: another comando named <id> runs its node [owner=…, pid=…, port=…]` | Another instance of the same name, on another data folder, runs. Quit it, or rename one. |
+| `Cannot start frontear: no port on 127.0.0.1 is free [from=…]` | Every port from 18883 up is held. |
+| `Cannot read the frontear registry; remove it if no frontear runs [registry=…, cause=…]` | The registry does not read, or a newer comando wrote it. |
 | `not an Ed25519 key pair; remove both files to make a new one` | `pod.key` and `pod.pub` do not read as a pair. Remove both and start again. |
 
 ## 9. Troubleshooting

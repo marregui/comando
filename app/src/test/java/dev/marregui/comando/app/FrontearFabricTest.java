@@ -19,17 +19,16 @@ import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
-import java.util.SplittableRandom;
-import java.util.concurrent.BrokenBarrierException;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,50 +39,62 @@ import dev.marregui.comando.app.FrontearFabric.Entry;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.frontear.alexander.Signer;
 import dev.marregui.comando.frontear.protocol.MqttClient;
+import dev.marregui.comando.frontear.protocol.MqttException;
+import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.mcp.PeerBroker;
+import dev.marregui.comando.mcp.Peers;
 import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-/// [FrontearFabric]: the frontear node hosted in this process, the one fabric between comando instances (record 185).
-/// Every test runs its instances in this one process, each on its own data root in a temporary folder, against a
-/// registry there and a free port, never the user's `~/.comando-fabric.json` or port 18883.
-/// - the first instance to start hosts; the registry names it, and the others see it and cannot stop it
-/// - the registry lets one instance host: a live entry refuses a second start, two starts at once make one host, a
-///   stale entry is cleared, and one of a later version is read by none
-/// - the registry's lock makes a takeover one step: two takeovers of a stale entry at once make one host, and while
-///   another holds the lock, a look takes nothing over
-/// - off the peers, the registry and the port are the data root's own, never the machine's
-/// - closing the host stops the node and clears the registry; closing another instance leaves it running
-/// - the peer link's look hosts the node when none runs, so another instance takes over when the host quits; a stop by
-///   hand holds in its own instance, and a port another process holds is said once and never touched
+/// [FrontearFabric]: every instance hosts a frontear node of its own, and the nodes are linked (record 187). Every
+/// test runs its instances in this one process, each on its own data root in a temporary folder, against a registry
+/// there and ports from a free one up, never the user's `~/.comando-fabric.json` or port 18883.
+/// - each instance's node runs on a port of its own, and the registry, version 2, holds every slug's node
+/// - one reconcile links each node to the others with the peer's inbox and reply topics and its own presence out
+/// - a question and its reply cross the links, and a presence is retained on the peer's node
+/// - a question queued for a peer that is down reaches its inbox once after its restart on the same port, which holds
+///   the links until its peer broker is subscribed, and the connect tells the listener, which sends the presence again
+/// - a peer's changed start tells the listener as a connect would
+/// - a subscribe before the start publishes its node lets the links in once it does, and a stop forgets it
+/// - a link to a peer first seen is put at once when wanted, not at the next look
+/// - a peer whose process is gone is told with its start; forgetting a peer removes its link and its entry
+/// - a registry of version 1 is replaced, one of a later version is read by none
 /// - the control key pair is made once, readable as its halves require, reused, and the node trusts it alone
-/// - two instances' peer brokers exchange a question and its answer through the node
+/// - a busy port moves the node to the next free one; a held registry lock, a second instance of the same name and a
+///   stop by hand start nothing; looks at once give each instance a port of its own
+/// - off the peers, the registry and the port are the data root's own
 class FrontearFabricTest {
 
+    /// Each wait's bound: a start, a connect or a control reply takes well under a second here.
     private static final Duration WAIT = Duration.ofSeconds(30);
-    private static final String INBOX = "comando/v1/local/instance/b/inbox";
-    private static final String REPLY = "comando/v1/local/instance/a/reply";
+    /// A link's reconnects back off to 30 s, so a drain after a restart may take that long.
+    private static final Duration DRAIN = Duration.ofSeconds(60);
+    /// Each poll that asks a node for its links opens a client; five a second keeps that cheap.
+    private static final Duration POLL = Duration.ofMillis(200);
     private static final long PID = ProcessHandle.current().pid();
-    /// A start no process of this pid had: an entry naming this process with it is stale.
-    private static final String LONG_AGO = "2000-01-01T00:00:00Z";
+    private static final String INBOX_Y = Peers.inboxTopic("y");
+    private static final String REPLY_X = Peers.replyTopic("x");
+    private static final String PRESENCE_X = Peers.presenceTopic("x");
 
     @TempDir
     Path dir;
     private Path registry;
-    private int port;
+    private int base;
     private final List<FrontearFabric> fabrics = new ArrayList<>();
+    private final AtomicInteger probes = new AtomicInteger();
 
     @BeforeEach
     void setUp() throws IOException {
         registry = dir.resolve("comando-fabric.json");
-        port = freePort();
+        base = freePort();
     }
 
     @AfterEach
@@ -92,178 +103,353 @@ class FrontearFabricTest {
         fabrics.forEach(FrontearFabric::close);
     }
 
-    /// A start hosts the node on the port on loopback, says so, and writes the registry with this process, its start
-    /// and the instance's data root; another instance sees it running, is not its host, is refused a stop and installs
-    /// nothing; the host's second toggle stops the node, frees the port and removes the registry.
+    /// The peer link's first look hosts the node without a word before it, on the lowest free port; a second instance
+    /// takes another; the registry, version 2, holds both with their ports, this process and its start. After one
+    /// reconcile each node keeps a link to the other, kept on disk: to the peer's port, the peer's inbox and reply
+    /// topics and its own presence out, nothing in, hop limit 1; both connect.
     @Test
-    void theFirstInstanceHostsAndTheOthersSeeItAndCannotStopIt() throws Exception {
-        final RecordingSink sinkA = new RecordingSink();
-        final FrontearFabric a = fabric("a", sinkA);
-        final RecordingSink sinkB = new RecordingSink();
-        final FrontearFabric b = fabric("b", sinkB);
+    void eachInstanceHostsItsOwnNodeAndOneReconcileLinksThem() throws Exception {
+        final RecordingSink sinkX = new RecordingSink();
+        final FrontearFabric x = fabric("x", sinkX);
+        final FrontearFabric y = fabric("y", new RecordingSink());
 
-        final Intent.Notify up = toggle(a, sinkA);
+        assertThat(look(x)).as("none ran at the look").isFalse();
+        await().atMost(WAIT).until(x::isRunning);
+        x.openLinks(x.mqttPort());
+        host(y);
 
-        assertThat(up.text()).isEqualTo("frontear is up: MQTT 127.0.0.1:" + port);
-        assertThat(sinkA.of(Intent.Notify.class).getFirst().text()).as("said at the click")
-                .isEqualTo("Starting frontear…");
-        final Entry entry = read();
-        assertThat(entry.version()).isEqualTo(FrontearFabric.REGISTRY_VERSION);
-        assertThat(entry.pid()).isEqualTo(PID);
-        assertThat(entry.owner()).isEqualTo(dir.resolve("a").toString());
-        assertThat(entry.name()).isEqualTo("a");
-        assertThat(entry.port()).isEqualTo(port);
-        assertThat(FrontearFabric.taken(port)).as("the node listens").isTrue();
-        await().atMost(WAIT).until(a::startedHere);
-        assertThat(a.status()).as("the host's button says it hosts").isEqualTo("running, hosted here");
+        final int xp = x.mqttPort();
+        final int yp = y.mqttPort();
+        assertThat(xp).isEqualTo(base);
+        assertThat(yp).as("a port of its own").isGreaterThan(xp);
+        assertThat(sinkX.of(Intent.Notify.class)).extracting(Intent.Notify::text).as("only the outcome is said")
+                .containsExactly("frontear is up: MQTT 127.0.0.1:" + xp);
+        assertThat(x.status()).isEqualTo("running on 127.0.0.1:" + xp + " as node x");
+        assertThat(nodes()).containsExactly(
+                Map.entry("x", new Entry(xp, PID, Peers.PROCESS_STARTED, "x", dir.resolve("x").toString())),
+                Map.entry("y", new Entry(yp, PID, Peers.PROCESS_STARTED, "y", dir.resolve("y").toString())));
 
-        assertThat(b.running()).isTrue();
-        await().atMost(WAIT).until(b::isRunning);
-        assertThat(b.startedHere()).isFalse();
-        final String host = "comando · a (" + dir.resolve("a") + ")";
-        assertThat(b.status()).as("the button's tooltip says whose node it is")
-                .isEqualTo("running, hosted by " + host + "; only that comando stops it");
-        assertThat(b.want(false)).isEqualTo("refused: frontear was started by " + host
-                + ", and only that comando stops it");
-        final Intent.Notify refused = toggle(b, sinkB);
-        assertThat(refused.level()).isEqualTo(Notice.Level.WARN);
-        assertThat(refused.text()).isEqualTo("Cannot stop frontear: only the comando that started it stops it"
-                + " [name=a, owner=" + dir.resolve("a") + ", pid=" + PID + ']');
-        assertThat(sinkB.of(Intent.Notify.class)).as("a refusal says nothing else").hasSize(1);
-        assertThat(read()).isEqualTo(entry);
-        assertThat(dir.resolve("b")).as("nothing made for the instance that does not host").doesNotExist();
+        x.reconcile();
+        y.reconcile();
 
-        final Intent.Notify down = toggle(a, sinkA);
-
-        assertThat(down.text()).isEqualTo("frontear is down");
-        assertThat(registry).doesNotExist();
-        assertThat(FrontearFabric.taken(port)).as("the port is free").isFalse();
-        assertThat(a.running()).isFalse();
-        assertThat(b.running()).isFalse();
+        final JsonNode spec = Json.readTree(Files.readString(dir.resolve("x/fabric/y/link.json")));
+        assertThat(spec.path("id").asString()).isEqualTo("y");
+        assertThat(spec.path("host").asString()).isEqualTo("127.0.0.1");
+        assertThat(spec.path("port").asInt()).isEqualTo(yp);
+        assertThat(strings(spec.path("out"))).containsExactlyInAnyOrder(INBOX_Y, Peers.replyTopic("y"), PRESENCE_X);
+        assertThat(strings(spec.path("in"))).isEmpty();
+        assertThat(spec.path("hopLimit").asInt()).isEqualTo(FrontearFabric.HOP_LIMIT);
+        assertThat(strings(Json.readTree(Files.readString(dir.resolve("y/fabric/x/link.json"))).path("out")))
+                .containsExactlyInAnyOrder(Peers.inboxTopic("x"), REPLY_X, Peers.presenceTopic("y"));
+        await().atMost(WAIT).pollInterval(POLL).until(() -> connected("x", xp, "y") && connected("y", yp, "x"));
+        assertThat(links("x", xp).keySet()).containsExactly("y");
     }
 
-    /// While the registry names a live host, a second instance's start changes nothing and says who hosts: its
-    /// registry, its folder and the host's node are left as they were.
+    /// Two instances' peer brokers on their own nodes, as the peer link runs them: a question published on X's node
+    /// with a response topic and correlation data reaches Y's inbox over X's link, the answer comes back over Y's link
+    /// on that topic with that correlation, and both links count what they sent. X's presence, retained, reaches Y's
+    /// node, which hands it to a client that subscribes later as retained.
     @Test
-    void aLiveEntryRefusesASecondHost() throws Exception {
-        final RecordingSink sinkA = new RecordingSink();
-        final FrontearFabric a = fabric("a", sinkA);
-        final RecordingSink sinkB = new RecordingSink();
-        final FrontearFabric b = fabric("b", sinkB);
-        assertThat(a.want(false)).isEqualTo("frontear is not running");
-        assertThat(a.want(true)).startsWith("starting frontear");
-        await().atMost(WAIT).until(() -> !a.busy() && a.running());
-        final Entry started = read();
+    void aQuestionAndItsReplyCrossTheLinksAndThePresenceIsRetainedOnThePeersNode() throws Exception {
+        final FrontearFabric x = fabric("x", new RecordingSink());
+        final FrontearFabric y = fabric("y", new RecordingSink());
+        link(x, y);
+        final int xp = x.mqttPort();
+        final int yp = y.mqttPort();
+        final List<PeerBroker.Message> answers = new CopyOnWriteArrayList<>();
+        final List<PeerBroker.Message> questions = new CopyOnWriteArrayList<>();
+        try (MqttPeerBroker onX = new MqttPeerBroker("comando-x", x::mqttPort, x::isRunning);
+                MqttPeerBroker onY = new MqttPeerBroker("comando-y", y::mqttPort, y::isRunning)) {
+            onY.subscribe(INBOX_Y, m -> {
+                questions.add(m);
+                onY.publish(m.responseTopic(), bytes("X is 42"), false, null, m.correlation());
+            });
+            onX.subscribe(REPLY_X, answers::add);
+            onX.follow();
+            onY.follow();
+            await().atMost(WAIT).until(() -> onX.connected() && onY.connected());
+            // the subscriptions are granted some time after the connect; ask until an answer comes back
+            await().atMost(WAIT).pollInterval(Duration.ofMillis(500)).until(() -> {
+                onX.publish(INBOX_Y, bytes("what is X?"), false, REPLY_X, bytes("id-1"));
+                return !answers.isEmpty();
+            });
 
-        assertThat(b.want(true)).isEqualTo("frontear already runs, started by comando · a (" + dir.resolve("a")
-                + ")");
-        assertThat(a.want(true)).as("its own, running").isEqualTo("frontear already runs");
+            final PeerBroker.Message question = questions.getFirst();
+            assertThat(question.payload()).isEqualTo(bytes("what is X?"));
+            assertThat(question.responseTopic()).isEqualTo(REPLY_X);
+            assertThat(question.correlation()).isEqualTo(bytes("id-1"));
+            final PeerBroker.Message answer = answers.getFirst();
+            assertThat(answer.topic()).isEqualTo(REPLY_X);
+            assertThat(answer.payload()).isEqualTo(bytes("X is 42"));
+            assertThat(answer.correlation()).isEqualTo(bytes("id-1"));
+            assertThat(links("x", xp).get("y").path("sent").asLong()).as("X's link sent the question").isPositive();
+            assertThat(links("y", yp).get("x").path("sent").asLong()).as("Y's link sent the answer").isPositive();
 
-        assertThat(read()).isEqualTo(started);
-        assertThat(sinkB.of(Intent.Notify.class)).as("answered, not toggled").isEmpty();
-        assertThat(dir.resolve("b")).doesNotExist();
-        assertThat(FrontearFabric.taken(port)).isTrue();
+            final List<Packet.Publish> live = new CopyOnWriteArrayList<>();
+            try (MqttClient watcher = client(yp, "watcher", live)) {
+                watcher.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                watcher.subscribe(PRESENCE_X, 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                onX.publish(PRESENCE_X, bytes("x is here"), true, null, null).get(WAIT.toMillis(),
+                        TimeUnit.MILLISECONDS);
+                await().atMost(WAIT).until(() -> !live.isEmpty());
+            }
+        }
+        final List<Packet.Publish> late = new CopyOnWriteArrayList<>();
+        try (MqttClient reader = client(yp, "late", late)) {
+            reader.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            reader.subscribe(PRESENCE_X, 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            await().atMost(WAIT).until(() -> !late.isEmpty());
+        }
+        assertThat(late.getFirst().retain()).as("kept on Y's node").isTrue();
+        assertThat(late.getFirst().payload()).isEqualTo(bytes("x is here"));
     }
 
-    /// Two instances asked to start at the same moment, round after round, leave exactly one host: the registry names
-    /// it, it alone holds the node, and the other connects to it; the host's stop leaves none.
+    /// Once Y closes, X's link to it disconnects and stays; a question for Y, not retained, queues in its log. Y
+    /// started again takes the port it had and holds the links: a link client is refused 0x88, and a port other than
+    /// its node's lets none in. Y's peer broker, as the peer link wires it, lets them in once its inbox is subscribed;
+    /// X's link then drains the question into that subscription, once, with its response topic and correlation data,
+    /// and X's next reconcile tells the listener that a link connected, whose resend of X's presence reaches Y.
     @Test
-    void twoStartsAtOnceMakeOneHost() throws Exception {
-        final FrontearFabric a = fabric("a", new RecordingSink());
-        final FrontearFabric b = fabric("b", new RecordingSink());
-        for (int round = 0; round < 10; round++) {
-            a.want(true);
-            b.want(true);
-            await().atMost(WAIT).until(() -> !a.busy() && !b.busy());
+    void aQuestionQueuedForAPeerThatIsDownReachesItsInboxOnceAfterItsRestart() throws Exception {
+        final FrontearFabric x = fabric("x", new RecordingSink());
+        final FrontearFabric y = fabric("y", new RecordingSink());
+        link(x, y);
+        final int xp = x.mqttPort();
+        final int yp = y.mqttPort();
+        final AtomicInteger ups = new AtomicInteger();
+        try (MqttClient onX = client(xp, "comando-x", new CopyOnWriteArrayList<>())) {
+            onX.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            x.onPeers((_, _) -> { }, () -> onX.publish(new Packet.Publish(PRESENCE_X,
+                    bytes("presence " + ups.incrementAndGet()), 1, true, false, 0, null, null)));
+            final long queued = links("x", xp).get("y").path("queued").asLong();
 
-            final Entry entry = read();
-            final FrontearFabric host = entry.owner().equals(dir.resolve("a").toString()) ? a : b;
-            assertThat(a.running() && b.running()).as("round " + round).isTrue();
-            assertThat(List.of(a, b).stream().filter(FrontearFabric::startedHere).toList()).as("round " + round)
-                    .containsExactly(host);
-            assertThat(FrontearFabric.taken(port)).isTrue();
+            y.close();
 
-            host.want(false);
-            await().atMost(WAIT).until(() -> !host.busy() && !host.running());
-            assertThat(registry).doesNotExist();
-            assertThat(FrontearFabric.taken(port)).as("round " + round).isFalse();
+            await().atMost(WAIT).pollInterval(POLL).until(() -> !connected("x", xp, "y"));
+            // a look while the link is down, as the peer link makes every few seconds
+            x.reconcile();
+            assertThat(links("x", xp)).as("a peer merely down keeps its link").containsKey("y");
+            onX.publishAcknowledged(new Packet.Publish(INBOX_Y, bytes("while you were away"), 1, false, false, 0,
+                    REPLY_X, bytes("id-1"))).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            await().atMost(WAIT).pollInterval(POLL)
+                    .until(() -> links("x", xp).get("y").path("queued").asLong() > queued);
+            assertThat(ups.get()).as("no link connected since").isZero();
+
+            final FrontearFabric back = fabric("y", new RecordingSink());
+            start(back);
+
+            assertThat(back.mqttPort()).as("the port kept in the registry").isEqualTo(yp);
+            back.openLinks(yp + 1);
+            try (MqttClient probe = client(yp, "probe~y", new CopyOnWriteArrayList<>())) {
+                assertThatThrownBy(() -> probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
+                        .isInstanceOf(ExecutionException.class)
+                        .cause()
+                        .isInstanceOfSatisfying(MqttException.class, e -> assertThat(e.reasonCode()).isEqualTo(0x88));
+            }
+            final List<PeerBroker.Message> questions = new CopyOnWriteArrayList<>();
+            final List<String> presences = new CopyOnWriteArrayList<>();
+            try (MqttPeerBroker onY = new MqttPeerBroker("comando-y", back::mqttPort, back::isRunning)) {
+                onY.subscribe(INBOX_Y, questions::add);
+                onY.subscribe(PRESENCE_X, m -> presences.add(new String(m.payload(), StandardCharsets.UTF_8)));
+                onY.onSubscribed(back::openLinks);
+                onY.follow();
+                await().atMost(DRAIN).until(() -> !questions.isEmpty());
+                await().atMost(WAIT).pollInterval(POLL)
+                        .until(() -> links("x", xp).get("y").path("queued").asLong() == queued);
+                assertThat(questions).singleElement().satisfies(q -> {
+                    assertThat(q.payload()).isEqualTo(bytes("while you were away"));
+                    assertThat(q.responseTopic()).isEqualTo(REPLY_X);
+                    assertThat(q.correlation()).isEqualTo(bytes("id-1"));
+                });
+                await().atMost(WAIT).pollInterval(POLL).until(() -> {
+                    x.reconcile();
+                    return ups.get() > 0;
+                });
+                await().atMost(WAIT).until(() -> presences.contains("presence 1"));
+            }
         }
     }
 
-    /// An entry whose pid is dead, or alive but started at another time (another process on a reused pid), names no
-    /// running fabric; the next start clears it and hosts.
+    /// A peer whose node started again between two reconciles shows its link connected at both: the new start its
+    /// entry records tells the listener once, as a connect would, and the same start read again tells nothing.
     @Test
-    void aStaleEntryIsClearedAndTheNextStartHosts() throws Exception {
-        final RecordingSink sink = new RecordingSink();
-        final FrontearFabric a = fabric("a", sink);
-        final Process gone = new ProcessBuilder("true").start();
-        gone.waitFor();
-        write(new Entry(gone.pid(), dir.resolve("b").toString(), "b", port, Instant.now().toString()));
+    void aPeerWhoseStartChangedGetsThePresenceAgain() throws Exception {
+        final FrontearFabric x = fabric("x", new RecordingSink());
+        final FrontearFabric y = fabric("y", new RecordingSink());
+        final AtomicInteger ups = new AtomicInteger();
+        x.onPeers((_, _) -> { }, ups::incrementAndGet);
+        // the link's connect is seen at the reconcile that put it or at the next, by the time both are done
+        link(x, y);
+        x.reconcile();
+        assertThat(ups).as("the link's connect, once").hasValue(1);
+        final Map<String, Entry> nodes = nodes();
+        final Entry e = nodes.get("y");
+        nodes.put("y", new Entry(e.port(), e.pid(), "2026-11-21T11:00:00Z", e.name(), e.owner()));
+        write(nodes);
 
-        assertThat(a.running()).as("a dead pid").isFalse();
-        assertThat(toggle(a, sink).text()).startsWith("frontear is up");
-        assertThat(read().owner()).isEqualTo(dir.resolve("a").toString());
-        toggle(a, sink);
-
-        write(new Entry(PID, dir.resolve("b").toString(), "b", port, LONG_AGO));
-
-        assertThat(a.running()).as("this pid, started at another time").isFalse();
-        assertThat(toggle(a, sink).text()).startsWith("frontear is up");
-        assertThat(read().owner()).isEqualTo(dir.resolve("a").toString());
+        x.reconcile();
+        assertThat(ups).as("the new start").hasValue(2);
+        x.reconcile();
+        assertThat(ups).as("the same start again").hasValue(2);
     }
 
-    /// The registry keeps the schema rules of record 133: an entry with no version is version 1 and names its
-    /// host; one of a later version is read by no instance of this comando, which then starts nothing and leaves it.
+    /// The peer link's subscribe that completes before a start has published its node, as a reconnect between the bind
+    /// and the registry write does, finds no node to open; the start, once it publishes the node on that port, lets the
+    /// links in. A stop forgets that subscribe: the next start holds its links until the peer link subscribes again.
     @Test
-    void anEntryWithoutAVersionIsReadAndOneOfALaterVersionIsNot() throws Exception {
+    void aSubscribeBeforeTheStartPublishesItsNodeLetsTheLinksInOnceItDoes() throws Exception {
+        final FrontearFabric y = fabric("y", new RecordingSink());
+        y.openLinks(base);
+        start(y);
+        assertThat(y.mqttPort()).isEqualTo(base);
+        try (MqttClient probe = client(base, "probe~y", new CopyOnWriteArrayList<>())) {
+            probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+        }
+
+        y.want(false);
+        await().atMost(WAIT).until(() -> !y.busy() && !y.isRunning());
+        start(y);
+        assertThat(y.mqttPort()).as("the port kept").isEqualTo(base);
+        try (MqttClient probe = client(base, "probe~y", new CopyOnWriteArrayList<>())) {
+            assertThatThrownBy(() -> probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOfSatisfying(MqttException.class, e -> assertThat(e.reasonCode()).isEqualTo(0x88));
+        }
+        y.openLinks(base);
+        try (MqttClient probe = client(base, "probe~y", new CopyOnWriteArrayList<>())) {
+            probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /// A link to a peer first seen is put at once, on the caller's thread, without waiting for the next look's
+    /// reconcile, to the peer's port with its inbox out; this node's own slug puts none, and a slug the registry does
+    /// not hold puts none of its own.
+    @Test
+    void aLinkToAPeerIsPutAtOnceWhenItIsWanted() throws Exception {
+        final FrontearFabric x = fabric("x", new RecordingSink());
+        final FrontearFabric y = fabric("y", new RecordingSink());
+        host(x);
+        host(y);
+        final int xp = x.mqttPort();
+        assertThat(links("x", xp)).as("no reconcile yet").isEmpty();
+
+        x.linkTo("x");
+        assertThat(links("x", xp)).isEmpty();
+
+        x.linkTo("y");
+        x.linkTo("z");
+        assertThat(links("x", xp).keySet()).containsExactly("y");
+        final JsonNode spec = Json.readTree(Files.readString(dir.resolve("x/fabric/y/link.json")));
+        assertThat(spec.path("port").asInt()).isEqualTo(y.mqttPort());
+        assertThat(strings(spec.path("out"))).contains(INBOX_Y);
+    }
+
+    /// A reconcile tells the listener of each peer whose entry names a process that is gone, with the start the entry
+    /// records, and of no live one; both keep their links, the gone one's queueing.
+    @Test
+    void aPeerWhoseProcessIsGoneIsToldWithItsStart() throws Exception {
+        final FrontearFabric x = fabric("x", new RecordingSink());
+        host(x);
+        final List<String> gone = new CopyOnWriteArrayList<>();
+        x.onPeers((slug, started) -> gone.add(slug + ' ' + started), () -> { });
+        final Process dead = new ProcessBuilder("true").start();
+        dead.waitFor();
+        final Map<String, Entry> nodes = nodes();
+        nodes.put("z", new Entry(freePort(), dead.pid(), "2026-11-21T10:00:00Z", "z", dir.resolve("z").toString()));
+        nodes.put("w", new Entry(freePort(), PID, Peers.PROCESS_STARTED, "w", dir.resolve("w").toString()));
+        write(nodes);
+
+        x.reconcile();
+
+        assertThat(gone).containsExactly("z 2026-11-21T10:00:00Z");
+        assertThat(links("x", x.mqttPort()).keySet()).containsExactlyInAnyOrder("w", "z");
+    }
+
+    /// Forgetting a peer whose node runs changes nothing; once it is down, its registry entry, this node's link to it
+    /// and the link's spec go, and the next reconcile does not put it back. Forgetting oneself does nothing.
+    @Test
+    void forgettingAPeerRemovesItsLinkAndItsEntry() throws Exception {
+        final FrontearFabric x = fabric("x", new RecordingSink());
+        final FrontearFabric y = fabric("y", new RecordingSink());
+        link(x, y);
+        final int xp = x.mqttPort();
+
+        x.forgetNow("y");
+        x.forgetNow("x");
+
+        assertThat(nodes().keySet()).containsExactly("x", "y");
+        assertThat(links("x", xp).keySet()).as("its node runs").containsExactly("y");
+
+        y.close();
+        x.forgetNow("y");
+
+        assertThat(nodes().keySet()).containsExactly("x");
+        assertThat(links("x", xp)).isEmpty();
+        assertThat(dir.resolve("x/fabric/y/link.json")).doesNotExist();
+        x.reconcile();
+        assertThat(links("x", xp)).isEmpty();
+    }
+
+    /// A registry of version 1, one node for the machine, is replaced at the next start by one of this version holding
+    /// this node alone; one of a later version is read by no instance of this comando, which then starts nothing and
+    /// leaves it as it was.
+    @Test
+    void aRegistryOfVersion1IsReplacedAndOneOfALaterVersionIsNotRead() throws Exception {
         final RecordingSink sink = new RecordingSink();
         final FrontearFabric a = fabric("a", sink);
-        final String started = ProcessHandle.current().info().startInstant().orElseThrow().toString();
         Files.writeString(registry, "{\"pid\":" + PID + ",\"owner\":\"" + dir.resolve("b") + "\",\"name\":\"b\","
-                + "\"port\":" + port + ",\"started\":\"" + started + "\"}\n");
+                + "\"port\":" + base + ",\"started\":\"" + Peers.PROCESS_STARTED + "\"}\n");
 
-        assertThat(read().version()).isEqualTo(1);
-        assertThat(a.running()).isTrue();
-        assertThat(a.want(true)).startsWith("frontear already runs, started by comando · b");
+        assertThat(toggle(a, sink).text()).isEqualTo("frontear is up: MQTT 127.0.0.1:" + base);
 
-        write(new Entry(FrontearFabric.REGISTRY_VERSION + 1, PID, dir.resolve("b").toString(), "b", port, started));
-        final String later = Files.readString(registry);
+        assertThat(nodes().keySet()).containsExactly("a");
+        a.close();
 
-        assertThat(a.running()).isFalse();
-        final Intent.Notify refused = toggle(a, sink);
+        final String later = "{\"version\":" + (FrontearFabric.REGISTRY_VERSION + 1) + ",\"nodes\":{}}\n";
+        Files.writeString(registry, later);
+        final FrontearFabric b = fabric("b", sink);
+        final Intent.Notify refused = toggle(b, sink);
+
         assertThat(refused.level()).isEqualTo(Notice.Level.WARN);
         assertThat(refused.text()).startsWith("Cannot read the frontear registry; remove it if no frontear runs"
                 + " [registry=" + registry + ", cause=");
         assertThat(Files.readString(registry)).isEqualTo(later);
-        assertThat(FrontearFabric.taken(port)).isFalse();
+        assertThat(b.isRunning()).isFalse();
     }
 
-    /// Closing an instance that does not host leaves the node running; closing the host stops it within a bounded
-    /// time, frees the port and removes the registry, so the others see it stop; a second close does nothing.
+    /// Closing an instance stops its node within a bounded time and marks its entry down, pid 0, its port and start
+    /// kept, so the port is free and another instance's node keeps running; a second close does nothing, and the
+    /// instance started again takes the same port. The node it runs is handed out while it runs, and none before or
+    /// after.
     @Test
-    void closingTheHostStopsTheFabricAndClosingAnotherDoesNot() throws Exception {
-        final RecordingSink sinkA = new RecordingSink();
-        final FrontearFabric a = fabric("a", sinkA);
+    void closingMarksTheNodeDownAndKeepsItsPort() throws Exception {
+        final FrontearFabric a = fabric("a", new RecordingSink());
         final FrontearFabric b = fabric("b", new RecordingSink());
-        toggle(a, sinkA);
-        final Entry started = read();
-
-        b.close();
-
-        assertThat(read()).isEqualTo(started);
-        assertThat(FrontearFabric.taken(port)).isTrue();
-        assertThat(a.running()).isTrue();
+        assertThat(a.node()).as("none before the start").isNull();
+        host(a);
+        host(b);
+        final int port = a.mqttPort();
+        assertThat(a.node().port()).as("the node it runs").isEqualTo(port);
 
         final long start = System.nanoTime();
         a.close();
         final Duration closed = Duration.ofNanos(System.nanoTime() - start);
 
         assertThat(closed).isLessThan(WAIT);
-        assertThat(registry).doesNotExist();
+        final Entry down = new Entry(port, 0L, Peers.PROCESS_STARTED, "a", dir.resolve("a").toString());
+        assertThat(nodes().get("a")).isEqualTo(down);
         assertThat(FrontearFabric.taken(port)).isFalse();
-        assertThat(fabric("c", new RecordingSink()).running()).as("another instance sees it stop").isFalse();
+        assertThat(a.isRunning()).isFalse();
+        assertThat(a.node()).as("none once closed").isNull();
+        assertThat(a.mqttPort()).as("the lowest port a start may take").isEqualTo(base);
+        assertThat(b.isRunning()).isTrue();
         a.close();
-        assertThat(registry).doesNotExist();
+        assertThat(nodes().get("a")).isEqualTo(down);
+
+        final FrontearFabric again = fabric("a", new RecordingSink());
+        host(again);
+        assertThat(again.mqttPort()).isEqualTo(port);
     }
 
     /// The first start makes the control key pair in the fabric's folder, the folder and the private half readable by
@@ -289,13 +475,14 @@ class FrontearFabricTest {
         final PublicKey pub = publicKey(shared);
         final KeyPair stranger = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
         final List<Packet.Publish> replies = new CopyOnWriteArrayList<>();
-        try (MqttClient pod = client("pod", replies)) {
+        final String getState = Names.CONTROL + "a/GetState";
+        try (MqttClient pod = client(a.mqttPort(), "pod", replies)) {
             pod.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             pod.subscribe("replies/#", 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            pod.publishAcknowledged(new Signer(key, Signer.keyId(pub)).sign("$frontear/control/comando/GetState",
-                    bytes("{}"), "replies/pod", bytes("1"))).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            pod.publishAcknowledged(new Signer(key, Signer.keyId(pub)).sign(getState, bytes("{}"), "replies/pod",
+                    bytes("1"))).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             pod.publishAcknowledged(new Signer(stranger.getPrivate(), Signer.keyId(stranger.getPublic()))
-                    .sign("$frontear/control/comando/GetState", bytes("{}"), "replies/stranger", bytes("2")))
+                    .sign(getState, bytes("{}"), "replies/stranger", bytes("2")))
                     .get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             await().atMost(WAIT).until(() -> replies.size() == 2);
         }
@@ -340,263 +527,122 @@ class FrontearFabricTest {
         assertThat(refused.level()).isEqualTo(Notice.Level.ERROR);
         assertThat(Files.readString(root.resolve(FrontearFabric.PRIVATE_KEY))).isEqualTo("not a key\n");
         assertThat(registry).doesNotExist();
-        assertThat(FrontearFabric.taken(port)).isFalse();
+        assertThat(FrontearFabric.taken(base)).isFalse();
     }
 
-    /// With the port held by another listener on loopback, a toggle warns naming that port, makes no folder and no key
-    /// and writes no registry, and the button's tooltip says the port is held; the listener keeps its port.
+    /// With the lowest port held by another listener on loopback, a start takes the next free one, records it, and
+    /// leaves the listener its port.
     @Test
-    void aBusyPortRefusesTheStart() throws Exception {
+    void aBusyPortMovesTheNodeToTheNextFreeOne() throws Exception {
         final RecordingSink sink = new RecordingSink();
         final FrontearFabric a = fabric("a", sink);
         try (ServerSocket holder = new ServerSocket()) {
-            holder.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+            holder.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), base));
 
-            final Intent.Notify refused = toggle(a, sink);
+            final Intent.Notify up = toggle(a, sink);
 
-            assertThat(refused.level()).isEqualTo(Notice.Level.WARN);
-            assertThat(refused.text()).isEqualTo(portHeld(port));
-            assertThat(a.status()).isEqualTo("stopped; port " + port + " on 127.0.0.1 is in use by another process");
-            assertThat(registry).doesNotExist();
-            assertThat(dir.resolve("a")).doesNotExist();
+            final int port = a.mqttPort();
+            assertThat(port).isGreaterThan(base);
+            assertThat(up.text()).isEqualTo("frontear is up: MQTT 127.0.0.1:" + port);
+            assertThat(nodes().get("a").port()).isEqualTo(port);
             assertThat(holder.isBound() && !holder.isClosed()).isTrue();
         }
     }
 
-    /// Two instances' peer brokers follow the fabric as the peer link does: each connects while it runs, a question
-    /// published with a response topic and correlation data reaches the other's inbox, and the answer comes back on
-    /// that topic with that correlation; once the host closes, the client's broker stops following and disconnects.
+    /// While another comando holds the registry's lock, a look neither hosts nor writes, says nothing, and gives up
+    /// within its bound; once the lock is let go, the next look hosts.
     @Test
-    void twoInstancesExchangeAQuestionAndItsAnswerThroughTheFabric() {
-        final RecordingSink sinkA = new RecordingSink();
-        final FrontearFabric a = fabric("a", sinkA);
-        final FrontearFabric b = fabric("b", new RecordingSink());
-        toggle(a, sinkA);
-        final List<PeerBroker.Message> answers = new CopyOnWriteArrayList<>();
-        final List<PeerBroker.Message> questions = new CopyOnWriteArrayList<>();
-        try (MqttPeerBroker onA = new MqttPeerBroker("comando-a", a.mqttPort(), a::running);
-                MqttPeerBroker onB = new MqttPeerBroker("comando-b", b.mqttPort(), b::running)) {
-            onB.subscribe(INBOX, m -> {
-                questions.add(m);
-                onB.publish(m.responseTopic(), bytes("X is 42"), false, null, m.correlation());
-            });
-            onA.subscribe(REPLY, answers::add);
-            onA.follow();
-            onB.follow();
-            await().atMost(WAIT).until(() -> onA.connected() && onB.connected());
-            // the subscriptions are granted some time after the connect; ask until an answer comes back
-            await().atMost(WAIT).pollInterval(Duration.ofMillis(500)).until(() -> {
-                onA.publish(INBOX, bytes("what is X?"), false, REPLY, bytes("id-1"));
-                return !answers.isEmpty();
-            });
-
-            final PeerBroker.Message question = questions.getFirst();
-            assertThat(question.payload()).isEqualTo(bytes("what is X?"));
-            assertThat(question.responseTopic()).isEqualTo(REPLY);
-            assertThat(question.correlation()).isEqualTo(bytes("id-1"));
-            final PeerBroker.Message answer = answers.getFirst();
-            assertThat(answer.topic()).isEqualTo(REPLY);
-            assertThat(answer.payload()).isEqualTo(bytes("X is 42"));
-            assertThat(answer.correlation()).isEqualTo(bytes("id-1"));
-
-            a.close();
-            onB.follow();
-            await().atMost(WAIT).until(() -> !onB.connected());
-        }
-    }
-
-    /// The peer link's first look, with none running, hosts the node without a word before it; another instance's look
-    /// finds it running and hosts nothing. Once the host quits, the other's next look hosts it, and the registry names
-    /// that instance.
-    @Test
-    void aLookHostsWhenNoneRunsAndAnotherTakesOverWhenTheHostQuits() throws Exception {
-        final RecordingSink sinkA = new RecordingSink();
-        final FrontearFabric a = fabric("a", sinkA);
-        final RecordingSink sinkB = new RecordingSink();
-        final FrontearFabric b = fabric("b", sinkB);
-
-        assertThat(look(a)).as("none ran at the look").isFalse();
-        await().atMost(WAIT).until(a::startedHere);
-        assertThat(sinkA.of(Intent.Notify.class)).extracting(Intent.Notify::text).as("only the outcome is said")
-                .containsExactly("frontear is up: MQTT 127.0.0.1:" + port);
-        assertThat(look(b)).as("a's node runs").isTrue();
-        assertThat(b.startedHere()).isFalse();
-        assertThat(read().owner()).isEqualTo(dir.resolve("a").toString());
-
-        a.close();
-        assertThat(FrontearFabric.taken(port)).as("the host quit").isFalse();
-
-        await().atMost(WAIT).until(() -> {
-            look(b);
-            return b.startedHere();
-        });
-        assertThat(read().owner()).isEqualTo(dir.resolve("b").toString());
-        assertThat(FrontearFabric.taken(port)).isTrue();
-        assertThat(sinkB.of(Intent.Notify.class)).extracting(Intent.Notify::text)
-                .containsExactly("frontear is up: MQTT 127.0.0.1:" + port);
-    }
-
-    /// Three instances looking at once with none running, round after round, leave exactly one host, the one the
-    /// registry names; the others connect to it.
-    @Test
-    void looksAtOnceMakeOneHost() throws Exception {
-        for (int round = 0; round < 5; round++) {
-            final List<String> names = List.of(round + "a", round + "b", round + "c");
-            final List<FrontearFabric> all = names.stream().map(n -> fabric(n, new RecordingSink())).toList();
-            all.forEach(FrontearFabric::runningOrHost);
-            await().atMost(WAIT).until(() -> all.stream().noneMatch(FrontearFabric::busy));
-
-            final List<FrontearFabric> hosts = all.stream().filter(FrontearFabric::startedHere).toList();
-            assertThat(hosts).as("round " + round).hasSize(1);
-            assertThat(read().owner()).as("round " + round)
-                    .isEqualTo(dir.resolve(names.get(all.indexOf(hosts.getFirst()))).toString());
-            assertThat(all.stream().allMatch(FrontearFabric::running)).as("round " + round).isTrue();
-
-            all.forEach(FrontearFabric::close);
-            assertThat(registry).as("round " + round).doesNotExist();
-            assertThat(FrontearFabric.taken(port)).as("round " + round).isFalse();
-        }
-    }
-
-    /// A port another process holds: the looks start nothing and say so once, however many there are, the tooltip
-    /// says why it is stopped, and the holder keeps its port; once it lets go, the next look hosts.
-    @Test
-    void aPortHeldByAnotherProcessIsSaidOnceAndLeftAlone() throws Exception {
+    void aHeldRegistryLockHoldsOffAStartUntilItIsLetGo() throws Exception {
         final RecordingSink sink = new RecordingSink();
         final FrontearFabric a = fabric("a", sink);
-        try (final ServerSocket holder = new ServerSocket()) {
-            holder.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-
-            for (int i = 0; i < 3; i++) {
-                assertThat(look(a)).isFalse();
-            }
-
-            assertThat(sink.of(Intent.Notify.class)).extracting(Intent.Notify::text).as("said once")
-                    .containsExactly(portHeld(port));
-            assertThat(sink.of(Intent.Notify.class).getFirst().level()).isEqualTo(Notice.Level.WARN);
-            assertThat(a.status()).isEqualTo("stopped; port " + port + " on 127.0.0.1 is in use by another process");
-            assertThat(registry).doesNotExist();
-            assertThat(holder.isBound() && !holder.isClosed()).isTrue();
-        }
-        await().atMost(WAIT).until(() -> {
-            look(a);
-            return a.startedHere();
-        });
-    }
-
-    /// A stop by hand holds in its own instance: its next looks start nothing until a start by hand; another
-    /// instance's look, which cannot tell the stop from a quit, hosts it.
-    @Test
-    void aStopByHandHoldsInItsOwnInstance() throws Exception {
-        final RecordingSink sinkA = new RecordingSink();
-        final FrontearFabric a = fabric("a", sinkA);
-        final FrontearFabric b = fabric("b", new RecordingSink());
-        look(a);
-        await().atMost(WAIT).until(a::startedHere);
-
-        assertThat(toggle(a, sinkA).text()).isEqualTo("frontear is down");
-
-        assertThat(look(a)).isFalse();
-        assertThat(a.busy()).as("no start under way").isFalse();
-        assertThat(registry).doesNotExist();
-
-        await().atMost(WAIT).until(() -> {
-            look(b);
-            return b.startedHere();
-        });
-        b.close();
-        assertThat(a.want(true)).startsWith("starting frontear");
-        await().atMost(WAIT).until(() -> !a.busy() && a.startedHere());
-    }
-
-    /// While another comando holds the registry's lock, a look over a stale entry neither clears it nor hosts, and
-    /// gives up within its bound; once the lock is let go, the next look clears it and hosts. The entry names this
-    /// process at another start: a removal that read it before another instance's claim would delete that claim.
-    @Test
-    void aHeldRegistryLockHoldsOffATakeoverUntilItIsLetGo() throws Exception {
-        final RecordingSink sink = new RecordingSink();
-        final FrontearFabric a = fabric("a", sink);
-        final Entry stale = new Entry(PID, dir.resolve("b").toString(), "b", port, LONG_AGO);
-        write(stale);
         try (final FileChannel channel = FileChannel.open(FrontearFabric.lockFile(registry),
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                 final FileLock _ = channel.lock()) {
 
             assertThat(look(a)).isFalse();
 
-            assertThat(read()).as("left as it was").isEqualTo(stale);
-            assertThat(a.startedHere()).isFalse();
-            assertThat(FrontearFabric.taken(port)).as("nothing bound").isFalse();
+            assertThat(a.isRunning()).isFalse();
+            assertThat(registry).doesNotExist();
+            assertThat(FrontearFabric.taken(base)).as("nothing bound").isFalse();
             assertThat(sink.of(Intent.Notify.class)).as("a look says nothing of it").isEmpty();
         }
         await().atMost(WAIT).until(() -> {
             look(a);
-            return a.startedHere();
+            return a.isRunning();
         });
-        assertThat(read().owner()).isEqualTo(dir.resolve("a").toString());
+        assertThat(nodes().keySet()).containsExactly("a");
     }
 
-    /// Two instances taking over a stale entry at the same moment, round after round with seeded timing, leave exactly
-    /// one host, the one the registry names, and neither says another process holds the port: the entry names this
-    /// process at another start and one of the two, so each finds it stale. Seeds `comando.fabric.seed0` and
-    /// `comando.fabric.seed1` (`COMANDO_FABRIC_SEED0/1` through Gradle).
+    /// A second instance of the same name, on another data root, is refused a start while the first's node runs: the
+    /// warning names the other's root, process and port, and the registry keeps the first.
     @Test
-    void staleTakeoversAtOnceMakeOneHost() throws Exception {
-        final long seed0 = Long.getLong("comando.fabric.seed0", System.nanoTime());
-        final long seed1 = Long.getLong("comando.fabric.seed1", System.currentTimeMillis() * 31L + System.nanoTime());
-        System.out.println("staleTakeoversAtOnceMakeOneHost seeds [comando.fabric.seed0=" + seed0
-                + ", comando.fabric.seed1=" + seed1 + ']');
-        final SplittableRandom random = new SplittableRandom(seed0 ^ Long.rotateLeft(seed1, 32));
-        for (int round = 0; round < 20; round++) {
-            final List<RecordingSink> sinks = List.of(new RecordingSink(), new RecordingSink());
-            final List<FrontearFabric> two = List.of(fabric(round + "a", sinks.get(0)),
-                    fabric(round + "b", sinks.get(1)));
-            final String named = round + (random.nextBoolean() ? "a" : "b");
-            write(new Entry(PID, dir.resolve(named).toString(), named, port, LONG_AGO));
-            final CyclicBarrier barrier = new CyclicBarrier(two.size());
-            final AtomicReference<Throwable> failed = new AtomicReference<>();
-            final List<Thread> racers = new ArrayList<>();
-            for (final FrontearFabric f : two) {
-                // up to 0.2 ms apart, spun: the race is between one's removal and the other's claim
-                final long lagNanos = random.nextLong(200_000);
-                racers.add(Thread.ofVirtual().name("fabric-test-takeover-" + round + "-" + racers.size()).start(() -> {
-                    try {
-                        barrier.await(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-                        final long until = System.nanoTime() + lagNanos;
-                        while (System.nanoTime() - until < 0) {
-                            Thread.onSpinWait();
-                        }
-                        f.runningOrHost();
-                    } catch (final InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        failed.compareAndSet(null, e);
-                    } catch (final BrokenBarrierException | TimeoutException | RuntimeException e) {
-                        failed.compareAndSet(null, e);
-                    }
-                }));
-            }
-            for (final Thread t : racers) {
-                assertThat(t.join(WAIT)).as("round " + round).isTrue();
-            }
-            assertThat(failed.get()).as("round " + round).isNull();
-            await().atMost(WAIT).until(() -> two.stream().noneMatch(FrontearFabric::busy));
+    void aSecondInstanceOfTheSameNameIsRefused() throws Exception {
+        final FrontearFabric first = fabric("a", new RecordingSink());
+        final RecordingSink sink = new RecordingSink();
+        final FrontearFabric second = new FrontearFabric(dir.resolve("other/fabric"), dir.resolve("other"), "a", sink,
+                registry, base);
+        fabrics.add(second);
+        host(first);
+        final Entry entry = nodes().get("a");
 
-            final List<FrontearFabric> hosts = two.stream().filter(FrontearFabric::startedHere).toList();
-            assertThat(hosts).as("round " + round).hasSize(1);
-            assertThat(read().owner()).as("round " + round)
-                    .isEqualTo(dir.resolve(round + (hosts.getFirst() == two.get(0) ? "a" : "b")).toString());
-            assertThat(two.stream().allMatch(FrontearFabric::running)).as("round " + round).isTrue();
-            assertThat(sinks.stream().flatMap(k -> k.of(Intent.Notify.class).stream()).map(Intent.Notify::text))
-                    .as("round " + round).noneMatch(t -> t.contains("another process"));
+        final Intent.Notify refused = toggle(second, sink);
 
-            two.forEach(FrontearFabric::close);
-            assertThat(registry).as("round " + round).doesNotExist();
-            assertThat(FrontearFabric.taken(port)).as("round " + round).isFalse();
+        assertThat(refused.level()).isEqualTo(Notice.Level.WARN);
+        assertThat(refused.text()).isEqualTo("Cannot start frontear: another comando named a runs its node [owner="
+                + dir.resolve("a") + ", pid=" + PID + ", port=" + first.mqttPort() + ']');
+        assertThat(second.isRunning()).isFalse();
+        assertThat(second.status()).isEqualTo("stopped");
+        assertThat(nodes().get("a")).isEqualTo(entry);
+    }
+
+    /// Three instances looking at once with none running, round after round, each host a node on a port of its own,
+    /// the one the registry records for it; closed, each keeps its port, and the next round's take others.
+    @Test
+    void looksAtOnceGiveEachInstanceAPortOfItsOwn() throws Exception {
+        final List<Integer> taken = new ArrayList<>();
+        for (int round = 0; round < 5; round++) {
+            final List<String> names = List.of(round + "a", round + "b", round + "c");
+            final List<FrontearFabric> all = names.stream().map(n -> fabric(n, new RecordingSink())).toList();
+            all.forEach(FrontearFabric::runningOrHost);
+            await().atMost(WAIT).until(() -> all.stream().noneMatch(FrontearFabric::busy));
+
+            assertThat(all.stream().allMatch(FrontearFabric::isRunning)).as("round " + round).isTrue();
+            final Map<String, Entry> nodes = nodes();
+            for (int i = 0; i < all.size(); i++) {
+                assertThat(nodes.get(names.get(i)).port()).as("round " + round).isEqualTo(all.get(i).mqttPort());
+                taken.add(all.get(i).mqttPort());
+            }
+            all.forEach(FrontearFabric::close);
         }
+        assertThat(new HashSet<>(taken)).as("no port twice").hasSize(taken.size());
+        assertThat(nodes().values()).allMatch(e -> e.pid() == 0L);
+    }
+
+    /// A stop by hand holds in its own instance: its entry is marked down, and its next looks start nothing until a
+    /// start by hand, which takes the same port.
+    @Test
+    void aStopByHandHoldsInItsOwnInstance() throws Exception {
+        final RecordingSink sink = new RecordingSink();
+        final FrontearFabric a = fabric("a", sink);
+        look(a);
+        await().atMost(WAIT).until(a::isRunning);
+        final int port = a.mqttPort();
+
+        assertThat(toggle(a, sink).text()).isEqualTo("frontear is down");
+
+        assertThat(look(a)).isFalse();
+        assertThat(a.busy()).as("no start under way").isFalse();
+        assertThat(nodes().get("a").pid()).isZero();
+        assertThat(a.want(false)).isEqualTo("frontear is not running");
+
+        assertThat(a.want(true)).startsWith("starting frontear");
+        await().atMost(WAIT).until(() -> !a.busy() && a.isRunning());
+        assertThat(a.want(true)).isEqualTo("frontear already runs");
+        assertThat(a.mqttPort()).isEqualTo(port);
     }
 
     /// Off the peers, as every test and picture tool runs, the fabric's registry is the data root's and its port one
-    /// the OS picks: a toggle hosts there and never reads or writes the machine's registry or binds its port.
+    /// the OS picks: a toggle hosts there and never binds the machine's port.
     @Test
     void offThePeersTheFabricKeepsToTheDataRoot() throws Exception {
         final RecordingSink sink = new RecordingSink();
@@ -609,16 +655,35 @@ class FrontearFabricTest {
 
         assertThat(up.text()).startsWith("frontear is up: MQTT 127.0.0.1:")
                 .isNotEqualTo("frontear is up: MQTT 127.0.0.1:" + FrontearFabric.PORT);
-        final Entry entry = read(home.resolve(FrontearFabric.REGISTRY.getFileName()));
+        final Entry entry = nodes(home.resolve(FrontearFabric.REGISTRY.getFileName())).get("off");
         assertThat(entry.owner()).isEqualTo(home.toString());
         assertThat(entry.pid()).isEqualTo(PID);
-        await().atMost(WAIT).until(off::startedHere);
+        assertThat(entry.port()).isEqualTo(off.mqttPort());
     }
 
-    /// The warning a start meets when another process holds `port`.
-    private static String portHeld(final int port) {
-        return "Cannot start frontear: another process holds its port; comando leaves it alone, and the instances reach"
-                + " each other once it is free [host=127.0.0.1, port=" + port + ']';
+    /// Starts `fabric`'s node as an agent's `server_start frontear` does, waits until it runs, and lets the peers'
+    /// links in, as its peer broker does once subscribed.
+    private static void host(final FrontearFabric fabric) {
+        start(fabric);
+        fabric.openLinks(fabric.mqttPort());
+    }
+
+    /// Starts `fabric`'s node as an agent's `server_start frontear` does, and waits until it runs, its links held.
+    private static void start(final FrontearFabric fabric) {
+        await().atMost(WAIT).until(() -> !fabric.busy());
+        fabric.want(true);
+        await().atMost(WAIT).until(() -> !fabric.busy() && fabric.isRunning());
+    }
+
+    /// Hosts the nodes of `x` and `y`, named so, reconciles each once, and waits until each one's link to the other
+    /// connected.
+    private void link(final FrontearFabric x, final FrontearFabric y) {
+        host(x);
+        host(y);
+        x.reconcile();
+        y.reconcile();
+        await().atMost(WAIT).pollInterval(POLL)
+                .until(() -> connected("x", x.mqttPort(), "y") && connected("y", y.mqttPort(), "x"));
     }
 
     /// One look of the peer link, waited for: whether the node ran when it looked.
@@ -638,6 +703,42 @@ class FrontearFabricTest {
         sink.await(Intent.Notify.class, WAIT);
         await().atMost(WAIT).until(() -> !fabric.busy());
         return sink.of(Intent.Notify.class).getLast();
+    }
+
+    /// Whether node `instance`, on `port`, has a link to `peer` and it is connected.
+    private boolean connected(final String instance, final int port, final String peer) throws Exception {
+        final JsonNode link = links(instance, port).get(peer);
+        return link != null && link.path("connected").asBoolean(false);
+    }
+
+    /// The links of node `instance` on `port` by id, as its control plane answers a `GetState` signed with the
+    /// instance's pod key.
+    private Map<String, JsonNode> links(final String instance, final int port) throws Exception {
+        final KeyPair pair = FrontearFabric.keys(dir.resolve(instance + "/fabric"));
+        final String id = "probe-" + probes.incrementAndGet();
+        final List<Packet.Publish> replies = new CopyOnWriteArrayList<>();
+        try (MqttClient pod = client(port, id, replies)) {
+            pod.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            pod.subscribe("replies/" + id, 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            pod.publishAcknowledged(new Signer(pair.getPrivate(), Signer.keyId(pair.getPublic())).sign(Names.CONTROL
+                    + instance + "/GetState", bytes("{}"), "replies/" + id, bytes(id)))
+                    .get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            await().atMost(WAIT).until(() -> !replies.isEmpty());
+        }
+        final JsonNode state = Json.readTree(replies.getFirst().payload());
+        assertThat(state.path("ok").asBoolean(false)).as("GetState answered").isTrue();
+        final Map<String, JsonNode> links = new TreeMap<>();
+        for (final JsonNode l : state.path("links")) {
+            links.put(l.path("id").asString(""), l);
+        }
+        return links;
+    }
+
+    /// The text elements of JSON array `array`.
+    private static List<String> strings(final JsonNode array) {
+        final List<String> out = new ArrayList<>();
+        array.forEach(n -> out.add(n.asString()));
+        return out;
     }
 
     /// The one reply that came on `topic`, read as JSON.
@@ -664,13 +765,13 @@ class FrontearFabricTest {
 
     private FrontearFabric fabric(final String instance, final RecordingSink sink) {
         final FrontearFabric f = new FrontearFabric(dir.resolve(instance + "/fabric"), dir.resolve(instance), instance,
-                sink, registry, port);
+                sink, registry, base);
         fabrics.add(f);
         return f;
     }
 
-    /// A plain client of the node on the test's port, its messages collected in `into` on its reader thread.
-    private MqttClient client(final String id, final List<Packet.Publish> into) {
+    /// A plain client of the node on `port`, its messages collected in `into` on its reader thread.
+    private static MqttClient client(final int port, final String id, final List<Packet.Publish> into) {
         return new MqttClient(new MqttClient.Options("127.0.0.1", port, id, 0, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE,
                 null), new MqttClient.Handler() {
 
@@ -691,15 +792,30 @@ class FrontearFabricTest {
                 }, Runnable::run);
     }
 
-    private Entry read() throws IOException {
-        return read(registry);
+    /// The registry's nodes by slug, as written on disk; it must be of this comando's version.
+    private Map<String, Entry> nodes() throws IOException {
+        return nodes(registry);
     }
 
-    private static Entry read(final Path file) throws IOException {
-        return JsonFile.BINDER.fromTree(Json.readTree(Files.readString(file)), Entry.class);
+    private static Map<String, Entry> nodes(final Path file) throws IOException {
+        final JsonNode tree = Json.readTree(Files.readString(file));
+        assertThat(tree.path("version").asInt(0)).isEqualTo(FrontearFabric.REGISTRY_VERSION);
+        final Map<String, Entry> nodes = new TreeMap<>();
+        for (final Map.Entry<String, JsonNode> n : tree.path("nodes").properties()) {
+            final JsonNode e = n.getValue();
+            nodes.put(n.getKey(), new Entry(e.path("port").asInt(0), e.path("pid").asLong(0L),
+                    e.hasNonNull("started") ? e.path("started").asString() : null, e.path("name").asString(""),
+                    e.path("owner").asString("")));
+        }
+        return nodes;
     }
 
-    private void write(final Entry e) throws IOException {
-        Files.write(registry, JsonFile.pretty(JsonFile.BINDER.toTree(e)));
+    /// Writes `nodes` as the registry, as another instance's start would.
+    private void write(final Map<String, Entry> nodes) throws IOException {
+        final ObjectNode tree = Json.object().put("version", FrontearFabric.REGISTRY_VERSION);
+        final ObjectNode all = tree.putObject("nodes");
+        nodes.forEach((slug, e) -> all.putObject(slug).put("port", e.port()).put("pid", e.pid())
+                .put("started", e.started()).put("name", e.name()).put("owner", e.owner()));
+        Files.write(registry, JsonFile.pretty(tree));
     }
 }

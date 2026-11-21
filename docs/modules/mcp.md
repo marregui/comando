@@ -54,6 +54,7 @@ The tools, by family:
 | Held results | `result_list`, `result_read`, `result_stats` | The results a panel holds. |
 | Sessions | `session_send`, `session_read` | Another session's prompt and transcript. |
 | Instances | `instances_list`, `instance_ask`, `instance_reply` | `Peers`. |
+| frontear | `frontear_read` | `LabTools`, over `LabPort`: the node's watch as the frontear tab reads it. |
 | Actions | `panel_*`, `session_*`, `server_start`, `server_stop` and more | The same actions you run by hand. |
 | Terminals | `terminal_list`, `terminal_read`, `terminal_send`, `terminal_start`, `terminal_stop`, `terminal_interrupt` | `TerminalPort`. |
 

@@ -97,7 +97,7 @@ the last part built closes first. The picture shows the ten main parts. The tabl
 | 15 | `Store` | The stored files; it writes what is pending |
 | 16 | `KitGit` | The git runs on the kit root |
 | 17 | The kit root | The root named before is named again |
-| 18 | The fabric | Stops only if this instance hosts it |
+| 18 | The fabric | This instance's node stops and its registry entry is marked down |
 | 19 | `MachineCdb` | Its errands stop; the server keeps running |
 | 20 | `ComandoUi` | The window, greyed and titled "closing…" until then |
 
@@ -230,32 +230,36 @@ The server itself: [the `cdb` module](cdb.md) and [the cdb guide](../cdb.md). Wh
 
 ![The fabric: one frontear node inside the JVM of the instance that hosts it, started at launch and taken over when its host quits, one address, and each instance a client](../images/mod-app-fabric.svg)
 
-Several comando instances can run on one machine and consult each other. They need a place to meet: an MQTT broker
-on `127.0.0.1:18883`. That broker is the fabric, a frontear node that `FrontearFabric` hosts inside the JVM of one
-instance.
+Several comando instances can run on one machine and consult each other. They meet on the fabric: one frontear node
+inside each instance's JVM, hosted by its `FrontearFabric`, and a link from each node to every other one
+([record 187](../adr/0187-frontear-lab-node-per-instance.md)).
 
 | Fact | frontear |
 |---|---|
 | Class | `FrontearFabric`, named `frontear` to the window and the agents |
-| Runs as | A frontear node named `comando`, inside the host's JVM |
-| Port on `127.0.0.1` | MQTT 18883 |
-| Registry | `~/.comando-fabric.json`: the host's pid, name, data root and port; every read-modify-write of it runs under an OS lock on `~/.comando-fabric.json.lock` (bounded wait), so of several instances starting at once exactly one hosts and a stale entry is replaced once |
-| Keeps in the data root | `fabric/`, with the key pair `pod.key` and `pod.pub` (Ed25519) |
-| Starts | At the peer link's first look when no live instance hosts it, and at any later look that finds none (every 5 s) |
-| Stops | From the host only, by hand or at its close. A stop by hand holds in that instance until it is asked again |
-| A port held by another process | One notice; the process is probed, never signalled |
+| Runs as | A frontear node named as the instance's id, inside its JVM; the node refuses a link client named for another node, and every link client (`0x88`, Server unavailable, which the link retries after its backoff) until `MqttPeerBroker` has its subscriptions acknowledged on it, so what the other nodes queued for this instance is delivered after its inbox is subscribed. An acknowledgement that comes before the start has published the node opens it once published; a refused one is renewed at the next look (every 5 s) |
+| Port on `127.0.0.1` | MQTT: the lowest port from 18883 up that is free and that no other instance's entry holds, kept in the registry for that instance from then on |
+| Registry | `~/.comando-fabric.json`, version 2: per instance id, the node's port, the pid while it runs (0 once down), its start, the instance's name and data root. Every read-modify-write of it runs under an OS lock on `~/.comando-fabric.json.lock` (bounded wait), so instances starting at once take distinct ports. A file of version 1 is replaced |
+| Links | One per other instance in the registry, put through the node's own control plane at each look (every 5 s): to `127.0.0.1` at that instance's port, out its inbox and reply topics and this instance's presence, nothing in, hop limit 1; also at once when `Peers` first sees an instance's presence and before each question to it, as the link is the only subscriber of its inbox on this node. A link to an instance that is merely down stays and queues; forgetting an instance removes its link and its entry |
+| Keeps in the data root | `fabric/`, with the key pair `pod.key` and `pod.pub` (Ed25519) and a folder per link with its spec and log |
+| Starts | At the peer link's first look, and at any later look while it is down |
+| Stops | By hand or at the instance's close; the other nodes keep running. A stop by hand holds in that instance until it is asked again |
+| A port held by another process | The node takes the next free port; the process is probed, never signalled |
+| Peers gone or back | A look that finds an instance's process gone tells the peer link, which drops that instance's presence if its start matches; a link that connects again, or an instance whose registry entry names a new start, makes this instance send its presence again |
 
-Only the instance that hosts the fabric stops it. `FrontearFabric` implements `ServerToggle` and `ServerSwitch`, so the
-window and the agents treat it as they treat the machine's cdb.
+`FrontearFabric` implements `ServerToggle` and `ServerSwitch`, so the window and the agents treat it as they treat the
+machine's cdb.
 
-`MqttPeerBroker` is each instance's link to the fabric. It connects as the MQTT 5 client `comando-<instance>`. Every
-5 s it checks whether a broker is live. It reconnects after a drop and renews its subscriptions. The MQTT client it
-uses lives in [`frontear`](frontear.md), in the package `frontear.protocol`.
+`MqttPeerBroker` is each instance's client of its own node. It connects as the MQTT 5 client `comando-<instance>`.
+Every 5 s it checks whether the node runs, and moves to the node's port if that changed. It reconnects after a drop
+and renews its subscriptions. The MQTT client it uses lives in [`frontear`](frontear.md), in the package
+`frontear.protocol`.
 
 > **Learn: publish and subscribe.** A school notice board has topics: sports, lost property, exams. Whoever pins a
 > note does not know who reads it. Whoever reads a topic does not know who pinned the note. A broker is that board
 > for programs: one publishes to a topic, and the broker hands the message to every subscriber. Nobody needs
-> anybody's address, only the board's. comando's instances meet this way, on one board at `127.0.0.1:18883`.
+> anybody's address, only the board's. comando's instances meet this way: each pins on its own board, and the boards
+> copy to each other the notes meant for one another.
 
 How frontear works: [the `frontear` module](frontear.md) and [the frontear guide](../frontear.md). What instances say
 to each other: [the `mcp` module](mcp.md). The reasons:
@@ -331,7 +335,7 @@ tabs, the lower tabs and the side pane against the final state. It also saves a 
 | `StoreTest`, `JsonFileTest`, `PanelFilesTest`, `JsonGoldenTest` | The store files, byte for byte |
 | `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest` | The intent log, logging, the lock, the data root |
 | `AppCloseTest`, `DataRootFoldersTest` | The closing order, whatever a part throws; the folders of the data root |
-| `MachineCdbTest`, `FrontearFabricTest`, `MqttPeerBrokerTest` | The servers, the fabric's start, takeover and single host, and the link to them |
+| `MachineCdbTest`, `FrontearFabricTest`, `MqttPeerBrokerTest` | The servers, each instance's node, its port and registry entry, the links between the nodes, and the client to its own node |
 
 Four rule tests read the classes of every module, because only `app` sees every module:
 

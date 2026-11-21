@@ -24,11 +24,16 @@ import dev.marregui.comando.frontear.gateway.Broker;
 import dev.marregui.comando.frontear.gateway.BrokerOptions;
 import dev.marregui.comando.frontear.octopus.Links;
 import dev.marregui.comando.frontear.store.LogOptions;
+import dev.marregui.comando.frontear.watch.NodeSnapshot;
+import dev.marregui.comando.frontear.watch.Watch;
 
 /**
  * One frontear node: an MQTT 5 broker, the links to its peers and the control plane that changes them, started
  * together and closed in reverse. Configuration arrives only as signed control messages; the start takes the node's
  * name, its port, its data folder (the links' logs) and the control keys it trusts.
+ *
+ * <p>Its {@link #watch()} keeps, while on, what the broker routes, what its links do and their logs' force rounds;
+ * {@link #snapshot()} reads its parts' state now. Neither makes a publisher wait.</p>
  */
 public final class Frontear implements AutoCloseable {
 
@@ -44,12 +49,24 @@ public final class Frontear implements AutoCloseable {
      * durable append is about 4 ms on an Apple SSD, so a group forms behind each force).
      */
     static final LogOptions LOG_OPTIONS = new LogOptions(64L << 20, 1L << 30, Duration.ZERO);
+    /**
+     * The events the watch keeps: a poller that reads every 250 ms (the lab's drain, ADR 0187 §2.3) loses none below
+     * about 65 000 events a second, past the stress harness's highest step at four events a message.
+     */
+    public static final int WATCH_CAPACITY = 16_384;
 
+    private final String node;
+    private final InstantSource clock;
+    private final Watch watch;
     private final Broker broker;
     private final Links links;
     private final ControlPlane control;
 
-    private Frontear(final Broker broker, final Links links, final ControlPlane control) {
+    private Frontear(final String node, final InstantSource clock, final Watch watch, final Broker broker,
+            final Links links, final ControlPlane control) {
+        this.node = node;
+        this.clock = clock;
+        this.watch = watch;
         this.broker = broker;
         this.links = links;
         this.control = control;
@@ -61,18 +78,48 @@ public final class Frontear implements AutoCloseable {
      */
     public static Frontear start(final String node, final int port, final Path dataDir, final Set<PublicKey> trusted,
             final InstantSource clock) throws IOException {
+        return start(node, port, dataDir, trusted, clock, false);
+    }
+
+    /**
+     * As above. With {@code linksNameNodes}, every link's id is the name of the node it reaches (ADR 0187 §2.1), so
+     * this node's broker refuses with 0x85 a link client, client id {@code <peer>~<linkId>}, whose link id is not
+     * {@code node}: a link aimed at another node's port connects to none and delivers nothing there.
+     */
+    public static Frontear start(final String node, final int port, final Path dataDir, final Set<PublicKey> trusted,
+            final InstantSource clock, final boolean linksNameNodes) throws IOException {
+        return start(node, port, dataDir, trusted, clock, linksNameNodes, false);
+    }
+
+    /**
+     * As above. With {@code linksHeld}, which needs {@code linksNameNodes}, the broker refuses every link client 0x88
+     * (Server unavailable) until {@link #openLinks()}: a peer's link that queued for this node while it was down
+     * retries after its backoff, and drains once the host has subscribed what it reads, not before into no subscriber.
+     *
+     * @throws IllegalArgumentException when {@code linksHeld} is asked without {@code linksNameNodes}
+     */
+    public static Frontear start(final String node, final int port, final Path dataDir, final Set<PublicKey> trusted,
+            final InstantSource clock, final boolean linksNameNodes, final boolean linksHeld) throws IOException {
         Objects.requireNonNull(node, "node");
+        if (linksHeld && !linksNameNodes) {
+            throw new IllegalArgumentException("links are held only on a node whose links name nodes [node=" + node
+                    + ']');
+        }
         final BrokerOptions defaults = BrokerOptions.defaults(new InetSocketAddress(InetAddress.getLoopbackAddress(),
                 port));
-        final Broker broker = Broker.start(new BrokerOptions(defaults.bind(), defaults.receiveMaximum(),
-                defaults.maximumPacketSize(), defaults.maxSessions(), clock, defaults.maxQueued()));
+        final BrokerOptions options = new BrokerOptions(defaults.bind(), defaults.receiveMaximum(),
+                defaults.maximumPacketSize(), defaults.maxSessions(), clock, defaults.maxQueued());
+        final Watch watch = new Watch(WATCH_CAPACITY, clock);
+        final Broker broker = linksNameNodes ? Broker.start(options, watch, node, linksHeld)
+                : Broker.start(options, watch);
         Links links = null;
         try {
-            links = new Links(broker, node, dataDir, LOG_OPTIONS);
+            links = new Links(broker, node, dataDir, LOG_OPTIONS, watch);
             final ControlPlane control = new ControlPlane(broker, links, node, trusted, clock);
             LOG.log(System.Logger.Level.INFO, "frontear started [node=" + node + ", port=" + broker.port()
-                    + ", dataDir=" + dataDir + ", keys=" + trusted.size() + ']');
-            return new Frontear(broker, links, control);
+                    + ", dataDir=" + dataDir + ", keys=" + trusted.size() + ", linksNameNodes=" + linksNameNodes
+                    + ", linksHeld=" + linksHeld + ']');
+            return new Frontear(node, clock, watch, broker, links, control);
         } catch (final RuntimeException e) {
             if (links != null) {
                 links.close();
@@ -125,6 +172,25 @@ public final class Frontear implements AutoCloseable {
     /** The broker, for a host that runs frontear in its own process (comando). */
     public Broker broker() {
         return broker;
+    }
+
+    /** Lets the peers' links in, on a node started with its links held; nothing otherwise or when called again. */
+    public void openLinks() {
+        broker.openLinks();
+    }
+
+    /** The node's watch, of {@link #WATCH_CAPACITY} events; off until its owner turns it on. */
+    public Watch watch() {
+        return watch;
+    }
+
+    /**
+     * The node now: the broker's figures and connections, the links' states and their logs'. Each part is read on its
+     * own, under no lock a publisher holds for longer than a copy.
+     */
+    public NodeSnapshot snapshot() {
+        return new NodeSnapshot(node, broker.port(), clock.millis(), broker.stats(), broker.connections(),
+                links.state(), links.logs());
     }
 
     /**

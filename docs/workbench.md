@@ -29,7 +29,7 @@ The window has eight regions. The numbers match the picture above.
 | 3 | Corner | Stop refreshing plots, the machine's cdb, frontear, the theme button, New panel |
 | 4 | Header and editor | the focused panel's icons and its text, with a gutter that marks each block's target |
 | 5 | Side pane | what sits beside the editor: the schema, Changes, Search, any tab you move there |
-| 6 | Lower panel | Session, Approvals, Terminal, Results, then view tabs ([§1.5](#15-the-lower-panel-and-views)) |
+| 6 | Lower panel | Session, Approvals, Terminal, Results, frontear, then view tabs ([§1.5](#15-the-lower-panel-and-views)) |
 | 7 | Session bar | the focused panel's session ([§1.7](#17-the-session-bar-and-the-status-bar)) |
 | 8 | Status bar | the notice, the plans' usage, the work running, the UTC clock |
 
@@ -287,7 +287,7 @@ writes it.
 
 ### 1.5 The lower panel and views
 
-The lower panel follows the focused panel. Four tabs are always there; view tabs follow them.
+The lower panel follows the focused panel. Five tabs are always there; view tabs follow them.
 
 | Tab | Key | Shows |
 |---|---|---|
@@ -295,6 +295,7 @@ The lower panel follows the focused panel. Four tabs are always there; view tabs
 | Approvals | ⌃2 | every session's requests ([§1.6](#16-approvals)) |
 | Terminal | ⌃3 | the focused panel's shell ([§5.1](#51-terminal)) |
 | Results | ⌃4 | the focused panel's last SQL run ([§3.2](#32-results)) |
+| frontear | none | this instance's frontear node: its traffic, links and log ([§4.4](#44-the-frontear-tab)) |
 
 ⌃Tab and ⌃⇧Tab go to the next and the previous tab. ⌘⇧W closes the view in front. A request selects Approvals on
 the panel in front and on the asking session's panels, nowhere else.
@@ -632,37 +633,41 @@ to it. Its SQL, its access secrets, backup and restore are in [cdb](cdb.md) and 
 ## 4. Instances and frontear
 
 You may run more than one comando on a machine. Each instance is a specialist with its own name, data root, kit and
-brain ([why](adr/0122-instances-name-kit-brain-data-root-edge.md)). The instances find each other through one local
-MQTT broker, frontear. Through it, a session of one instance asks another instance a question.
+brain ([why](adr/0122-instances-name-kit-brain-data-root-edge.md)). The instances find each other through frontear:
+each runs a local MQTT broker node of its own, and the nodes are linked. Through them, a session of one instance asks
+another instance a question.
 
 ### 4.1 frontear
 
-frontear is comando's fabric between instances: an MQTT 5 broker of comando's own, run as one node per machine inside
-the process of one comando instance, the host. Every instance connects to it. It runs by itself: no click is needed
-for the instances to find each other ([why](adr/0185-frontear-is-the-only-fabric.md)). The antenna button in the
-corner starts and stops it; so does the Connections tab's menu. How the broker works is in [frontear](frontear.md).
+frontear is comando's fabric between instances: an MQTT 5 broker of comando's own. Every instance runs one node of it
+inside its own process, named as the instance's id, and connects to that node alone. Each node keeps a link to every
+other instance's node, which carries that instance's messages there and queues them while it is down
+([why](adr/0187-frontear-lab-node-per-instance.md)). It runs by itself: no click is needed for the instances to find
+each other ([why](adr/0185-frontear-is-the-only-fabric.md)). The antenna button in the corner starts and stops this
+instance's node; so does the Connections tab's menu. How the broker works is in [frontear](frontear.md).
 
 | Fact | Value |
 |---|---|
-| Port | MQTT 18883 on `127.0.0.1` |
-| One per machine | `~/.comando-fabric.json` names the host: its process, its name, its data root and the port. The instance that creates the file hosts; the others connect to it |
-| Data | `fabric/` of the host's data root: the node's link logs and the control key pair, `pod.key` (owner-only) and `pod.pub` |
-| Starts | at launch, when no live instance hosts it; and when the host quits, in the next instance that looks (each looks every 5 s) |
-| Stops | only from the host: its button, an agent's `server_stop frontear`, or its quit. After a stop by hand that instance starts it again only when asked; another instance hosts it at its next look |
+| Port | MQTT on `127.0.0.1`: the lowest port from 18883 up that is free and no other instance holds, kept for that instance from then on |
+| Registry | `~/.comando-fabric.json` holds every instance's node: its port, its process while it runs, its name and its data root. Each instance's node links to the others it names |
+| Links | to each other node: this instance's presence, and the other's inbox and reply topics; while that node is down they queue, and its next start receives them once that instance has subscribed |
+| Data | `fabric/` of the instance's data root: its links' logs and the control key pair, `pod.key` (owner-only) and `pod.pub` |
+| Starts | at launch, and at each later look while it is down (every 5 s) |
+| Stops | its button, an agent's `server_stop frontear`, or the instance's quit; the other instances' nodes keep running. After a stop by hand it starts again only when asked |
 | Log | comando's own log; Help ▸ **Show the log** |
 
-The button's tooltip names frontear, says what it is and gives its state: running and hosted here, running and hosted
-by another instance (which alone stops it), or stopped. A port held by another process (an older comando's broker,
-say) refuses the start with one notice and shows in the tooltip; comando never signals that process, and the
-instances meet once the port is free. `-Dcomando.peers=false` keeps an instance off frontear: it neither starts a node
-nor joins one.
+The button's tooltip names frontear, says what it is and gives its state: running, with its port and node name, or
+stopped. A port held by another process moves the node to the next free port; comando never signals that process.
+A second instance of the same name is refused a start while the first one's node runs. `-Dcomando.peers=false` keeps
+an instance off frontear: its node runs on a port the OS picks, with a registry in its data root, and links to no
+other.
 
 ### 4.2 What travels between instances
 
 ![A question from one instance to another through frontear: instance_ask publishes to the other's inbox, the instance asked prompts the session named, or its consult session, and the turn's text returns as the reply](images/instance-ask.svg)
 
-Every instance connects to frontear while it runs, over MQTT 5, and again after another instance takes it over. An instance's id is its
-name in lower case with dashes, `main` for the main instance. Each instance has three topics under
+Every instance connects to its own frontear node while it runs, over MQTT 5, and its node's links carry the
+messages to the other nodes. An instance's id is its name in lower case with dashes, `main` for the main instance. Each instance has three topics under
 `comando/v1/local/instance/<id>/`:
 
 | Topic | Carries |
@@ -699,9 +704,9 @@ frontear has no per-instance credentials: any local process of yours could publi
 The Instances tab shows what the other instances do, from their presence alone. No question is asked.
 
 - **The tree** lists this instance first, then the others present, then those that left, greyed with when they were
-  last seen. **Forget** removes one that left.
+  last seen. **Forget** removes one that left, with this node's link to it and its registry entry.
 - **An instance row** has a dot (green idle, orange while a session runs a turn, red when its questions are refused
-  here), its role, its version when it differs, and the antenna when it hosts frontear.
+  here), its role, its version when it differs, and the antenna while its frontear node runs.
 - **Its sessions** sit under it, each with a dot and what its turn does.
 - **A click** shows a row's card: an instance's state, role, version, kit, uptime and id; a session's state, turn,
   model, effort, context, folder and branch.
@@ -711,6 +716,38 @@ The Instances tab shows what the other instances do, from their presence alone. 
   and its reply, or opens the session here that answered it.
 
 A header shows only while this instance is not connected, with **Start frontear** while frontear is down.
+
+### 4.4 The frontear tab
+
+The frontear tab of the lower panel shows this instance's frontear node: what crosses it, its links to the other
+instances' nodes, and each link's log ([why](adr/0187-frontear-lab-node-per-instance.md)). Nothing is watched until
+the tab is first shown. From then on the node keeps a record of every packet, and comando reads it four times a
+second; the tab is redrawn once per read at most, however much arrived. A packet's payload does not leave the node
+except for its first bytes.
+
+| View | Shows |
+|---|---|
+| Overview | the node, its port and the time of its figures; the broker's sessions, connections, retained messages and drops; the watch's own losses; a row per peer: its link's state, messages and bytes per second over the last 5 s, and its queue |
+| Traffic | the last 10 000 packets: the time, the kind, the origin or link, the topic, QoS, retain, bytes, hops and the correlation data in hex; the start of the selected packet's payload beside them |
+| Octopus | each link: connected or in backoff, queued, cursor, tail, sent, dropped, reordered, deliveries waiting, and its last connect and disconnect with the reason given |
+| Store | each link's log: how far the peer has read, bytes, segments, and its force rounds: per second, the last one's records, bytes and time, and the median and 99th percentile time of the last 200 |
+
+The kinds of a packet are Published (a client's publish reached the node), APPENDED (written to a link's log), SENT
+(the link sent it to the peer), ARRIVED (it came in over a link), DROPPED (with the reason), CONNECTED and
+DISCONNECTED (a link's connection, with the reason given).
+
+**Traffic's bar** filters by a part of the topic and by kind. A run of presences from one origin is one row with
+its count; **every presence** shows each. **pause** stops the rows moving while you read; the node goes on
+recording. **missed** counts the packets that came while the view could not keep them: more than 10 000 since the
+last read, or more than the node's own record holds. Selecting a publish also selects its steps on the links, so its
+path through the node reads in one selection.
+
+While the machine's cdb runs ([§3.4](#34-the-machines-cdb)), each packet is also written to its table
+`frontear_packet`, without its payload, and kept seven days. A DROPPED packet's `code` names the reason as a number:
+1 the link's queue was full, 2 past the hop limit, 3 the link's log was full, 4 the peer refused it, 5 expired in the
+log, 6 larger than the peer accepts, 7 unreadable; 0 for any other. The writer never waits: rows that come while cdb
+is down or slow are dropped, and Overview counts them. A session reads the same views with `frontear_read`
+([Claude Code](claude-code.md)).
 
 ## 5. Development tools
 
@@ -862,7 +899,7 @@ its own data root and its own kit. Help ▸ **Reveal comando folder** opens the 
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ **Show the log** opens it |
 | `help/tutorial.md` | the tutorial |
 | `cache/mermaid/`, `cache/images/` | drawn diagrams and pictures; safe to delete |
-| `fabric/` | frontear's data, in the instance that hosts it ([§4.1](#41-frontear)); an `edge/` folder an older comando left is neither read nor removed |
+| `fabric/` | this instance's frontear node's data: its key pair and a folder per link ([§4.1](#41-frontear)); an `edge/` folder an older comando left is neither read nor removed |
 
 Outside the root: connection passwords in the macOS keychain for the default data root (elsewhere they stay in
 `connections.json`); `~/.comando-fabric.json`, the registry of the one frontear node, and its lock file `~/.comando-fabric.json.lock`; `~/.comando-cdb/`, the machine's

@@ -20,7 +20,7 @@ Look at the picture above. It holds six things.
 | A session | one `claude -p` process per running session: Claude Code without its own screen | two pipes, and HTTP back to comando |
 | The machine's cdb | comando's own database as a server; one per machine, it outlives comando | the PG wire protocol, on `127.0.0.1` |
 | Your databases | PostgreSQL or QuestDB servers you connect to | the PG wire protocol (JDBC) |
-| frontear | a local MQTT broker on `127.0.0.1:18883`, inside one instance's JVM | MQTT 5 |
+| frontear | a local MQTT broker on `127.0.0.1`, one node inside each instance's JVM, each on a port from 18883 up, linked to the others | MQTT 5 |
 | Other instances | more comandos, each its own JVM and data root | messages through frontear |
 
 Nothing here listens on the network: every server comando starts binds `127.0.0.1`.
@@ -239,7 +239,7 @@ The budget counts the window's own threads. These platform threads are the named
 | Who | Platform threads | When |
 |---|---|---|
 | `cdb` | `cdb-applier-<name>` and `cdb-log-force-<name>`, one each per store; the `cdb-query-<n>` workers, one pool per process | a connection of kind cdb opens the database in this process |
-| `frontear` | `frontear-log-force-<name>`, one per link log | the instance hosts frontear |
+| `frontear` | `frontear-log-force-<name>`, one per link log | the instance's frontear node runs |
 | The MCP server | `HTTP-Dispatcher`, made by the JDK's HTTP server | while the MCP server runs; its close stops it |
 | `Main` | `exit` and `shutdown` | at quit |
 
@@ -331,21 +331,25 @@ What a session can do, and every tool it has: [Claude Code in comando](claude-co
 You can run several comandos on one machine. Each is an *instance*: its own JVM, its own data root, its own window.
 `COMANDO_HOME` names the data root, and `comando.lock` in it refuses a second start on the same root.
 
-Instances find and ask each other through one local MQTT broker, frontear. Each instance uses three topics
+Instances find and ask each other through frontear, a local MQTT broker of linked nodes. Each instance uses three topics
 under `comando/v1/local/instance/<id>/`.
 
 | Topic | Carries |
 |---|---|
-| `presence` | "I am here", as a retained message; the broker clears it if the instance dies (a *last will*) |
+| `presence` | "I am here", as a retained message; its own node clears it if the instance dies (a *last will*), and the other instances drop it once its process is gone |
 | `inbox` | questions for this instance |
 | `reply` | answers to the questions this instance asked |
 
 A session asks with the tool `instance_ask`. The instance asked answers in a session of its own, named
 `consult-<asker>`. The file `agents.json` in the data root can refuse instances by id.
 
-The broker is a frontear node inside the JVM of one instance, the host. It starts at launch when no instance
-hosts it, and when its host quits the next instance to look hosts it. `-Dcomando.peers=false` turns the whole
-feature off.
+Each instance runs a frontear node of its own inside its JVM, named as its id, on the port the registry
+`~/.comando-fabric.json` keeps for it, and connects to that node alone. Each node keeps a link to every other node
+the registry names, which carries the instance's presence there and the questions and answers for that instance; a
+link to a node that is down queues until it starts again. A node lets the links in only once its instance has
+subscribed its topics on it, so what was queued for that instance finds its subscriber. A node starts at launch and
+stops with its instance.
+`-Dcomando.peers=false` turns the whole feature off ([why](adr/0187-frontear-lab-node-per-instance.md)).
 
 Using instances: [Workbench](workbench.md). The broker comando wrote for itself: [frontear](frontear.md). Why
 instances consult each other: [the record](adr/0123-instances-consult-each-other.md).
@@ -371,7 +375,7 @@ Everything an instance keeps is under one folder, the *data root*: `-Dcomando.ho
 | `logs/` | `comando-<n>.log`, and the intent log when recording |
 | `audit/` | every MCP tool call and approval decision, one file per day |
 | `cache/` | drawn diagrams and pictures; safe to delete |
-| `cdb/`, `fabric/` | the data of the local cdb, of the frontear node this instance hosts |
+| `cdb/`, `fabric/` | the data of the local cdb, of this instance's frontear node |
 | `instance.json`, `comando.lock`, `agents.json`, `instances-seen.json` | who this instance is, and who it talks to |
 
 Three things live outside it.
@@ -408,8 +412,8 @@ close in reverse order, each once. A program that starts cleanly and stops clean
   through the same path.
 - **Three parts close last**: frontear, after this instance has left it; the machine's cdb's errands; and the
   window, greyed until everything behind it has closed.
-- **The servers have their own lives.** The machine's cdb keeps running after comando exits. frontear is
-  stopped only by the instance that hosts it, and with it; another instance then hosts it.
+- **The servers have their own lives.** The machine's cdb keeps running after comando exits. An instance's
+  frontear node stops with it; the other instances' nodes keep running, their links to it queueing.
 
 Quit asks first when work would stop: a running query, a turn, a Gradle run, a shell job. Then `App.close()` runs,
 then the JVM exits. The order of every part and what closing it does: [app](modules/app.md).

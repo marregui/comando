@@ -72,6 +72,10 @@ final class Connection {
     // the threads that end the connection (a takeover under the same lock, the broker's close after the reader set it)
     private volatile Session session;
     private volatile String clientId;
+    // written with session by the reader when the CONNECT is accepted; read by the broker's connections(), a snapshot
+    // that pairs them with the session it read first, so at worst a moment's mismatch
+    private volatile int keepAliveSeconds;
+    private volatile long acceptedMillis;
     // written once by the thread that ends the connection; read by the broker's sweep to close a writer stuck on a
     // client that does not read
     private volatile long endedAtNanos;
@@ -114,10 +118,30 @@ final class Connection {
         return endedAtNanos;
     }
 
-    /** The CONNECT was accepted for {@code s}: from here on the connection speaks for its client. */
-    void accepted(final Session s, final String id) {
+    /**
+     * The CONNECT, which asked {@code keepAlive} seconds, was accepted for {@code s} at {@code atMillis}: from here on
+     * the connection speaks for its client.
+     */
+    void accepted(final Session s, final String id, final int keepAlive, final long atMillis) {
         clientId = id;
+        keepAliveSeconds = keepAlive;
+        acceptedMillis = atMillis;
         session = s;
+    }
+
+    /** The session the connection speaks for; null before its CONNECT was accepted. */
+    Session session() {
+        return session;
+    }
+
+    /** The keep-alive its CONNECT asked; 0 before it was accepted. */
+    int keepAliveSeconds() {
+        return keepAliveSeconds;
+    }
+
+    /** When its CONNECT was accepted, by the broker's clock; 0 before. */
+    long acceptedMillis() {
+        return acceptedMillis;
     }
 
     /**

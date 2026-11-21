@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.zip.CRC32C;
 
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.frontear.watch.Watch;
 
 /**
  * A link's queue: an append-only log of records in segment files, read from a cursor that survives a restart.
@@ -106,6 +107,8 @@ public final class LinkLog implements AutoCloseable {
     private final LogOptions options;
     private final long forceEveryNanos;
     private final LogForcer forcer;
+    // keeps each round the forcer writes while it is on
+    private final Watch watch;
     // the log's one refusal, built again for each: a link offers one message per refusal while the forcer is behind
     private final QuotaExceededException quotaExceeded;
     // guards the fields below up to the volatile ones: taken by the writer's thread and the forcer, never across a
@@ -155,9 +158,11 @@ public final class LinkLog implements AutoCloseable {
             final LogOptions options,
             final ArrayDeque<Segment> segments,
             final long cursor,
-            final long tail
+            final long tail,
+            final Watch watch
     ) {
         this.files = files;
+        this.watch = watch;
         this.dir = dir;
         this.options = options;
         this.forceEveryNanos = nanos(options.forceEvery());
@@ -185,6 +190,11 @@ public final class LinkLog implements AutoCloseable {
      */
     public static LinkLog open(final Path dir, final LogOptions options) throws IOException {
         return open(DiskFiles.INSTANCE, dir, options);
+    }
+
+    /** As above, each round the forcer writes kept in {@code watch} while that is on, named by the folder. */
+    public static LinkLog open(final Path dir, final LogOptions options, final Watch watch) throws IOException {
+        return open(DiskFiles.INSTANCE, dir, options, Objects.requireNonNull(watch, "watch"));
     }
 
     /**
@@ -320,6 +330,13 @@ public final class LinkLog implements AutoCloseable {
         return roundBytes;
     }
 
+    /** The segment files the log retains: read under the lock, which no file operation holds. */
+    public int segments() {
+        synchronized (lock) {
+            return segments.size();
+        }
+    }
+
     /**
      * Writes and forces what was appended and saves the cursor, waiting a bounded time for it, then ends the forcer
      * and closes the files; idempotent. An append whose force did not hold by then fails, in doubt. When the wait runs
@@ -350,6 +367,12 @@ public final class LinkLog implements AutoCloseable {
 
     /** As {@link #open(Path, LogOptions)}, every file operation through {@code files}. */
     static LinkLog open(final LogFiles files, final Path dir, final LogOptions options) throws IOException {
+        return open(files, dir, options, new Watch(1));
+    }
+
+    /** As {@link #open(Path, LogOptions, Watch)}, every file operation through {@code files}. */
+    static LinkLog open(final LogFiles files, final Path dir, final LogOptions options, final Watch watch)
+            throws IOException {
         Objects.requireNonNull(options, "options");
         files.createDirectories(dir);
         files.delete(WholeFile.tmp(dir.resolve(CURSOR)));
@@ -387,7 +410,7 @@ public final class LinkLog implements AutoCloseable {
             files.forceFolder(dir);
             LOG.log(System.Logger.Level.INFO, "opened link log [dir=" + dir + ", segments=" + kept.size() + ", cursor="
                     + cursor + ", tail=" + tail + ']');
-            final LinkLog log = new LinkLog(files, dir, options, kept, cursor, tail);
+            final LinkLog log = new LinkLog(files, dir, options, kept, cursor, tail, watch);
             log.forcer.start();
             return log;
         } catch (final IOException | RuntimeException e) {
@@ -662,14 +685,30 @@ public final class LinkLog implements AutoCloseable {
             round = List.copyOf(pending);
             cursorToSave = acked > saved ? acked : NO_CURSOR;
         }
-        if (!round.isEmpty() && !write(round)) {
-            return;
+        if (!round.isEmpty()) {
+            final long startedNanos = System.nanoTime();
+            if (!write(round)) {
+                return;
+            }
+            if (watch.on()) {
+                watch.round(dir.getFileName().toString(), round.size(), frameBytes(round), System.nanoTime()
+                        - startedNanos);
+            }
         }
         complete(target, round);
         if (cursorToSave != NO_CURSOR && cursorDue()) {
             savedAtNanos = System.nanoTime();
             saveCursor(cursorToSave);
         }
+    }
+
+    // the frame bytes of round's appends, as roundBytes counts them
+    private static long frameBytes(final List<Pending> round) {
+        long n = 0L;
+        for (final Pending p : round) {
+            n += FRAME + p.record.length;
+        }
+        return n;
     }
 
     // the forcer's: whether this round saves the cursor. The save's forces would hold back the appends taken since

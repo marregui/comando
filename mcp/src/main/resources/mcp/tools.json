@@ -545,5 +545,37 @@
         "id"
       ]
     }
+  },
+  {
+    "name": "frontear_read",
+    "description": "Reads this instance's frontear node as JSON, as its frontear tab shows it; nothing is asked of the user. view overview: the broker's totals and each link's state, msg/s and bytes/s over 5 s and queue; traffic: the packets after since (each with seq, kind, origin or link, topic, qos, retain, bytes, hops, offset, correlation hex, head, detail), at most max, with missed (packets no longer kept) and last (the next since); octopus: each link's cursor, tail, sent, dropped, reordered, deliveries queued and last connect or disconnect; store: each link log's cursor, tail, bytes, segments and force rounds (per second, the last, p50 and p99 ms). The first call starts the watch, so traffic holds only what came after it. node.up is false when this instance runs no node.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "enum": [
+            "overview",
+            "traffic",
+            "octopus",
+            "store"
+          ],
+          "default": "overview"
+        },
+        "since": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "traffic: the packets after this seq; the last of an answer is the next since."
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000,
+          "default": 200,
+          "description": "traffic: at most this many packets."
+        }
+      }
+    }
   }
 ]

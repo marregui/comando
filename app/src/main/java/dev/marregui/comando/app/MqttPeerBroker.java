@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
@@ -22,13 +24,13 @@ import dev.marregui.comando.frontear.protocol.Topics;
 import dev.marregui.comando.mcp.PeerBroker;
 
 /**
- * frontear as the instances' broker (records 123, 185), on comando's own MQTT client: MQTT 5 to {@code 127.0.0.1},
- * client id {@code comando-<instance>}. It follows frontear rather than the window: every {@link #FOLLOW_EVERY}, on a
- * strand of its own, it asks whether the registry names a live frontear node, whichever instance hosts it, and the
- * answer may start one here when none runs; it connects when one runs and disconnects when none does. While the node
- * runs the client reconnects by itself, 1 s after a drop and then at most every {@link #FOLLOW_EVERY}, and renews its
- * subscriptions after every connect; once the node stops it stops trying. Messages reach their handlers on one
- * strand, in order.
+ * frontear as the instances' broker (records 123, 185, 187), on comando's own MQTT client: MQTT 5 to {@code 127.0.0.1},
+ * client id {@code comando-<instance>}. It follows this instance's own frontear node rather than the window: every
+ * {@link #FOLLOW_EVERY}, on a strand of its own, it asks whether the node runs, and the answer may start it; it
+ * connects when it runs, again when its port changed, and disconnects when it does not. While the node runs the
+ * client reconnects by itself, 1 s after a drop and then at most every {@link #FOLLOW_EVERY}, and renews its
+ * subscriptions after every connect, and at the next look when one was refused; once the node stops it stops trying.
+ * Messages reach their handlers on one strand, in order.
  */
 final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
@@ -45,21 +47,32 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     static final int MAXIMUM_PACKET_SIZE = Packet.PROTOCOL_MAXIMUM_PACKET_SIZE;
 
     private final String clientId;
-    private final int port;
+    private final IntSupplier port;
     private final BooleanSupplier fabricUp;
     private final ScheduledExecutorService follow = Threads.timedStrand("peer-broker");
     private final ExecutorService messages = Threads.strand("peer-messages");
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final List<IntConsumer> subscribed = new CopyOnWriteArrayList<>();
     /** The filters subscribed, in order, with their handlers; guarded by itself. */
     private final Map<String, Consumer<Message>> handlers = new LinkedHashMap<>();
     /** Written by whoever sets the will, read by the follow strand when it connects. */
     private volatile Packet.Publish will;
     /** The client while frontear runs; null while it does not. Guarded by this. */
     private MqttClient client;
+    /** The port {@link #client} connects to; guarded by this. */
+    private int clientPort;
+    /**
+     * {@link #client} when a filter of its last round of subscriptions was refused, so the next look renews the round;
+     * else null. Guarded by this.
+     */
+    private MqttClient refused;
     private boolean closed;
 
-    /** Client {@code clientId} on frontear's MQTT {@code port}, connected while {@code fabricUp} says it runs. */
-    MqttPeerBroker(final String clientId, final int port, final BooleanSupplier fabricUp) {
+    /**
+     * Client {@code clientId} on frontear's MQTT port, as {@code port} says it at each look, connected while
+     * {@code fabricUp} says the node runs.
+     */
+    MqttPeerBroker(final String clientId, final IntSupplier port, final BooleanSupplier fabricUp) {
         this.clientId = clientId;
         this.port = port;
         this.fabricUp = fabricUp;
@@ -70,39 +83,63 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         follow.scheduleWithFixedDelay(this::follow, 0, FOLLOW_EVERY.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    /** Connects when the registry names a live frontear node and no client exists, disconnects when it names none. */
+    /**
+     * Connects when the node runs and no client exists, again when the node's port is not the client's, and
+     * disconnects when the node does not run; renews a connected client's subscriptions when one of them was refused.
+     */
     void follow() {
         // an exception escaping a periodic task cancels every later run
         try {
             final boolean up = fabricUp.getAsBoolean();
+            final int at = port.getAsInt();
+            final MqttClient again;
+            final int againAt;
             synchronized (this) {
                 if (closed) {
                     return;
                 }
+                if (up && client != null && clientPort != at) {
+                    final MqttClient moved = client;
+                    final int was = clientPort;
+                    client = null;
+                    moved.disconnect().whenComplete((v, e) -> LOG.log(System.Logger.Level.INFO,
+                            "left frontear's old port [client=" + clientId + ", port=" + was + ", now=" + at + ']'));
+                }
                 if (up && client == null) {
-                    client = connect();
+                    clientPort = at;
+                    client = connect(at);
                 } else if (!up && client != null) {
                     final MqttClient gone = client;
                     client = null;
                     gone.disconnect().whenComplete((v, e) -> LOG.log(System.Logger.Level.INFO,
                             "left frontear: it no longer runs"));
                 }
+                again = client != null && client == refused && client.connected() ? client : null;
+                againAt = clientPort;
+                if (again != null) {
+                    refused = null;
+                }
+            }
+            if (again != null) {
+                LOG.log(System.Logger.Level.INFO, "renewing the subscriptions frontear refused [client=" + clientId
+                        + ", port=" + againAt + ']');
+                subscribeAll(again, againAt);
             }
         } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot follow frontear", e);
         }
     }
 
-    private MqttClient connect() {
+    private MqttClient connect(final int at) {
         final AtomicReference<MqttClient> self = new AtomicReference<>();
-        final MqttClient.Options options = new MqttClient.Options(HOST, port, clientId, KEEP_ALIVE_SECONDS,
+        final MqttClient.Options options = new MqttClient.Options(HOST, at, clientId, KEEP_ALIVE_SECONDS,
                 MAXIMUM_PACKET_SIZE, will);
         // the client's callbacks on the message strand: connects and messages in the order they happened
         final MqttClient c = new MqttClient(options, new MqttClient.Handler() {
 
             @Override
             public void connected() {
-                onConnect();
+                onConnect(at);
             }
 
             @Override
@@ -137,8 +174,8 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     }
 
     /** Connected, first or again: the listeners first, then the subscriptions, whose retained messages follow. */
-    private void onConnect() {
-        LOG.log(System.Logger.Level.INFO, "connected to frontear [client=" + clientId + ", port=" + port + ']');
+    private void onConnect(final int at) {
+        LOG.log(System.Logger.Level.INFO, "connected to frontear [client=" + clientId + ", port=" + at + ']');
         for (final Runnable l : listeners) {
             try {
                 l.run();
@@ -150,21 +187,64 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         if (c == null) {
             return;
         }
+        subscribeAll(c, at);
+    }
+
+    /**
+     * Subscribes {@code c}, on port {@code at}, to every filter: once all are acknowledged the subscribed listeners
+     * hear the port; when one is refused, the next look renews the round.
+     */
+    private void subscribeAll(final MqttClient c, final int at) {
         final List<String> filters;
         synchronized (handlers) {
             filters = List.copyOf(handlers.keySet());
         }
+        final List<CompletableFuture<Void>> acks = new ArrayList<>();
         for (final String f : filters) {
-            subscribe(c, f);
+            acks.add(subscribe(c, f));
+        }
+        CompletableFuture.allOf(acks.toArray(CompletableFuture[]::new)).whenComplete((v, e) -> {
+            roundEnded(c, e == null);
+            if (e == null) {
+                subscribedAt(at);
+            }
+        });
+    }
+
+    /** {@code c}'s round ended, every filter acknowledged or not: while it is the client, the next look knows. */
+    private synchronized void roundEnded(final MqttClient c, final boolean acknowledged) {
+        if (c == client) {
+            refused = acknowledged ? null : c;
         }
     }
 
-    private static void subscribe(final MqttClient c, final String filter) {
-        c.subscribe(filter, 1).whenComplete((v, e) -> {
+    private static CompletableFuture<Void> subscribe(final MqttClient c, final String filter) {
+        return c.subscribe(filter, 1).whenComplete((v, e) -> {
             if (e != null) {
                 LOG.log(System.Logger.Level.WARNING, "subscription failed [filter=" + filter + ']', e);
             }
         });
+    }
+
+    /** Every filter of a connect to port {@code at} is acknowledged: the listeners hear the port. */
+    private void subscribedAt(final int at) {
+        for (final IntConsumer l : subscribed) {
+            try {
+                l.accept(at);
+            } catch (final RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "a subscribed listener failed", e);
+            }
+        }
+    }
+
+    /**
+     * Runs {@code listener} with the node's port once every filter a connect renewed is acknowledged, at each connect,
+     * on the client's thread, or at the look that renewed them after one was refused; not for a filter subscribed
+     * later. The node's host lets the other nodes' links in then, so what they queued for this instance finds its
+     * subscribers in place.
+     */
+    void onSubscribed(final IntConsumer listener) {
+        subscribed.add(listener);
     }
 
     /** Hands a message to every handler whose filter matches its topic. */

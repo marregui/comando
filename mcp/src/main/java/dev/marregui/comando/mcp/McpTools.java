@@ -42,6 +42,7 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.LabPort;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.port.TerminalPort;
@@ -149,6 +150,11 @@ public final class McpTools {
      * read by the request threads; null until then.
      */
     private volatile ResultRegistry results;
+    /**
+     * This instance's frontear node, for {@code frontear_read} (record 187): written once by the application thread
+     * when the node's watch is built, read by the request threads; {@link LabPort#NONE} until then.
+     */
+    private volatile LabPort lab = LabPort.NONE;
     /** Permits for {@link #MAX_SCANS} scans; a call that finds none is refused, never queued. */
     private final Semaphore scans = new Semaphore(MAX_SCANS);
     private final AtomicLong approvalIds = new AtomicLong(1_000_000L);
@@ -226,6 +232,11 @@ public final class McpTools {
         this.peers = peers;
     }
 
+    /** This instance's frontear node, which {@code frontear_read} reads (record 187); the application sets it once. */
+    public void lab(final LabPort lab) {
+        this.lab = lab;
+    }
+
     /** The rows of the panels' runs, which the result tools read (record 145); the application sets it once. */
     public void results(final ResultRegistry results) {
         this.results = results;
@@ -291,6 +302,7 @@ public final class McpTools {
                 case "instances_list" -> peers().list();
                 case "instance_ask" -> peers().ask(session, args);
                 case "instance_reply" -> peers().replyOf(session, args);
+                case "frontear_read" -> LabTools.read(lab, args);
                 default -> ActionTools.handles(name, builtIn) ? actions.run(session, name, args) : Outcome.fail("unknown tool " + name);
             };
         } catch (final IllegalArgumentException e) {

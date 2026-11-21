@@ -10,6 +10,7 @@ import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.port.LabPort;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
@@ -30,9 +31,10 @@ import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
 /**
  * The lower panel: Session (the focused panel's transcript), Approvals (every session, the focused panel's first),
- * Terminal (the focused panel's shell), Results, then one tab per view placed below. The selected tab follows the
- * state, and selecting a tab updates the state. Results and Session carry a dot when something new arrived while
- * another tab was in front. The palette's Clear empties the Session tab (record 104);
+ * Terminal (the focused panel's shell), Results, frontear (this instance's node, record 187), then one tab per view
+ * placed below. The selected tab follows the state, and selecting a tab updates the state; frontear is no state's
+ * tab, so it stays in front until the state selects another. Results and Session carry a dot when something new
+ * arrived while another tab was in front. The palette's Clear empties the Session tab (record 104);
  * the conversation goes on, whole in Claude Code's files.
  */
 public final class LowerPanel {
@@ -42,8 +44,9 @@ public final class LowerPanel {
     static final int APPROVALS = 1;
     static final int TERMINAL = 2;
     static final int RESULTS = 3;
+    static final int FRONTEAR = 4;
     /** The fixed tabs; placed views follow them. */
-    static final int FIXED_TABS = 4;
+    static final int FIXED_TABS = 5;
 
     private final WidgetContext context;
     private final TranscriptRegistry transcripts;
@@ -58,7 +61,10 @@ public final class LowerPanel {
     private final ApprovalInbox inbox;
     private final ViewTabs views;
     private final TerminalTabs terminals = new TerminalTabs();
+    private final FrontearTab frontear = new FrontearTab();
     private AppState state;
+    /** The state's tab at the last render: while it stays, a frontear tab the user brought forward stays in front. */
+    private LowerTab renderedTab;
     private boolean rendering;
     private String transcriptSession = "";
     /** The transcript version the user last saw on the Session tab, by session. */
@@ -79,6 +85,7 @@ public final class LowerPanel {
         tabs.addTab("Approvals", Icons.get("check"), inbox.component());
         tabs.addTab("Terminal", Icons.get("terminal"), terminals.component());
         tabs.addTab("Results", Icons.get("table"), this.results.component());
+        tabs.addTab("frontear", Icons.get("frontear"), frontear.component());
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         // the region's frame under the console style; none, and no room, under the plain one (record 151)
@@ -95,6 +102,7 @@ public final class LowerPanel {
                 case SESSION -> LowerTab.SESSION;
                 case APPROVALS -> LowerTab.APPROVALS;
                 case TERMINAL -> LowerTab.TERMINAL;
+                case FRONTEAR -> null;
                 default -> {
                     final long id = views.viewAt(i);
                     yield id < 0 ? null : LowerTab.view(id);
@@ -134,12 +142,17 @@ public final class LowerPanel {
         return transcript;
     }
 
+    /** The node the frontear tab shows; the application sets it once its node's watch is built. */
+    public void lab(final LabPort port) {
+        frontear.lab(port);
+    }
+
     /** The component of the tab in front: a fixed tab's view or a placed view. */
     public Component selected() {
         return tabs.getSelectedComponent();
     }
 
-    /** The placed view in front, or -1 when a fixed tab (Session, Approvals, Terminal, Results) is in front. */
+    /** The placed view in front, or -1 when a fixed tab (Session, Approvals, Terminal, Results, frontear) is. */
     public long selectedView() {
         final int i = tabs.getSelectedIndex();
         return i < FIXED_TABS ? -1 : views.viewAt(i);
@@ -197,9 +210,11 @@ public final class LowerPanel {
                 case TERMINAL -> TERMINAL;
                 case VIEW -> views.indexOf(s.lowerTab().viewId());
             };
-            if (want >= 0 && tabs.getSelectedIndex() != want) {
+            final boolean keepFrontear = tabs.getSelectedIndex() == FRONTEAR && s.lowerTab().equals(renderedTab);
+            if (!keepFrontear && want >= 0 && tabs.getSelectedIndex() != want) {
                 tabs.setSelectedIndex(want);
             }
+            renderedTab = s.lowerTab();
             terminals.render(s, s.lowerTab().kind() == LowerTab.Kind.TERMINAL);
             markResults(s);
             markSession();

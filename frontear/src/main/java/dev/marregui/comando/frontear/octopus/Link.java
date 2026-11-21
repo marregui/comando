@@ -34,6 +34,9 @@ import dev.marregui.comando.frontear.store.LinkLog;
 import dev.marregui.comando.frontear.store.LogOptions;
 import dev.marregui.comando.frontear.store.QuotaExceededException;
 import dev.marregui.comando.frontear.store.Record;
+import dev.marregui.comando.frontear.watch.LinkStep;
+import dev.marregui.comando.frontear.watch.LogView;
+import dev.marregui.comando.frontear.watch.Watch;
 
 /**
  * One link to a peer broker. Its strand, {@code link-<id>}, runs every step of the link and is the only thread that
@@ -54,6 +57,10 @@ import dev.marregui.comando.frontear.store.Record;
  * <p>In, at least once. The link subscribes to its IN filters on the peer with No Local, so what it sends does not
  * come back, and publishes what arrives on the local broker as {@code $link/<id>}, whose own OUT subscription, No
  * Local under that owner, leaves it; the peer's PUBACK waits for that local publish and carries its reason code.
+ *
+ * <p>Watch. While the node's {@link Watch} is on, the link keeps each message's steps there (appended, sent, arrived,
+ * dropped and why) and each connection change; a connection the peer refused for the client id, a link aimed at a
+ * node other than the one its id names, says so.
  */
 final class Link implements AutoCloseable {
 
@@ -77,6 +84,7 @@ final class Link implements AutoCloseable {
     private final LinkLog log;
     private final InstantSource clock;
     private final LinkOptions options;
+    private final Watch watch;
     /**
      * Runs every step of the link. Its queue has no bound of its own; what joins it is bounded where it comes from:
      * the broker's messages wait in {@link #deliveries} behind one task, the log's completions behind one pump, the
@@ -147,8 +155,9 @@ final class Link implements AutoCloseable {
     private volatile long reordered;
 
     private Link(final String id, final String localId, final Broker broker, final LinkLog log,
-            final LinkOptions options, final InstantSource clock) {
+            final LinkOptions options, final InstantSource clock, final Watch watch) {
         this.id = id;
+        this.watch = watch;
         this.owner = OWNER + id;
         this.localId = localId;
         this.broker = broker;
@@ -223,11 +232,12 @@ final class Link implements AutoCloseable {
 
     /** A link {@code id} on its log in {@code dir}, created when missing; nothing runs before {@link #start}. */
     static Link open(final String id, final String localId, final Broker broker, final Path dir,
-            final LogOptions logOptions, final LinkOptions options, final InstantSource clock) throws IOException {
+            final LogOptions logOptions, final LinkOptions options, final InstantSource clock, final Watch watch)
+            throws IOException {
         Files.createDirectories(dir);
-        final LinkLog log = LinkLog.open(dir, logOptions);
+        final LinkLog log = LinkLog.open(dir, logOptions, watch);
         try {
-            return new Link(id, localId, broker, log, options, clock);
+            return new Link(id, localId, broker, log, options, clock, watch);
         } catch (final RuntimeException e) {
             log.close();
             throw e;
@@ -295,6 +305,11 @@ final class Link implements AutoCloseable {
                 reordered, waiting.depth(), options.queueMax());
     }
 
+    /** The link's log now; from any thread. */
+    LogView logView() {
+        return new LogView(id, log.cursor(), log.tail(), log.bytes(), log.segments());
+    }
+
     private static Throwable cause(final Throwable e) {
         return e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
     }
@@ -357,6 +372,7 @@ final class Link implements AutoCloseable {
             }
             LOG.log(System.Logger.Level.DEBUG, () -> "message refused: the link's queue is full [link=" + id
                     + ", topic=" + m.topic() + ", qos=" + m.qos() + ", queueMax=" + options.queueMax() + ']');
+            watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "the link's queue is full");
             return CompletableFuture.completedFuture(Packet.QUOTA_EXCEEDED);
         }
         waiting.sample();
@@ -403,6 +419,7 @@ final class Link implements AutoCloseable {
             dropped++;
             LOG.log(System.Logger.Level.DEBUG, () -> "message not forwarded past the hop limit [link=" + id
                     + ", topic=" + m.topic() + ", hops=" + hops + ", hopLimit=" + spec.hopLimit() + ']');
+            watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "past the hop limit");
             done.complete(Packet.SUCCESS);
             return;
         }
@@ -421,11 +438,13 @@ final class Link implements AutoCloseable {
             if (e == null) {
                 LOG.log(System.Logger.Level.DEBUG, () -> "message queued [link=" + id + ", offset=" + offset
                         + ", topic=" + m.topic() + ']');
+                watch.step(id, LinkStep.Kind.APPENDED, offset, m.topic(), m.payload().length, "");
                 done.complete(Packet.SUCCESS);
                 schedulePump();
             } else if (cause(e) instanceof QuotaExceededException) {
                 LOG.log(System.Logger.Level.DEBUG, () -> "message refused: the link's log is full [link=" + id
                         + ", topic=" + m.topic() + ']');
+                watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "the link's log is full");
                 done.complete(Packet.QUOTA_EXCEEDED);
             } else if (closed) {
                 LOG.log(System.Logger.Level.DEBUG, () -> "message not queued, the link closed first [link=" + id
@@ -500,13 +519,17 @@ final class Link implements AutoCloseable {
         } catch (final MqttException e) {
             LOG.log(System.Logger.Level.WARNING, "link record unreadable, dropped [link=" + id + ", offset="
                     + r.offset() + ']', e);
+            f.detail = "the record is unreadable";
             return false;
         }
         if (m == null) {
             LOG.log(System.Logger.Level.DEBUG, () -> "message expired in the link's log, dropped [link=" + id
                     + ", offset=" + r.offset() + ']');
+            f.detail = "expired in the link's log";
             return false;
         }
+        f.topic = m.topic();
+        f.bytes = m.payload().length;
         final int sentIn = epoch;
         p.client.publishAcknowledged(m).whenComplete((code, e) -> post(() -> answered(sentIn, f, code, e)));
         return true;
@@ -524,6 +547,7 @@ final class Link implements AutoCloseable {
             } else if (reason == Packet.PACKET_TOO_LARGE) {
                 LOG.log(System.Logger.Level.WARNING, "message larger than the peer accepts, dropped [link=" + id
                         + ", offset=" + f.offset + ']');
+                f.detail = "larger than the peer accepts";
                 settle(f, Outcome.DROPPED);
             }
             // otherwise the connection ended; its end rewinds to the cursor
@@ -534,6 +558,7 @@ final class Link implements AutoCloseable {
         } else {
             LOG.log(System.Logger.Level.INFO, "peer refused a message, dropped [link=" + id + ", offset=" + f.offset
                     + ", reasonCode=" + Packet.hex(code) + ']');
+            f.detail = "the peer refused it [reasonCode=" + Packet.hex(code) + ']';
             settle(f, Outcome.DROPPED);
         }
     }
@@ -688,8 +713,12 @@ final class Link implements AutoCloseable {
                     sent++;
                     LOG.log(System.Logger.Level.DEBUG, () -> "message sent [link=" + id + ", offset=" + f.offset
                             + ']');
+                    watch.step(id, LinkStep.Kind.SENT, f.offset, f.topic, f.bytes, "");
                 }
-                case DROPPED -> dropped++;
+                case DROPPED -> {
+                    dropped++;
+                    watch.step(id, LinkStep.Kind.DROPPED, f.offset, f.topic, f.bytes, f.detail);
+                }
             }
             flights.poll();
             done = f.offset;
@@ -719,20 +748,43 @@ final class Link implements AutoCloseable {
         subscribedIn = new HashSet<>();
         LOG.log(System.Logger.Level.INFO, "link connected [link=" + id + ", window=" + window + ", cursor="
                 + log.cursor() + ", tail=" + log.tail() + ']');
+        watch.step(id, LinkStep.Kind.CONNECTED, -1, null, 0, "");
         syncIn();
         rewindToCursor();
         pump();
     }
 
-    /** The connection ended, or is being replaced: nothing is in flight any more. Strand. */
+    /**
+     * The connection ended, or is being replaced: nothing is in flight any more. A connection that was up, or one that
+     * failed with {@code cause}, is a disconnect the watch sees. Strand.
+     */
     private void down(final Throwable cause) {
         if (up) {
             LOG.log(System.Logger.Level.INFO, "link disconnected [link=" + id + ", inFlight=" + flights.size()
                     + ", cause=" + cause + ']');
         }
+        if ((up || cause != null) && watch.on()) {
+            watch.step(id, LinkStep.Kind.DISCONNECTED, -1, null, 0, disconnected(cause));
+        }
         up = false;
         connected = false;
         rewindToCursor();
+    }
+
+    /**
+     * Why the connection ended, for the watch: empty for a replacement, a refused client id named as a link aimed at
+     * the wrong node (a node refuses a link client whose id does not end with its name), else the cause's message.
+     */
+    private String disconnected(final Throwable cause) {
+        if (cause == null) {
+            return "";
+        }
+        final Throwable c = cause(cause);
+        if (c instanceof final MqttException e && e.reasonCode() == Packet.CLIENT_ID_NOT_VALID) {
+            return "the peer refused the link's client id: it is not node " + id + " [clientId=" + clientId()
+                    + ", reasonCode=" + Packet.hex(e.reasonCode()) + ']';
+        }
+        return c.getMessage() == null ? c.getClass().getSimpleName() : c.getMessage();
     }
 
     private void rewindToCursor() {
@@ -817,8 +869,10 @@ final class Link implements AutoCloseable {
             dropped++;
             LOG.log(System.Logger.Level.DEBUG, () -> "message in not published past the hop limit [link=" + id
                     + ", topic=" + m.topic() + ", hops=" + hops + ']');
+            watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "past the hop limit");
             return CompletableFuture.completedFuture(Packet.SUCCESS);
         }
+        watch.step(id, LinkStep.Kind.ARRIVED, -1, m.topic(), m.payload().length, "");
         final CompletableFuture<Integer> published;
         try {
             published = broker.publish(Forwarding.arrived(m, hops + 1), owner);
@@ -869,6 +923,11 @@ final class Link implements AutoCloseable {
         private boolean resent;
         /** Counted in {@code reordered}: the peer accepted a later flight while this one was refused. */
         private boolean overtaken;
+        /** The record's topic and payload length, for the watch; null and 0 until it was read. */
+        private String topic;
+        private int bytes;
+        /** Why it was dropped, for the watch; empty unless it was. */
+        private String detail = "";
 
         Flight(final long offset) {
             this.offset = offset;

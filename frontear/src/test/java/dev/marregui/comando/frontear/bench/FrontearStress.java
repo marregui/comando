@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
@@ -39,6 +40,7 @@ import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.MqttException;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.PublishRecord;
+import dev.marregui.comando.frontear.watch.Watch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -51,9 +53,12 @@ import static org.awaitility.Awaitility.await;
 /// 10 s it prints the offered (scheduled), sent and delivered messages a second, the latency's p50, p99, p99.9 and
 /// maximum, the link's backlog in messages and in bytes, its `reordered` count and the strands' queues; at the end, a
 /// table with one row per step and the highest rate a step kept up with. `main` takes
-/// `--minutes M --rate R[,R...] [--payload 128|4096|mix] [--publishers N] [--window W] [--warmup S] --data DIR`; the
-/// test runs it only with `COMANDO_STRESS=true`, its arguments from `COMANDO_STRESS_ARGS` (default: one minute at
-/// 2,000 msg/s), and asserts that every message arrived and every publish was acknowledged 0x00.
+/// `--minutes M --rate R[,R...] [--payload 128|4096|mix] [--publishers N] [--window W] [--warmup S] [--watch on|off]
+/// --data DIR`; the test runs it only with `COMANDO_STRESS=true`, its arguments from `COMANDO_STRESS_ARGS` (default:
+/// one minute at 2,000 msg/s), and asserts that every message arrived and every publish was acknowledged 0x00. With
+/// `--watch on` both nodes' watches keep events and a drainer reads them every 250 ms, as the lab's view does, so the
+/// run measures what watching costs the publishers. The link's id is b, the node it reaches, and both nodes refuse a
+/// link client aimed at another node.
 @EnabledIfEnvironmentVariable(named = "COMANDO_STRESS", matches = "true")
 class FrontearStress {
 
@@ -66,11 +71,13 @@ class FrontearStress {
     private static final int LARGE = 4_096;
     // the first send's lead over the schedule's start, so the publishers' loops run when the schedule begins
     private static final long LEAD_NANOS = TimeUnit.MILLISECONDS.toNanos(200);
-    private static final String LINK = "ab";
+    private static final String LINK = "b";
     private static final Duration REPORT_EVERY = Duration.ofSeconds(10);
     private static final Duration SETUP = Duration.ofSeconds(15);
     private static final int SMALL = 128;
     private static final String STATE = "$frontear/state/a/links";
+    // how often the drainer reads the watches: the lab's view's poll (ADR 0187 §2.3)
+    private static final Duration WATCH_EVERY = Duration.ofMillis(250);
     // how long a publisher may wait for its window: far above any acknowledgement at the rates run, so reaching it
     // means the run is stuck, not slow
     private static final Duration WINDOW_WAIT = Duration.ofSeconds(60);
@@ -113,9 +120,9 @@ class FrontearStress {
         final ExecutorService controlCallbacks = Threads.strand("frontear-stress-control");
         strands.add(controlCallbacks);
         try (Frontear b = Frontear.start("b", 0, o.data().resolve("b"), Set.of(pod.getPublic()),
-                InstantSource.system());
+                InstantSource.system(), true);
                 Frontear a = Frontear.start("a", 0, o.data().resolve("a"), Set.of(pod.getPublic()),
-                        InstantSource.system());
+                        InstantSource.system(), true);
                 MqttClient controller = new MqttClient(new MqttClient.Options("127.0.0.1", a.port(),
                         "stress-control", 0, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null), control,
                         controlCallbacks)) {
@@ -125,7 +132,7 @@ class FrontearStress {
             final String link = "{\"id\":\"" + LINK + "\",\"host\":\"127.0.0.1\",\"port\":" + b.port()
                     + ",\"out\":[\"stress/#\"],\"in\":[],\"hopLimit\":3}";
             assertThat(controller.publishAcknowledged(signer.sign("$frontear/control/a/PutLink",
-                    link.getBytes(StandardCharsets.UTF_8), "replies/ab", new byte[] {1}))
+                    link.getBytes(StandardCharsets.UTF_8), "replies/" + LINK, new byte[] {1}))
                     .get(SETUP.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.SUCCESS);
             await().atMost(SETUP).until(() -> control.reply != null);
             assertThat(control.reply).contains("\"ok\":true");
@@ -157,26 +164,29 @@ class FrontearStress {
             final List<Step> steps = o.steps(System.nanoTime() + LEAD_NANOS);
             report.header(steps);
             final AtomicReference<Throwable> failure = new AtomicReference<>();
-            final List<Thread> forks = new ArrayList<>();
-            for (final Publisher p : publishers) {
-                forks.add(Threads.fork("frontear-stress-send-" + p.index, () -> {
-                    try {
-                        p.send(steps);
-                    } catch (final InterruptedException _) {
-                        Thread.currentThread().interrupt();
-                    } catch (final RuntimeException | MqttException e) {
-                        failure.compareAndSet(null, e);
-                    }
-                }));
-            }
-            report.follow(steps, forks, failure);
-            final long sendsEnded = System.nanoTime();
-            for (final Thread fork : forks) {
-                if (!fork.join(WINDOW_WAIT)) {
-                    throw new IllegalStateException("publisher did not end [thread=" + fork.getName() + ']');
+            final long sendsEnded;
+            try (Drainer _ = Drainer.start(o.watch(), a.watch(), b.watch())) {
+                final List<Thread> forks = new ArrayList<>();
+                for (final Publisher p : publishers) {
+                    forks.add(Threads.fork("frontear-stress-send-" + p.index, () -> {
+                        try {
+                            p.send(steps);
+                        } catch (final InterruptedException _) {
+                            Thread.currentThread().interrupt();
+                        } catch (final RuntimeException | MqttException e) {
+                            failure.compareAndSet(null, e);
+                        }
+                    }));
                 }
+                report.follow(steps, forks, failure);
+                sendsEnded = System.nanoTime();
+                for (final Thread fork : forks) {
+                    if (!fork.join(WINDOW_WAIT)) {
+                        throw new IllegalStateException("publisher did not end [thread=" + fork.getName() + ']');
+                    }
+                }
+                report.drain();
             }
-            report.drain();
             report.table(steps);
             if (failure.get() != null) {
                 throw new IllegalStateException("stress run failed", failure.get());
@@ -204,7 +214,7 @@ class FrontearStress {
 
     /// What the command line asks: a step per rate, each `minutes` long, after a warm-up at the first rate.
     private record Options(double minutes, List<Integer> rates, String payload, int publishers, int window,
-            int warmupSeconds, Path data) {
+            int warmupSeconds, boolean watch, Path data) {
 
         private static final int DEFAULT_PUBLISHERS = 4;
         // long enough for the JIT to compile the paths measured at the rates run (the bench's 20,000 messages)
@@ -219,6 +229,7 @@ class FrontearStress {
             int publishers = DEFAULT_PUBLISHERS;
             int window = DEFAULT_WINDOW;
             int warmup = DEFAULT_WARMUP_SECONDS;
+            String watch = "off";
             Path data = null;
             for (int i = 0; i + 1 < args.length; i += 2) {
                 final String value = args[i + 1];
@@ -229,17 +240,19 @@ class FrontearStress {
                     case "--publishers" -> publishers = Integer.parseInt(value);
                     case "--window" -> window = Integer.parseInt(value);
                     case "--warmup" -> warmup = Integer.parseInt(value);
+                    case "--watch" -> watch = value;
                     case "--data" -> data = Path.of(value);
                     default -> throw new IllegalArgumentException("unknown option [option=" + args[i] + ']');
                 }
             }
             if (args.length % 2 != 0 || data == null || minutes <= 0 || publishers < 1 || window < 1 || warmup < 0
-                    || !Set.of("128", "4096", "mix").contains(payload) || rates.stream().anyMatch(r -> r < 1)) {
+                    || !Set.of("128", "4096", "mix").contains(payload) || rates.stream().anyMatch(r -> r < 1)
+                    || !Set.of("on", "off").contains(watch)) {
                 throw new IllegalArgumentException("usage: --minutes M --rate R[,R...] [--payload 128|4096|mix]"
-                        + " [--publishers N] [--window W] [--warmup S] --data DIR [args=" + String.join(" ", args)
-                        + ']');
+                        + " [--publishers N] [--window W] [--warmup S] [--watch on|off] --data DIR [args="
+                        + String.join(" ", args) + ']');
             }
-            return new Options(minutes, rates, payload, publishers, window, warmup, data);
+            return new Options(minutes, rates, payload, publishers, window, warmup, "on".equals(watch), data);
         }
 
         /// The payload of a publisher's `seq`-th message: half of each size for `mix`, alternating.
@@ -777,6 +790,71 @@ class FrontearStress {
                 n += Math.max(0, c.getCollectionTime());
             }
             return n;
+        }
+    }
+
+    /// The watches' reader for `--watch on`: turns them on and reads each from where it left off every
+    /// [#WATCH_EVERY], at most a ring at a time, counting the events read and those the rings overwrote first. For
+    /// `--watch off` it does nothing, and the watches stay off.
+    private static final class Drainer implements AutoCloseable {
+
+        private final List<Watch> watches;
+        private final long[] last;
+        private final AtomicBoolean stopped = new AtomicBoolean();
+        private final Thread thread;
+        private long events;
+        private long missed;
+
+        private Drainer(final List<Watch> watches) {
+            this.watches = watches;
+            this.last = new long[watches.size()];
+            this.thread = watches.isEmpty() ? null : Threads.fork("frontear-stress-watch", this::loop);
+        }
+
+        static Drainer start(final boolean on, final Watch... watches) {
+            if (!on) {
+                return new Drainer(List.of());
+            }
+            for (final Watch w : watches) {
+                w.on(true);
+            }
+            return new Drainer(List.of(watches));
+        }
+
+        /// Ends the reads, waits for the drainer and prints what it read; its counts are its thread's until the join.
+        /// An interrupt while waiting is kept on the run's thread, and the drainer, told to stop, ends on its own.
+        @Override
+        public void close() {
+            if (thread == null) {
+                return;
+            }
+            stopped.set(true);
+            thread.interrupt();
+            try {
+                if (!thread.join(WINDOW_WAIT)) {
+                    throw new IllegalStateException("watch drainer did not end [thread=" + thread.getName() + ']');
+                }
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupted waiting for the watch drainer", e);
+            }
+            for (final Watch w : watches) {
+                w.on(false);
+            }
+            System.out.printf(Locale.ROOT, "watch [events=%d, missed=%d, everyMillis=%d]%n", events, missed,
+                    WATCH_EVERY.toMillis());
+        }
+
+        private void loop() {
+            while (!stopped.get()) {
+                for (int i = 0; i < watches.size(); i++) {
+                    final Watch.Batch batch = watches.get(i).since(last[i], Frontear.WATCH_CAPACITY);
+                    events += batch.events().size();
+                    missed += batch.missed();
+                    last[i] = batch.last();
+                }
+                LockSupport.parkNanos(WATCH_EVERY.toNanos());
+            }
         }
     }
 

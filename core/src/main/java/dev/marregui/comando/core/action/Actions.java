@@ -209,13 +209,13 @@ public final class Actions {
             // ---- servers: the toggles at the top of the workspace, which call the server and send no intent
             new Action("server_start", Kind.ACT,
                     "Starts a local server, as its toggle at the top of the workspace does: frontear "
-                            + "(one node per machine, the instances' link) or the machine's cdb. Answers at once; the "
-                            + "outcome comes as a notice, and ui_get_state's servers show it.",
+                            + "(this instance's node, linked to the other instances' nodes) or the machine's cdb. "
+                            + "Answers at once; the outcome comes as a notice, and ui_get_state's servers show it.",
                     List.of(SERVER), Set.of()),
             new Action("server_stop", Kind.ACT,
-                    "Stops a local server this instance started, as its toggle does; frontear hosted by another "
-                            + "instance is refused. Stopping frontear ends the consults under way, and another "
-                            + "instance running hosts it again within seconds.",
+                    "Stops a local server this instance started, as its toggle does. Stopping frontear stops "
+                            + "this instance's node: its peer link is down, and the other instances' links to it "
+                            + "queue its messages until it starts again.",
                     List.of(SERVER), Set.of()),
 
             // ---- commands and folders

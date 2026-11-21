@@ -12,7 +12,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
+import javax.swing.SwingUtilities;
 
+import dev.marregui.comando.app.lab.CdbWriter;
+import dev.marregui.comando.app.lab.FrontearSource;
+import dev.marregui.comando.app.lab.LabDrain;
+import dev.marregui.comando.app.lab.PacketSink;
 import dev.marregui.comando.claude.ClaudeAdapter;
 import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.claude.ClaudeTopics;
@@ -231,8 +236,8 @@ public final class App implements AutoCloseable {
             claude.checkpointByComando();
             final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
-            // the instances' broker, one node on the machine whichever instance hosts it (record 185); off the peers,
-            // one of the data root's own, so no toggle of a test or picture tool touches the machine's
+            // the instances' brokers, a node per instance, linked to the others' (record 187); off the peers, a
+            // registry of the data root's own, so no toggle of a test or picture tool touches the machine's
             final boolean onPeers = Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"));
             final FrontearFabric fabric = FrontearFabric.of(config.home(), InstanceName.current(), loop, onPeers);
             // agents start and stop them as the toggles do (record 121)
@@ -249,20 +254,39 @@ public final class App implements AutoCloseable {
             ui.search(own(new Searcher(List.of(new FolderSearch(Searcher.SCANNERS, Searcher.MAX_HITS + 1),
                     new TranscriptSearch(root.projects())))));
             ui.checkpointThreshold(checkpointThreshold::set);
+            // the frontear tab and frontear_read read this node's watch, drained every 250 ms; the packets go to the
+            // machine cdb when this instance writes there; the drain closes first, then the sink, both before the
+            // fabric (record 187)
+            final PacketSink packets = own(onPeers && machineCdb ? new PacketSink(new CdbWriter(cdb))
+                    : PacketSink.off());
+            final LabDrain lab = own(new LabDrain(new FrontearSource(fabric::node), SwingUtilities::invokeLater,
+                    packets));
+            ui.lab(lab);
+            mcpTools.lab(lab);
             // agents reach the panels' Terminals through the window, which refuses them until it is built (record 148)
             mcpTools.terminals(ui.terminals());
-            // the instances consult each other through frontear, whichever instance hosts it (record 123); the link
-            // starts it when none runs, at launch and when its host quits (record 185); this instance's presence is
-            // cleared, and its link closed, before the node it hosts stops
+            // the instances consult each other through frontear (record 123), each on its own node, whose links carry
+            // the questions, replies and presences to the others' (record 187); the peer link starts the node at
+            // launch; this instance's presence is cleared, and its link closed, before its node stops
             if (onPeers) {
                 final Peers.Me me = Peers.Me.of(InstanceName.current(), version, Main.roleFile(config.home()));
-                peerBroker = own(new MqttPeerBroker(me.clientId(), fabric.mqttPort(), fabric::runningOrHost));
+                peerBroker = own(new MqttPeerBroker(me.clientId(), fabric::mqttPort, fabric::runningOrHost));
                 // a consult session is made where a new session is: the home folder
                 peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
-                // the instances seen are remembered in the data root, and the presence says whether this one hosts
-                // frontear (record 124)
+                // the instances seen are remembered in the data root, and the presence says whether this one's node
+                // runs (records 124, 187)
                 peers.dataRoot(config.home());
-                peers.host(fabric::startedHere);
+                peers.host(fabric::isRunning);
+                // a peer whose process is gone is dropped, a link that connects gets this presence again, and a peer
+                // forgotten loses its link and registry entry (record 187)
+                fabric.onPeers(peers::gone, peers::resendPresence);
+                peers.onForget(fabric::forget);
+                // the others' links are let in once this instance's peer link has its subscriptions, so a question
+                // queued for it while it was down is not routed to nobody (record 187)
+                peerBroker.onSubscribed(fabric::openLinks);
+                // a peer first seen gets its link at once, and a question to it waits for that link, as the link is
+                // the only subscriber of its inbox here (record 187)
+                peers.linkTo(fabric::linkTo);
                 mcpTools.peers(peers);
                 // the sidebar's Instances tab asks and refuses through it (record 124)
                 ui.instances(peers);
@@ -273,7 +297,7 @@ public final class App implements AutoCloseable {
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the kit check uses KitGit, Peers and the window: its strand stops before them
             own(() -> ExecutorStop.now("app", kitCheck));
-            // the node this instance hosts stops before the machine's cdb; one another instance hosts keeps running
+            // this instance's node stops before the machine's cdb; the others' keep running, their links to it queueing
             owned.addLast(fabric);
             // the machine's cdb is left running: its errands stop last, after the metrics log that writes to it
             owned.addLast(cdb);

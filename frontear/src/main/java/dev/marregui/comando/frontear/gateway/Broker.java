@@ -6,6 +6,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,9 @@ import dev.marregui.comando.frontear.channels.TopicTree;
 import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Topics;
+import dev.marregui.comando.frontear.watch.ConnectionView;
+import dev.marregui.comando.frontear.watch.LinkStep;
+import dev.marregui.comando.frontear.watch.Watch;
 
 /**
  * frontear's MQTT 5 broker: the clients that connect over TCP and the subscribers inside the process share one topic
@@ -56,6 +60,10 @@ import dev.marregui.comando.frontear.protocol.Topics;
  * wills and the session expiries, and one strand publishes the presence and wills the session lock ordered. Locks: the
  * session lock, then a session's own; the retained store's lock alone; no lock is held while a message is routed, so
  * no internal subscriber and no gate is called under one.
+ * <p>
+ * Watch: every message routed is kept in the broker's {@link Watch} while it is on, and one a link client published
+ * (its client id {@code <node>~<link>}) as that link's arrival too. A broker started as a node refuses a link client
+ * aimed at another node, and one started holding its links refuses every link client until {@link #openLinks()}.
  */
 public final class Broker implements AutoCloseable {
 
@@ -69,6 +77,10 @@ public final class Broker implements AutoCloseable {
     private static final String CLIENT_KEY = "c/";
     private static final String INTERNAL_KEY = "i/";
     private static final String ASSIGNED_PREFIX = "frontear-";
+    /** What separates a link client's node from its link id in its client id: {@code <node>~<link>}. */
+    private static final char LINK_MARK = '~';
+    /** Server unavailable (§3.2.2.2): the CONNACK a held link client gets, which its link takes as "try again". */
+    private static final int SERVER_UNAVAILABLE = 0x88;
     private static final byte[] ONLINE = "{\"online\":true}".getBytes(StandardCharsets.UTF_8);
     private static final Packet.Meta ONLINE_META = new Packet.Meta(-1, -1, Names.JSON, List.of());
     // what CONNACK says the broker declines: Maximum QoS 1, no subscription identifiers, no shared subscriptions
@@ -96,6 +108,9 @@ public final class Broker implements AutoCloseable {
     private final int port;
     private final String owner;
     private final TopicTree tree;
+    private final Watch watch;
+    // the node's name, which a link client's id must end with; null for a broker that is no node, which takes any
+    private final String node;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, InternalSubscriber> internals = new ConcurrentHashMap<>();
     // changed under retainedLock, read by retained() without it
@@ -128,9 +143,17 @@ public final class Broker implements AutoCloseable {
     // written by gate(); read by every connection's reader when a client publishes, subscribes or connects with a
     // will. A reader sees the gate installed before its read or the one after; either is a whole gate.
     private volatile Gate gate = new Reserved();
+    // set at construction for a broker whose host lets the links in later, cleared by openLinks(); read by every
+    // connection's reader at its CONNECT. A CONNECT read after the clear is let in; one read before it is refused and
+    // its link comes again after its backoff.
+    private volatile boolean linksHeld;
 
-    private Broker(final BrokerOptions options, final ServerSocket server) {
+    private Broker(final BrokerOptions options, final ServerSocket server, final Watch watch, final String node,
+            final boolean holdLinks) {
         this.options = options;
+        this.watch = watch;
+        this.node = node;
+        this.linksHeld = holdLinks;
         this.tree = new TopicTree(options.maxTopicLevels());
         this.server = server;
         this.port = server.getLocalPort();
@@ -142,6 +165,35 @@ public final class Broker implements AutoCloseable {
 
     /** Binds {@code options.bind()} and starts accepting clients. */
     public static Broker start(final BrokerOptions options) throws IOException {
+        return start(options, new Watch(1));
+    }
+
+    /** As above, keeping what it routes in {@code watch} while that is on. */
+    public static Broker start(final BrokerOptions options, final Watch watch) throws IOException {
+        return open(options, Objects.requireNonNull(watch, "watch"), null, false);
+    }
+
+    /**
+     * As above, as node {@code node}: a CONNECT whose client id holds {@code ~} (a link's, {@code <localId>~<linkId>})
+     * and whose part after the last {@code ~} is not {@code node} is refused 0x85, so a link aimed at another node's
+     * port delivers nothing to this one.
+     */
+    public static Broker start(final BrokerOptions options, final Watch watch, final String node) throws IOException {
+        return start(options, watch, node, false);
+    }
+
+    /**
+     * As above; with {@code holdLinks}, every link client is refused 0x88 (Server unavailable) at CONNECT until
+     * {@link #openLinks()}, so a link that queued for this node while it was down drains only once the host's own
+     * subscribers are in place: a message it carried before would reach none of them.
+     */
+    public static Broker start(final BrokerOptions options, final Watch watch, final String node,
+            final boolean holdLinks) throws IOException {
+        return open(options, Objects.requireNonNull(watch, "watch"), Objects.requireNonNull(node, "node"), holdLinks);
+    }
+
+    private static Broker open(final BrokerOptions options, final Watch watch, final String node,
+            final boolean holdLinks) throws IOException {
         Objects.requireNonNull(options, "options");
         final ServerSocket server = new ServerSocket();
         try {
@@ -150,12 +202,12 @@ public final class Broker implements AutoCloseable {
             server.close();
             throw e;
         }
-        final Broker broker = new Broker(options, server);
+        final Broker broker = new Broker(options, server, watch, node, holdLinks);
         broker.acceptor.execute(broker::acceptLoop);
         broker.sweeper.scheduleAtFixedRate(broker::sweep, SWEEP_MILLIS, SWEEP_MILLIS, TimeUnit.MILLISECONDS);
         LOG.log(System.Logger.Level.INFO, "broker started [port=" + broker.port + ", receiveMaximum="
                 + options.receiveMaximum() + ", maximumPacketSize=" + options.maximumPacketSize() + ", maxSessions="
-                + options.maxSessions() + ']');
+                + options.maxSessions() + ", node=" + node + ", linksHeld=" + holdLinks + ']');
         return broker;
     }
 
@@ -167,6 +219,17 @@ public final class Broker implements AutoCloseable {
     /** Installs {@code g} for every client PUBLISH, will and SUBSCRIBE from here on; never for {@link #publish}. */
     public void gate(final Gate g) {
         gate = Objects.requireNonNull(g, "gate");
+    }
+
+    /**
+     * Lets link clients connect from here on, on a broker started holding them; nothing on one that is not, or when
+     * called again. A link refused before comes again after its own backoff, at most {@code BACKOFF_MAX} later.
+     */
+    public void openLinks() {
+        if (linksHeld) {
+            linksHeld = false;
+            LOG.log(System.Logger.Level.INFO, "links let in [port=" + port + ", node=" + node + ']');
+        }
     }
 
     /**
@@ -251,6 +314,22 @@ public final class Broker implements AutoCloseable {
     }
 
     /**
+     * The clients connected now, by client id: each read under its session's lock for as long as a copy of two counts
+     * takes, so no publisher waits on it longer than on another session's reader.
+     */
+    public List<ConnectionView> connections() {
+        final List<ConnectionView> views = new ArrayList<>();
+        for (final Connection c : connections) {
+            final Session s = c.session();
+            if (s != null && !c.ended()) {
+                views.add(s.view(c));
+            }
+        }
+        views.sort(Comparator.comparing(ConnectionView::clientId));
+        return views;
+    }
+
+    /**
      * Sends DISCONNECT 0x8B to every connected client, closes every connection and stops the broker's threads; no
      * will and no presence is published. Every later call does nothing.
      */
@@ -320,6 +399,16 @@ public final class Broker implements AutoCloseable {
         if (id.startsWith("$") || !Topics.validName(Names.PRESENCE + id)) {
             return Packet.CLIENT_ID_NOT_VALID;
         }
+        if (misdelivered(id)) {
+            LOG.log(System.Logger.Level.DEBUG, "link client refused, it is aimed at another node [client=" + id
+                    + ", node=" + node + ']');
+            return Packet.CLIENT_ID_NOT_VALID;
+        }
+        if (linksHeld && id.indexOf(LINK_MARK) >= 0) {
+            LOG.log(System.Logger.Level.DEBUG, "link client refused, the node's host has not let links in yet [client="
+                    + id + ", node=" + node + ']');
+            return SERVER_UNAVAILABLE;
+        }
         if (c.will() != null) {
             if (c.will().qos() > MAXIMUM_QOS) {
                 return Packet.QOS_NOT_SUPPORTED;
@@ -365,7 +454,7 @@ public final class Broker implements AutoCloseable {
                 s = new Session(id, this);
                 sessions.put(id, s);
             }
-            conn.accepted(s, id);
+            conn.accepted(s, id, c.keepAliveSeconds(), nowMillis());
             s.attach(conn, c, Connection.encode(new Packet.ConnAck(present, Packet.SUCCESS, options.receiveMaximum(),
                     options.maximumPacketSize(), 0, Packet.NO_SERVER_KEEP_ALIVE, assigned, null, CAPABILITIES)));
             deferred.add(new Deferred(new Packet.Publish(Names.PRESENCE + id, ONLINE, 1, true, false, 0, null, null,
@@ -641,6 +730,9 @@ public final class Broker implements AutoCloseable {
      */
     private CompletableFuture<Integer> route(final Packet.Publish p, final String origin, final long receivedMillis) {
         final Collection<Match> matches = tree.match(p.topic(), origin);
+        if (watch.on()) {
+            observe(p, origin, matches.size());
+        }
         if (matches.isEmpty()) {
             return CompletableFuture.completedFuture(Packet.NO_MATCHING_SUBSCRIBERS);
         }
@@ -674,6 +766,24 @@ public final class Broker implements AutoCloseable {
             }
             return worst;
         });
+    }
+
+    /** Whether {@code clientId} is a link client's whose link id is not this node's name. */
+    private boolean misdelivered(final String clientId) {
+        final int mark = clientId.lastIndexOf(LINK_MARK);
+        return node != null && mark >= 0 && !clientId.substring(mark + 1).equals(node);
+    }
+
+    /**
+     * Keeps {@code p}, routed to {@code matches} subscriptions, in the watch, and as an arrival of the link whose
+     * client published it: on this node that link is named by the node it came from, the part before the {@code ~}.
+     */
+    private void observe(final Packet.Publish p, final String origin, final int matches) {
+        watch.published(origin, p, matches);
+        final int mark = origin.lastIndexOf(LINK_MARK);
+        if (mark > 0) {
+            watch.step(origin.substring(0, mark), LinkStep.Kind.ARRIVED, -1, p.topic(), p.payload().length, "");
+        }
     }
 
     /** {@code sub}'s code for {@code message}: 0x80, counted, when it throws, fails or completes without one. */
