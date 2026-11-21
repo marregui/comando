@@ -111,7 +111,10 @@ class VersionLazyMapTest {
 
     /// Four reader threads read random windows of random columns and compare each with the answer read before the
     /// race, while the main thread calls `releaseIfIdle` with no idle time in a loop: no read fails, no value differs,
-    /// releases happen, and the mapping count ends where the mapped columns put it.
+    /// and the mapping count ends where the mapped columns put it. Halfway, the readers stop together and the version
+    /// is released while they wait, so at least one release lands between reads whatever the scheduler does (a
+    /// 3-core CI runner let the readers finish before the loop ever found the version idle); whether a release
+    /// overlaps a read in flight stays up to the scheduler.
     @Test
     void releaseRacingReadersChangesNoValue() throws Exception {
         final Mappings mappings = new Mappings();
@@ -119,6 +122,8 @@ class VersionLazyMapTest {
         try {
             final List<Vector> expected = readAll(version);
             final CyclicBarrier start = new CyclicBarrier(READERS + 1);
+            final CyclicBarrier halfway = new CyclicBarrier(READERS + 1);
+            final CyclicBarrier resume = new CyclicBarrier(READERS + 1);
             final CountDownLatch done = new CountDownLatch(READERS);
             final AtomicReference<Throwable> failure = new AtomicReference<>();
             final AtomicInteger wrong = new AtomicInteger();
@@ -132,6 +137,10 @@ class VersionLazyMapTest {
                     try {
                         start.await(10, TimeUnit.SECONDS);
                         for (int round = 0; round < 3_000; round++) {
+                            if (round == 1_500) {
+                                halfway.await(10, TimeUnit.SECONDS);
+                                resume.await(10, TimeUnit.SECONDS);
+                            }
                             final int c = local.nextInt(VersionReadTest.TYPES.length);
                             final int n = 1 + local.nextInt(256);
                             final long from = local.nextInt(ROWS - n + 1);
@@ -163,6 +172,24 @@ class VersionLazyMapTest {
             int releases = 0;
             // the readers' bound, 60 s, set by the test: they take well under one
             final long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+            while (halfway.getNumberWaiting() < READERS && failure.get() == null
+                    && System.nanoTime() - deadlineNanos < 0L) {
+                if (version.releaseIfIdle(System.nanoTime(), 0L)) {
+                    releases++;
+                }
+                assertThat(mappings.count()).isNotNegative();
+            }
+            // a reader that failed never reaches the barrier: say its failure, not the barrier's timeout
+            assertThat(failure.get()).isNull();
+            halfway.await(10, TimeUnit.SECONDS);
+            // every reader waits at the barrier, so the version is idle: this call unmaps it, or the loop's last
+            // release already did after the last read (false, nothing mapped); either way a release lies between reads
+            if (version.releaseIfIdle(System.nanoTime(), 0L)) {
+                releases++;
+            }
+            assertThat(mappings.count()).isZero();
+            assertThat(releases).isPositive();
+            resume.await(10, TimeUnit.SECONDS);
             while (done.getCount() > 0L && System.nanoTime() - deadlineNanos < 0L) {
                 if (version.releaseIfIdle(System.nanoTime(), 0L)) {
                     releases++;
@@ -176,7 +203,6 @@ class VersionLazyMapTest {
             assertThat(failure.get()).isNull();
             assertThat(wrong.get()).isZero();
             assertThat(reads.get()).isEqualTo(READERS * 3_000);
-            assertThat(releases).isPositive();
             assertThat(mappings.count()).isBetween(0L, 7L);
         } finally {
             version.unmap();
