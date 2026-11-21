@@ -129,14 +129,14 @@ public final class Snapshot {
         Thread.sleep(1500);
         shoot(out.resolve("02-approvals-and-side-diff.png"));
         // the Sessions tab: a running session with its context past the checkpoint's threshold, the mouse over its row
-        loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("edge", repo).withModel("opus").withEffort("high")));
-        loop.dispatch(new Intent.SessionStarted("edge"));
-        loop.dispatch(new Intent.SessionInit("edge", new SessionInfo("e41164bc-160c-4e3e-b43b-3218489da4e1", "claude-opus-5-5", repo,
-                "2.1.302", "default", List.of())));
-        loop.dispatch(new Intent.SessionTurnEnded("edge", 0, 0.0, 128_000L, 200_000L, false, ""));
-        loop.dispatch(new Intent.SessionBranch("edge", "main"));
+        loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("eden", repo).withModel("opus").withEffort("high")));
+        loop.dispatch(new Intent.SessionStarted("eden"));
+        loop.dispatch(new Intent.SessionInit("eden", new SessionInfo("e41164bc-160c-4e3e-b43b-3218489da4e1",
+                "claude-opus-5-5", repo, "2.1.302", "default", List.of())));
+        loop.dispatch(new Intent.SessionTurnEnded("eden", 0, 0.0, 128_000L, 200_000L, false, ""));
+        loop.dispatch(new Intent.SessionBranch("eden", "main"));
         selectSidebarTab("Sessions");
-        await(loop, st -> st.session("edge").map(e -> e.contextWindow() > 0).orElse(false), 5_000);
+        await(loop, st -> st.session("eden").map(e -> e.contextWindow() > 0).orElse(false), 5_000);
         SwingUtilities.invokeAndWait(() -> {
             final JList<?> sessions = list("Sessions");
             if (sessions != null) {

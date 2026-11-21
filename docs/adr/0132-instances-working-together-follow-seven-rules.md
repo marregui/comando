@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted | Miguel and Claude |
+| 2026-10-29 | accepted; R5's third-session clause and R6 superseded by [record 186](0186-instances-trust-the-overseer.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -46,4 +46,4 @@ O10 needs no rule here: it is the kit's guard working as meant, and text that na
 - The rules bind the sessions of each instance, not comando's code; nothing in comando enforces them. They sit with the
   kit's instructions of each instance that consults another.
 - R1 and R2 follow from the 600 s wait; a longer wait in the tools would relax R1, not R2.
-- R6 lapses when record 122 §2.4's trust between instances is built.
+- R6 was superseded by record 186 on 2026-11-21: a trusted local machine, no credentials (Miguel).

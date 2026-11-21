@@ -255,11 +255,6 @@
   "outcome" : "error InvalidFormatException: Cannot deserialize value of type `int` from String \"x\": not a valid `int` value"
 }, {
   "mapper" : "file",
-  "type" : "EdgeEntry",
-  "input" : "{\"pid\":\"12\",\"ports\":{\"mqtt\":1883,\"bogus\":1}}",
-  "outcome" : "ok Entry[version=1, pid=12, owner=null, name=null, ports=Ports[mqtt=1883, websocket=0, api=0, jmx=0], started=null]"
-}, {
-  "mapper" : "file",
   "type" : "ListFolderRoot",
   "input" : "[{\"name\":\"a\",\"path\":\"p\"},null]",
   "outcome" : "ok [FolderRoot[name=a, path=p, index=, excludes=[], icon=folder, deletable=false, listedIn=, group=], null]"

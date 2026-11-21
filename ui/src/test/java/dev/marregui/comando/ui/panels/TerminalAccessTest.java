@@ -43,10 +43,11 @@ class TerminalAccessTest {
         }
     }
 
-    /// Two panels, the first focused; the second bound to a session working in `edge`.
+    /// Two panels, the first focused; the second bound to a session working in `eden`.
     private AppState state(final Path edge) {
-        return AppState.initial(List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "edge")), List.of(),
-                List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString()))));
+        return AppState.initial(
+                List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "eden")), List.of(),
+                List.of(SessionState.closed(SessionSpec.fresh("eden", edge.toString()))));
     }
 
     /// Terminals whose shell runs `command`, shown for the focused panel as the lower panel's render does.
@@ -66,7 +67,7 @@ class TerminalAccessTest {
     /// in front, not started. A second start leaves the running shell as it is and says so.
     @Test
     void aStartOnAPanelNotFocusedStartsItsShellInThePanelsFolder() throws Exception {
-        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path edge = Files.createDirectory(root.resolve("eden"));
         final TerminalAccess access = access(state(edge), List.of("/bin/sh", "-c", "sleep 30"));
 
         assertThat(access.start(P2, Optional.empty())).startsWith("started a shell in " + edge);
@@ -86,7 +87,7 @@ class TerminalAccessTest {
     /// A start in a directory asked for opens the shell there; one that does not exist is refused.
     @Test
     void aStartOpensTheShellInTheDirectoryAskedFor() throws Exception {
-        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path edge = Files.createDirectory(root.resolve("eden"));
         final Path other = Files.createDirectory(root.resolve("other"));
         final TerminalAccess access = access(state(edge), List.of("/bin/sh", "-c", "sleep 30"));
 
@@ -100,7 +101,7 @@ class TerminalAccessTest {
     /// opens; a panel without a shell has no process id.
     @Test
     void theListNamesEveryEditorPanelWithWhetherItsShellStartedAndRuns() throws Exception {
-        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path edge = Files.createDirectory(root.resolve("eden"));
         final TerminalAccess access = access(state(edge), List.of("/bin/sh", "-c", "sleep 30"));
         access.start(P2, Optional.empty());
 
@@ -117,7 +118,7 @@ class TerminalAccessTest {
     /// running shell, and a second stop says it was not running.
     @Test
     void aSendToAStoppedShellIsRefusedAndAStopEndsTheShell() throws Exception {
-        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path edge = Files.createDirectory(root.resolve("eden"));
         final TerminalAccess access = access(state(edge), List.of("/bin/sh", "-c", "sleep 30"));
 
         assertThat(access.send(P2, "ls", true)).isEqualTo("refused: the shell of two is not running");
@@ -135,7 +136,7 @@ class TerminalAccessTest {
     /// Every action on a panel the state does not hold is refused, and no terminal is made for it.
     @Test
     void anUnknownPanelIsRefused() throws Exception {
-        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path edge = Files.createDirectory(root.resolve("eden"));
         final TerminalAccess access = access(state(edge), List.of("/bin/sh", "-c", "sleep 30"));
         final PanelId gone = new PanelId("gone");
 
@@ -150,7 +151,7 @@ class TerminalAccessTest {
     /// Before the window is built every action is refused as not ready, and the list names the panels, none started.
     @Test
     void beforeTheWindowIsBuiltEveryActionIsRefused() throws Exception {
-        final AppState s = state(Files.createDirectory(root.resolve("edge")));
+        final AppState s = state(Files.createDirectory(root.resolve("eden")));
         final TerminalAccess access = new TerminalAccess(() -> null, () -> s);
 
         assertThat(access.start(P1, Optional.empty())).isEqualTo("refused: terminals are not ready");

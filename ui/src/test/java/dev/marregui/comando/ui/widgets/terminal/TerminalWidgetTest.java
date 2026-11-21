@@ -64,7 +64,7 @@ class TerminalWidgetTest {
     /// After the shell exits, the restart button names the directory set since.
     @Test
     void theExitBarNamesTheDirectoryOfTheRestart() {
-        final TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
+        final TerminalWidget t = new TerminalWidget(Path.of(HOME, "eden"));
         t.setDirectory(Path.of(HOME, "lane2"));
         t.showExited(1);
         assertThat(t.restartButtonText()).isEqualTo("Restart in ~/lane2");
@@ -73,8 +73,8 @@ class TerminalWidgetTest {
     /// The exit bar reads the directory source when it shows, so a rebinding no render reached is used for the restart.
     @Test
     void theExitBarAndRestartReadTheDirectorySourceWhenTheBarShows() {
-        final TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
-        final AtomicReference<Path> bound = new AtomicReference<>(Path.of(HOME, "edge"));
+        final TerminalWidget t = new TerminalWidget(Path.of(HOME, "eden"));
+        final AtomicReference<Path> bound = new AtomicReference<>(Path.of(HOME, "eden"));
         t.setDirectorySource(bound::get);
         bound.set(Path.of(HOME, "lane2")); // the panel was rebound while the shell ran: no render reached the terminal
         t.showExited(0);

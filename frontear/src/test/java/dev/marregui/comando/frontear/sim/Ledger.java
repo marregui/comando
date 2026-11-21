@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import dev.marregui.comando.frontear.mqtt.Packet;
-import dev.marregui.comando.frontear.mqtt.Topics;
+import dev.marregui.comando.frontear.protocol.Packet;
+import dev.marregui.comando.frontear.protocol.Topics;
 
 /// The simulation's oracle: what each node published, which links covered each message when it was published and the
 /// PUBACK its publisher got, and what each subscriber received, in the order it received it. [#violations] checks the

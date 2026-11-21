@@ -1740,11 +1740,11 @@ class ReducerTest {
 
     private static final PanelId P3 = new PanelId("p3");
 
-    /** p1 "one" on work, p2 "two" with no session, a headless session edge. */
+    /** p1 "one" on work, p2 "two" with no session, a headless session eden. */
     private static AppState onePanelPerSession() {
         return AppState.initial(List.of(new PanelState(P1, "work", "local", "work"), new PanelState(P2, "two", "local", "")),
                 List.of(ConnectionState.closed(States.LOCAL)),
-                List.of(SessionState.closed(States.WORK), SessionState.closed(SessionSpec.fresh("edge", "/w/edge"))));
+                List.of(SessionState.closed(States.WORK), SessionState.closed(SessionSpec.fresh("eden", "/w/eden"))));
     }
 
     /// Renaming a stopped session's own panel renames the session and forgets the old name, and renaming the session
@@ -1787,10 +1787,10 @@ class ReducerTest {
     @Test
     void openingASessionWithoutAPanelOpensItsOwnNamedAfterItAndTakesNoOtherPanel() {
         state = onePanelPerSession();
-        apply(new Intent.OpenSession("edge", P2, P3));
+        apply(new Intent.OpenSession("eden", P2, P3));
         assertThat(state.panel(P2).orElseThrow().session()).as("a panel is never given another session").isEmpty();
-        assertThat(state.panel(P3).orElseThrow()).isEqualTo(new PanelState(P3, "edge", "local", "edge"));
-        assertThat(state.homePanel("edge")).map(PanelState::id).contains(P3);
+        assertThat(state.panel(P3).orElseThrow()).isEqualTo(new PanelState(P3, "eden", "local", "eden"));
+        assertThat(state.homePanel("eden")).map(PanelState::id).contains(P3);
         assertThat(state.focused()).isEqualTo(P3);
         assertThat(effects).containsExactly(new Effect.SavePanels(state.panels(), state.closed()));
 
@@ -1853,10 +1853,10 @@ class ReducerTest {
         assertThat(own.title()).as("a new session comes with its own panel").isEqualTo("fresh");
         assertThat(state.focused()).isEqualTo(own.id());
 
-        apply(new Intent.AddPanel(P3, "edge"));
-        assertThat(state.panel(P3).orElseThrow().title()).as("a session's name is its own panel's").isEqualTo("edge 2");
-        apply(new Intent.RenamePanel(P3, "Edge"));
-        assertThat(state.notice().text()).isEqualTo("A session called Edge exists; its panel is its own");
+        apply(new Intent.AddPanel(P3, "eden"));
+        assertThat(state.panel(P3).orElseThrow().title()).as("a session's name is its own panel's").isEqualTo("eden 2");
+        apply(new Intent.RenamePanel(P3, "Eden"));
+        assertThat(state.notice().text()).isEqualTo("A session called Eden exists; its panel is its own");
 
         final PanelId doc = new PanelId("doc");
         apply(new Intent.AddPanel(doc, "PLAN.md", true));

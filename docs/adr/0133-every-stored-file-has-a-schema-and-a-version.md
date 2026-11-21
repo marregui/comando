@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-01 | accepted; built; the row `decisions.json` removed by [record 150](0150-a-card-only-when-a-session-cannot-go-on.md) | Miguel and Claude |
+| 2026-11-01 | accepted; built; the row `decisions.json` removed by [record 150](0150-a-card-only-when-a-session-cannot-go-on.md); superseded in part by [record 185](0185-frontear-is-the-only-fabric.md) | Miguel and Claude |
 
 ## 1. Context
 

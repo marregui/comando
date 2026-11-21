@@ -63,8 +63,6 @@ handler before those six exist, so `App.DeferredEffects` stands in until they do
 | The instance's name | `-Dcomando.name`, else `COMANDO_NAME` | from `instance.json` |
 | Record the intent log | `-Dcomando.recordIntents=true` | off |
 | Use the keychain | `-Dcomando.keychain` | on for `~/.comando` only |
-| The fabric | `-Dcomando.fabric=frontear` | `edge` |
-| A HiveMQ Edge zip of your own | `-Dcomando.edge.zip`, else `COMANDO_EDGE_ZIP` | the pinned release |
 | Talk to other instances | `-Dcomando.peers=false` | on |
 | Use the machine's cdb | `-Dcomando.metrics=false` | on |
 
@@ -99,7 +97,7 @@ the last part built closes first. The picture shows the ten main parts. The tabl
 | 15 | `Store` | The stored files; it writes what is pending |
 | 16 | `KitGit` | The git runs on the kit root |
 | 17 | The kit root | The root named before is named again |
-| 18 | The fabric | Stops only if this instance started it |
+| 18 | The fabric | Stops only if this instance hosts it |
 | 19 | `MachineCdb` | Its errands stop; the server keeps running |
 | 20 | `ComandoUi` | The window, greyed and titled "closing…" until then |
 
@@ -230,27 +228,29 @@ The server itself: [the `cdb` module](cdb.md) and [the cdb guide](../cdb.md). Wh
 
 ## 7. The fabric
 
-![The fabric: comando Edge as its own process or frontear inside the JVM, one address for both, and each instance a client](../images/mod-app-fabric.svg)
+![The fabric: one frontear node inside the JVM of the instance that hosts it, started at launch and taken over when its host quits, one address, and each instance a client](../images/mod-app-fabric.svg)
 
 Several comando instances can run on one machine and consult each other. They need a place to meet: an MQTT broker
-on `127.0.0.1:18883`. That broker is the fabric. Two classes can provide it, and `App` picks one.
+on `127.0.0.1:18883`. That broker is the fabric, a frontear node that `FrontearFabric` hosts inside the JVM of one
+instance.
 
-| | comando Edge | frontear |
-|---|---|---|
-| Chosen by | the default | `-Dcomando.fabric=frontear` |
-| Class | `EmbeddedEdge` | `FrontearFabric` |
-| Runs as | HiveMQ Edge, a process of its own | A frontear node named `comando`, inside comando's JVM |
-| Comes from | A pinned release, checked by SHA-256, installed in `edge/` | comando's own code |
-| Ports on `127.0.0.1` | MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010 | MQTT 18883 |
-| Registry | `~/.comando-edge.json` | `~/.comando-fabric.json` |
-| Keeps in the data root | `edge/` | `fabric/`, with the key pair `pod.key` and `pod.pub` (Ed25519) |
+| Fact | frontear |
+|---|---|
+| Class | `FrontearFabric`, named `frontear` to the window and the agents |
+| Runs as | A frontear node named `comando`, inside the host's JVM |
+| Port on `127.0.0.1` | MQTT 18883 |
+| Registry | `~/.comando-fabric.json`: the host's pid, name, data root and port; every read-modify-write of it runs under an OS lock on `~/.comando-fabric.json.lock` (bounded wait), so of several instances starting at once exactly one hosts and a stale entry is replaced once |
+| Keeps in the data root | `fabric/`, with the key pair `pod.key` and `pod.pub` (Ed25519) |
+| Starts | At the peer link's first look when no live instance hosts it, and at any later look that finds none (every 5 s) |
+| Stops | From the host only, by hand or at its close. A stop by hand holds in that instance until it is asked again |
+| A port held by another process | One notice; the process is probed, never signalled |
 
-The two never run together. Only the instance that started the fabric stops it. Both implement `ServerToggle` and
-`ServerSwitch`, so the window and the agents treat them alike.
+Only the instance that hosts the fabric stops it. `FrontearFabric` implements `ServerToggle` and `ServerSwitch`, so the
+window and the agents treat it as they treat the machine's cdb.
 
 `MqttPeerBroker` is each instance's link to the fabric. It connects as the MQTT 5 client `comando-<instance>`. Every
 5 s it checks whether a broker is live. It reconnects after a drop and renews its subscriptions. The MQTT client it
-uses lives in [`frontear`](frontear.md), in the package `frontear.mqtt`.
+uses lives in [`frontear`](frontear.md), in the package `frontear.protocol`.
 
 > **Learn: publish and subscribe.** A school notice board has topics: sports, lost property, exams. Whoever pins a
 > note does not know who reads it. Whoever reads a topic does not know who pinned the note. A broker is that board
@@ -260,7 +260,8 @@ uses lives in [`frontear`](frontear.md), in the package `frontear.mqtt`.
 How frontear works: [the `frontear` module](frontear.md) and [the frontear guide](../frontear.md). What instances say
 to each other: [the `mcp` module](mcp.md). The reasons:
 [instances consult each other](../adr/0123-instances-consult-each-other.md) and
-[frontear, comando's own MQTT fabric](../adr/0184-frontear-comandos-own-mqtt-fabric.md).
+[frontear, comando's own MQTT fabric](../adr/0184-frontear-comandos-own-mqtt-fabric.md) and
+[frontear is the only fabric](../adr/0185-frontear-is-the-only-fabric.md).
 
 ## 8. What `app` may depend on
 
@@ -285,7 +286,7 @@ No module depends on `app`. The module is one package, `dev.marregui.comando.app
 | `IntentLog` | The intent log |
 | `Logging` | `System.Logger` to the log files, warnings to stderr |
 | `MachineCdb` | The machine's cdb |
-| `EmbeddedEdge`, `FrontearFabric`, `MqttPeerBroker` | The fabric and the link to it |
+| `FrontearFabric`, `MqttPeerBroker` | The fabric and the link to it |
 | `RootSetup` | `ui`'s `Setup`: the kit root, its version and its jobs |
 | `Searcher` | `SearchPort`: one search at a time, at most 1 000 hits |
 | `Welcome` | The text of the first panel on a fresh data root |
@@ -330,8 +331,7 @@ tabs, the lower tabs and the side pane against the final state. It also saves a 
 | `StoreTest`, `JsonFileTest`, `PanelFilesTest`, `JsonGoldenTest` | The store files, byte for byte |
 | `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest` | The intent log, logging, the lock, the data root |
 | `AppCloseTest`, `DataRootFoldersTest` | The closing order, whatever a part throws; the folders of the data root |
-| `MachineCdbTest`, `EmbeddedEdgeTest`, `FrontearFabricTest`, `MqttPeerBrokerTest` | The servers and the link to them |
-| `FrontearParityTest`, with `COMANDO_PARITY=true` | A frontear node and the pinned HiveMQ Edge, side by side, compared field by field |
+| `MachineCdbTest`, `FrontearFabricTest`, `MqttPeerBrokerTest` | The servers, the fabric's start, takeover and single host, and the link to them |
 
 Four rule tests read the classes of every module, because only `app` sees every module:
 

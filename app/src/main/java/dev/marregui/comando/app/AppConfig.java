@@ -70,9 +70,4 @@ public record AppConfig(Path home, String claudeExecutable, KitRoot root, boolea
     public Path auditDir() {
         return home.resolve("audit");
     }
-
-    /** Where comando's Edge is installed and keeps its data and logs. */
-    public Path edgeRoot() {
-        return home.resolve("edge");
-    }
 }

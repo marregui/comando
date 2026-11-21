@@ -29,9 +29,9 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.frontear.Frontear;
-import dev.marregui.comando.frontear.control.Signer;
-import dev.marregui.comando.frontear.mqtt.MqttClient;
-import dev.marregui.comando.frontear.mqtt.Packet;
+import dev.marregui.comando.frontear.alexander.Signer;
+import dev.marregui.comando.frontear.protocol.MqttClient;
+import dev.marregui.comando.frontear.protocol.Packet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;

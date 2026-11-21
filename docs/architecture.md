@@ -1,6 +1,6 @@
 # Architecture
 
-![What runs on your machine: comando is one JVM holding the window, the reducer, the adapters, the MCP server and an in-process cdb; each running session is a claude -p process; beside them run the machine's cdb server, your own database servers, the comando Edge and the other comando instances](images/arch-processes.svg)
+![What runs on your machine: comando is one JVM holding the window, the reducer, the adapters, the MCP server and an in-process cdb; each running session is a claude -p process; beside them run the machine's cdb server, your own database servers, frontear and the other comando instances](images/arch-processes.svg)
 
 ## In one paragraph
 
@@ -20,8 +20,8 @@ Look at the picture above. It holds six things.
 | A session | one `claude -p` process per running session: Claude Code without its own screen | two pipes, and HTTP back to comando |
 | The machine's cdb | comando's own database as a server; one per machine, it outlives comando | the PG wire protocol, on `127.0.0.1` |
 | Your databases | PostgreSQL or QuestDB servers you connect to | the PG wire protocol (JDBC) |
-| The comando Edge | a local MQTT broker on `127.0.0.1:18883` | MQTT 5 |
-| Other instances | more comandos, each its own JVM and data root | messages through the comando Edge |
+| frontear | a local MQTT broker on `127.0.0.1:18883`, inside one instance's JVM | MQTT 5 |
+| Other instances | more comandos, each its own JVM and data root | messages through frontear |
 
 Nothing here listens on the network: every server comando starts binds `127.0.0.1`.
 
@@ -176,7 +176,7 @@ over by `app`.
 | `TerminalPort` | the MCP tools reach a panel's terminal | `TerminalAccess` in `ui` |
 | `SearchPort` | the window search files and conversations | `Searcher` in `app` |
 | `TopicPort` | the window ask for a panel's topic line | `ClaudeTopics` in `claude` |
-| `ServerSwitch` | the MCP tools start or stop a local server, as your button does | `MachineCdb`, `EmbeddedEdge`, `FrontearFabric` in `app` |
+| `ServerSwitch` | the MCP tools start or stop a local server, as your button does | `MachineCdb`, `FrontearFabric` in `app` |
 | `Clock`, `WaitLog` | code read the time, and record how long a wait took | the system clock, `MetricsLog` in `claude` |
 
 In a test, `testkit` brings the plugs instead: `RecordingPorts` implements all six effect ports and writes each call
@@ -239,7 +239,7 @@ The budget counts the window's own threads. These platform threads are the named
 | Who | Platform threads | When |
 |---|---|---|
 | `cdb` | `cdb-applier-<name>` and `cdb-log-force-<name>`, one each per store; the `cdb-query-<n>` workers, one pool per process | a connection of kind cdb opens the database in this process |
-| `frontear` | `frontear-log-force-<name>`, one per link log | frontear plays the comando Edge |
+| `frontear` | `frontear-log-force-<name>`, one per link log | the instance hosts frontear |
 | The MCP server | `HTTP-Dispatcher`, made by the JDK's HTTP server | while the MCP server runs; its close stops it |
 | `Main` | `exit` and `shutdown` | at quit |
 
@@ -254,7 +254,7 @@ For `cdb` and `frontear` the reason is one: a file force or a CPU-bound query ho
 | `ClaudeProcess` | K3 | `claude-out-<session>` |
 | `ClaudeAdapter` | K4 | `claude-strand-<session>`: owns a session's process and writes its transcript |
 | `db`'s `Lane` | K4 | one per connection; it ends when it has no connection and no work |
-| `Errands` of `App`, `EmbeddedEdge`, `MachineCdb`, `FrontearFabric`, `MetricsSink`, `ClaudeAdapter`, `DbAdapter`, `Peers`, `ToolsAdapter`, `UiErrands` | K5 | one virtual thread per call |
+| `Errands` of `App`, `MachineCdb`, `FrontearFabric`, `MetricsSink`, `ClaudeAdapter`, `DbAdapter`, `Peers`, `ToolsAdapter`, `UiErrands` | K5 | one virtual thread per call |
 
 Each module's page lists its own threads and what stops each.
 
@@ -326,12 +326,12 @@ What a session can do, and every tool it has: [Claude Code in comando](claude-co
 
 ## 8. Instances
 
-![A question from one instance to another: the asking session calls instance_ask; its instance publishes the question to the other's inbox on the comando Edge with a response topic and correlation data; the instance asked makes or reuses a consult session and sends it the question as a prompt; the turn's closing text goes back to the asker's reply topic, where the correlation data matches it to the waiting call](images/instance-ask.svg)
+![A question from one instance to another: the asking session calls instance_ask; its instance publishes the question to the other's inbox on frontear with a response topic and correlation data; the instance asked makes or reuses a consult session and sends it the question as a prompt; the turn's closing text goes back to the asker's reply topic, where the correlation data matches it to the waiting call](images/instance-ask.svg)
 
 You can run several comandos on one machine. Each is an *instance*: its own JVM, its own data root, its own window.
 `COMANDO_HOME` names the data root, and `comando.lock` in it refuses a second start on the same root.
 
-Instances find and ask each other through one local MQTT broker, the comando Edge. Each instance uses three topics
+Instances find and ask each other through one local MQTT broker, frontear. Each instance uses three topics
 under `comando/v1/local/instance/<id>/`.
 
 | Topic | Carries |
@@ -343,9 +343,9 @@ under `comando/v1/local/instance/<id>/`.
 A session asks with the tool `instance_ask`. The instance asked answers in a session of its own, named
 `consult-<asker>`. The file `agents.json` in the data root can refuse instances by id.
 
-Two programs can play the broker. By default it is HiveMQ Edge: you start it with a button, and it runs from `edge/`
-in the data root. With `-Dcomando.fabric=frontear` it is a frontear node inside comando, on the same port.
-`-Dcomando.peers=false` turns the whole feature off.
+The broker is a frontear node inside the JVM of one instance, the host. It starts at launch when no instance
+hosts it, and when its host quits the next instance to look hosts it. `-Dcomando.peers=false` turns the whole
+feature off.
 
 Using instances: [Workbench](workbench.md). The broker comando wrote for itself: [frontear](frontear.md). Why
 instances consult each other: [the record](adr/0123-instances-consult-each-other.md).
@@ -357,7 +357,7 @@ instances consult each other: [the record](adr/0123-instances-consult-each-other
 
 ## 9. Data on disk
 
-![comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, edge, fabric) and the instance's identity; outside it sit the machine's cdb, the Edge registry, and Claude Code's root with the kit and the conversations](images/arch-disk.svg)
+![comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, fabric) and the instance's identity; outside it sit the machine's cdb, the fabric registry, and Claude Code's root with the kit and the conversations](images/arch-disk.svg)
 
 Everything an instance keeps is under one folder, the *data root*: `-Dcomando.home`, else `COMANDO_HOME`, else
 `~/.comando`.
@@ -371,14 +371,14 @@ Everything an instance keeps is under one folder, the *data root*: `-Dcomando.ho
 | `logs/` | `comando-<n>.log`, and the intent log when recording |
 | `audit/` | every MCP tool call and approval decision, one file per day |
 | `cache/` | drawn diagrams and pictures; safe to delete |
-| `cdb/`, `edge/`, `fabric/` | the data of the local cdb, the comando Edge, a frontear node |
+| `cdb/`, `fabric/` | the data of the local cdb, of the frontear node this instance hosts |
 | `instance.json`, `comando.lock`, `agents.json`, `instances-seen.json` | who this instance is, and who it talks to |
 
 Three things live outside it.
 
 - **`~/.comando-cdb/`**: the machine's cdb, one server for every instance. Its registry `server.json` holds the pid,
   the ports and the token.
-- **`~/.comando-edge.json`**: the registry of the one comando Edge, shared by every instance.
+- **`~/.comando-fabric.json`**: the registry of the one frontear node, shared by every instance; `~/.comando-fabric.json.lock` serialises its changes across processes.
 - **Claude Code's own root**: the kit and each session's conversation. comando reads them; Claude Code writes them.
   See [Kit and brain](kit-and-brain.md).
 
@@ -406,10 +406,10 @@ close in reverse order, each once. A program that starts cleanly and stops clean
 - **Every part has one owner.** The owner creates it and closes it. Nobody else does.
 - **`close()` is safe to call twice, never throws, and works on a half-built part.** A start that fails rolls back
   through the same path.
-- **Three parts close last**: the comando Edge, after this instance has left it; the machine's cdb's errands; and the
+- **Three parts close last**: frontear, after this instance has left it; the machine's cdb's errands; and the
   window, greyed until everything behind it has closed.
-- **The servers have their own lives.** The machine's cdb keeps running after comando exits. The comando Edge is
-  stopped only by the instance that started it.
+- **The servers have their own lives.** The machine's cdb keeps running after comando exits. frontear is
+  stopped only by the instance that hosts it, and with it; another instance then hosts it.
 
 Quit asks first when work would stop: a running query, a turn, a Gradle run, a shell job. Then `App.close()` runs,
 then the JVM exits. The order of every part and what closing it does: [app](modules/app.md).

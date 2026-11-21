@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -86,8 +87,8 @@ class PeersTest {
     }
 
     /// A first question creates the consult session on the asked instance, created by the asker's peer, and prompts it
-    /// headed with who asks; a second question, addressed by the instance's display name, reuses it, and the asker
-    /// prompts nothing of its own.
+    /// headed with who asks, main marked the overseer; a second question, addressed by the instance's display name,
+    /// reuses it, and the asker prompts nothing of its own.
     @Test
     void anAskMakesTheConsultSessionOnceAndPromptsItThroughItsPanelHeadedWithWhoAsks() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
@@ -107,8 +108,9 @@ class PeersTest {
         assertThat(made.getFirst().spec().workDir()).isEqualTo(dir.resolve("b").toString());
         assertThat(b.window.recorded.of(Intent.PromptSession.class)).extracting(Intent.PromptSession::session, Intent.PromptSession::text,
                 Intent.PromptSession::from).containsExactly(
-                tuple("consult-main", "[from instance comando · session foreman]\nwhat is X?", "peer:main"),
-                tuple("consult-main", "[from instance comando · session foreman]\nand Y?", "peer:main"));
+                tuple("consult-main", "[from instance comando · overseer · session foreman]\nwhat is X?",
+                        "peer:main"),
+                tuple("consult-main", "[from instance comando · overseer · session foreman]\nand Y?", "peer:main"));
         assertThat(main.window.recorded.of(Intent.PromptSession.class)).as("the asker prompts nothing of its own").isEmpty();
     }
 
@@ -184,7 +186,7 @@ class PeersTest {
         assertThat(new String(bus.retained.get(Peers.presenceTopic("b")), StandardCharsets.UTF_8)).contains("\"schema\":1");
     }
 
-    /// A question whose reply never comes, its peer gone while this instance was off the Edge so no presence clears it,
+    /// A question whose reply never comes, its peer gone while this instance was off frontear so no presence clears it,
     /// expires past the answer's bound and margins: `instance_reply` then answers that no reply came, and the
     /// question waits no longer.
     @Test
@@ -247,16 +249,16 @@ class PeersTest {
         assertThat(out.text()).startsWith("timeout:").contains("consult-main", "did not finish its turn within 1 s");
     }
 
-    /// With the instance not connected to the comando Edge, the instance tools say so and point to the Edge toggle.
+    /// With the instance not connected to frontear, the instance tools say so and point to frontear's toggle.
     @Test
-    void withTheEdgeDownTheToolsSaySoAndHowToStartIt() throws Exception {
+    void withFrontearDownTheToolsSaySoAndHowToStartIt() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
         node("b", Peers.ANSWER_WITHIN);
         main.link.up = false;
         for (final String tool : List.of("instances_list", "instance_ask")) {
             final McpTools.Outcome out = call(main, tool, "{\"instance\":\"b\",\"text\":\"what is X?\"}");
             assertThat(out.error()).isTrue();
-            assertThat(out.text()).contains("not connected to the comando Edge", "toggle at the top of the workspace");
+            assertThat(out.text()).contains("not connected to frontear", "toggle at the top of the workspace");
         }
     }
 
@@ -305,12 +307,12 @@ class PeersTest {
 
     /// A presence says what each session is doing, so another instance knows without asking: its state, what its turn
     /// does and since when, its model, effort, context, folder and branch, its background tasks, and the first line of
-    /// its last prompt and reply (a consult's header skipped); and whether the instance started the comando Edge.
+    /// its last prompt and reply (a consult's header skipped); and whether the instance hosts frontear.
     @Test
-    void thePresenceSaysWhatEachSessionIsDoingAndWhoStartedTheEdge() throws Exception {
+    void thePresenceSaysWhatEachSessionIsDoingAndWhoHostsFrontear() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
         final Node b = node("b", Peers.ANSWER_WITHIN);
-        b.peers.edge(() -> true);
+        b.peers.host(() -> true);
         b.window.state.updateAndGet(s -> turns(s, "work", 1));
         b.window.state.updateAndGet(s -> s.withSession("work", x -> x.withActivity("running Bash", 0L).withContext(42_000, 100_000)));
         b.window.transcripts.of("work").append(new Block.UserPrompt("[from instance comando]\nwhat is X?\nmore", "work", ""));
@@ -320,7 +322,7 @@ class PeersTest {
         // the presence after the last change: the periodic tick or the connect may send one made between the updates
         // above, busy without its activity or before the transcript's lines
         final InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
-                i -> i.instances().others().stream().anyMatch(o -> o.edge() && o.sessions().stream()
+                i -> i.instances().others().stream().anyMatch(o -> o.host() && o.sessions().stream()
                         .anyMatch(m -> m.busy() && "running Bash".equals(m.activity()) && !m.reply().isEmpty())), WAIT)
                 .instances();
         final InstancesState.Member work = seen.others().getFirst().sessions().getFirst();
@@ -427,7 +429,7 @@ class PeersTest {
             assertThat(c.question()).isEqualTo("what is X?");
         });
         assertThat(b.window.recorded.of(Intent.PromptSession.class).getFirst().text()).as("no session in the header")
-                .isEqualTo("[from instance comando]\nwhat is X?");
+                .isEqualTo("[from instance comando · overseer]\nwhat is X?");
 
         b.window.turn("consult-main", "X is a broker.");
         final InstancesState.Consult asked = main.window.recorded.await(Intent.InstancesChanged.class,
@@ -461,6 +463,237 @@ class PeersTest {
         b.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().denied().isEmpty(), WAIT);
     }
 
+    /// A question naming a session the peer lacks makes it there, created by the asker's peer in the default folder,
+    /// and prompts it headed with who asks; the reply is that session's turn, and the answering side keeps the
+    /// question under that session.
+    @Test
+    void aNamedSessionThePeerLacksIsMadeThereAndItsTurnAnswers() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final CompletableFuture<McpTools.Outcome> asking = async(main, "foreman", "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"Comando G\",\"text\":\"say hello\",\"wait_seconds\":30}");
+        final Intent.PromptSession prompt = b.window.recorded.await(Intent.PromptSession.class, WAIT);
+        assertThat(prompt.session()).isEqualTo("Comando G");
+        assertThat(prompt.text()).isEqualTo("[from instance comando · overseer · session foreman]\nsay hello");
+        assertThat(prompt.from()).isEqualTo("peer:main");
+        assertThat(b.window.recorded.of(Intent.SaveSession.class)).singleElement().satisfies(save -> {
+            assertThat(save.spec().name()).isEqualTo("Comando G");
+            assertThat(save.spec().createdBy()).isEqualTo("peer:main");
+            assertThat(save.spec().workDir()).isEqualTo(dir.resolve("b").toString());
+        });
+
+        b.window.turn("Comando G", "hello");
+        final McpTools.Outcome reply = asking.get(WAIT.toSeconds(), TimeUnit.SECONDS);
+        assertThat(reply.error()).as(reply.text()).isFalse();
+        assertThat(reply.text()).startsWith("reply from comando · b (its session Comando G):").contains("hello")
+                .doesNotContain("does not take a session name");
+        b.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().consults().stream()
+                .anyMatch(c -> c.session().equals("Comando G") && c.status() == InstancesState.Status.OK), WAIT);
+    }
+
+    /// A question naming a session the peer has prompts that session, in its own panel, and makes none; a name the
+    /// peer's reducer refuses for a new session (the title of another session's panel) is refused with its reason, and
+    /// nothing is prompted.
+    @Test
+    void aNamedSessionThePeerHasIsPromptedAndARefusedNameIsSaid() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final CompletableFuture<McpTools.Outcome> asking = async(main, "foreman", "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"work\",\"text\":\"status?\",\"wait_seconds\":30}");
+        final Intent.PromptSession prompt = b.window.recorded.await(Intent.PromptSession.class, WAIT);
+        assertThat(prompt.session()).isEqualTo("work");
+        b.window.turn("work", "all green");
+        assertThat(asking.get(WAIT.toSeconds(), TimeUnit.SECONDS).text())
+                .startsWith("reply from comando · b (its session work):").contains("all green");
+        assertThat(b.window.recorded.of(Intent.SaveSession.class)).isEmpty();
+        assertThat(b.window.recorded.of(Intent.OpenSession.class)).as("work has its panel").isEmpty();
+
+        final McpTools.Outcome refused = call(main, "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"one\",\"text\":\"hi\",\"wait_seconds\":10}");
+        assertThat(refused.error()).isTrue();
+        assertThat(refused.text()).contains("session one cannot be made in comando · b", "A panel called one exists");
+        assertThat(b.window.recorded.of(Intent.PromptSession.class)).hasSize(1);
+    }
+
+    /// A peer from before session names drops the question's `to` and answers from the asker's consult session: the
+    /// answer says which session answered instead. Its presence names its link to frontear with the older key `edge`,
+    /// still read; this instance's own presence writes `host`, and `edge` beside it with the same value for that peer.
+    @Test
+    void anOlderPeerAnswersFromTheConsultSessionAndTheAnswerSaysSo() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final List<JsonNode> questions = new CopyOnWriteArrayList<>();
+        final Link old = new Link(bus);
+        old.subscribe(Peers.inboxTopic("old"), m -> {
+            questions.add(Json.readTree(m.payload()));
+            final String r = "{\"schema\":1,\"status\":\"ok\",\"text\":\"hello\",\"instance\":\"comando · old\","
+                    + "\"session\":\"consult-main\"}";
+            old.publish(m.responseTopic(), r.getBytes(StandardCharsets.UTF_8), false, null, m.correlation());
+        });
+        old.connect();
+        final String presence = "{\"schema\":1,\"name\":\"comando · old\",\"slug\":\"old\",\"version\":\"1.9.0\","
+                + "\"edge\":true,\"sessions\":[]}";
+        bus.publish(Peers.presenceTopic("old"), presence.getBytes(StandardCharsets.UTF_8), true, null, null);
+        main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> o.slug().equals("old") && o.host()), WAIT);
+
+        final McpTools.Outcome reply = call(main, "instance_ask",
+                "{\"instance\":\"old\",\"session\":\"Comando G\",\"text\":\"say hello\",\"wait_seconds\":10}");
+        assertThat(questions).singleElement().satisfies(q -> {
+            assertThat(q.path("to").asString()).isEqualTo("Comando G");
+            assertThat(q.path("session").asString()).as("the asker's session, as before").isEqualTo("foreman");
+        });
+        assertThat(reply.error()).as(reply.text()).isFalse();
+        assertThat(reply.text()).startsWith("reply from comando · old (its session consult-main) (comando · old "
+                + "runs a comando that does not take a session name, so its session consult-main answered, not "
+                + "Comando G):")
+                .contains("hello");
+
+        assertThat(call(main, "instance_ask", "{\"instance\":\"old\",\"text\":\"and you?\",\"wait_seconds\":10}")
+                .text())
+                .as("no session named, nothing to say").doesNotContain("does not take a session name");
+        assertThat(questions.getLast().has("to")).as("no session named, no to").isFalse();
+        final JsonNode own = Json.readTree(bus.retained.get(Peers.presenceTopic("main")));
+        assertThat(own.has("host")).isTrue();
+        assertThat(own.has("edge")).as("for a peer from before host").isTrue();
+        assertThat(own.path("edge").asBoolean()).isEqualTo(own.path("host").asBoolean());
+    }
+
+    /// A session waiting for its own `instance_ask` cannot take a question until that wait ends: a question to it is
+    /// refused at once, not after both waits ran out, and nothing is prompted; once its reply came it takes questions
+    /// again. A surrogate's header carries no overseer mark.
+    @Test
+    void aSessionWaitingOnItsOwnAskIsRefusedAtOnce() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final CompletableFuture<McpTools.Outcome> bAsks = async(b, "work", "instance_ask",
+                "{\"instance\":\"main\",\"text\":\"what is X?\",\"wait_seconds\":30}");
+        final Intent.PromptSession toMain = main.window.recorded.await(Intent.PromptSession.class, WAIT);
+        assertThat(toMain.session()).isEqualTo("consult-b");
+        assertThat(toMain.text()).isEqualTo("[from instance comando · b · session work]\nwhat is X?");
+
+        final long before = System.nanoTime();
+        final McpTools.Outcome refused = call(main, "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"work\",\"text\":\"and you?\",\"wait_seconds\":30}");
+        assertThat(Duration.ofNanos(System.nanoTime() - before)).as("no wait").isLessThan(WAIT);
+        assertThat(refused.error()).isTrue();
+        assertThat(refused.text()).contains("session work of comando · b is waiting for a reply of its own");
+        assertThat(b.window.recorded.of(Intent.PromptSession.class)).isEmpty();
+
+        main.window.turn("consult-b", "X is a broker.");
+        assertThat(bAsks.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a broker.");
+        final CompletableFuture<McpTools.Outcome> again = async(main, "foreman", "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"work\",\"text\":\"and you?\",\"wait_seconds\":30}");
+        b.window.recorded.await(Intent.PromptSession.class, p -> p.session().equals("work"), WAIT);
+        b.window.turn("work", "fine");
+        assertThat(again.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("fine");
+    }
+
+    /// An instance whose name starts like the main instance's id is not main: its header names it, with no overseer
+    /// mark.
+    @Test
+    void aNameLikeMainsIsHeadedWithoutTheOverseerMark() throws Exception {
+        final Node surrogate = node("mainframe", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final McpTools.Outcome out = call(surrogate, "instance_ask",
+                "{\"instance\":\"b\",\"text\":\"who?\",\"wait_seconds\":0}");
+        assertThat(out.error()).as(out.text()).isFalse();
+        assertThat(b.window.recorded.await(Intent.PromptSession.class, WAIT).text())
+                .isEqualTo("[from instance comando · mainframe · session foreman]\nwho?");
+    }
+
+    /// The mark a session's own `instance_ask` sets is cleared however the ask ends: its wait running out, the
+    /// question not sent, an interrupt while it waits, and a refusal; after each, a question to that session is
+    /// prompted there.
+    @Test
+    void theWaitingMarkOfAnAskClearsAfterATimeoutAnErrorAndAnInterrupt() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final McpTools.Outcome waited = call(b, "work", "instance_ask",
+                "{\"instance\":\"main\",\"text\":\"one?\",\"wait_seconds\":0}");
+        assertThat(waited.error()).as(waited.text()).isFalse();
+        assertThat(waited.text()).contains("no reply from comando yet");
+        assertPrompted(main, b, "probe after a timeout");
+
+        b.link.failing = true;
+        final McpTools.Outcome unsent = call(b, "work", "instance_ask",
+                "{\"instance\":\"main\",\"text\":\"two?\",\"wait_seconds\":10}");
+        b.link.failing = false;
+        assertThat(unsent.error()).isTrue();
+        assertThat(unsent.text()).contains("the question did not reach comando");
+        assertPrompted(main, b, "probe after an unsent question");
+
+        final McpTools.Outcome interrupted = interrupted(b, "instance_ask",
+                "{\"instance\":\"main\",\"text\":\"three?\",\"wait_seconds\":30}");
+        assertThat(interrupted.error()).isTrue();
+        assertThat(interrupted.text()).contains("interrupted");
+        assertPrompted(main, b, "probe after an interrupt");
+
+        Files.writeString(main.agents, "{\"peers\": {\"deny\": [\"b\"]}}");
+        final McpTools.Outcome refused = call(b, "work", "instance_ask",
+                "{\"instance\":\"main\",\"text\":\"four?\",\"wait_seconds\":10}");
+        assertThat(refused.error()).isTrue();
+        assertThat(refused.text()).startsWith("refused:");
+        assertPrompted(main, b, "probe after a refusal");
+    }
+
+    /// The mark `instance_reply` sets while it waits is cleared however that wait ends: its wait running out, an
+    /// interrupt, and an error reply; after each, a question to that session is prompted there.
+    @Test
+    void theWaitingMarkOfAnInstanceReplyClearsAfterATimeoutAnErrorAndAnInterrupt() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final McpTools.Outcome asked = call(b, "work", "instance_ask",
+                "{\"instance\":\"main\",\"text\":\"one?\",\"wait_seconds\":0}");
+        final Matcher id = ID.matcher(asked.text());
+        assertThat(id.find()).as(asked.text()).isTrue();
+        final String read = "{\"id\":\"" + id.group(1) + "\",\"wait_seconds\":";
+
+        final McpTools.Outcome waited = call(b, "work", "instance_reply", read + "0}");
+        assertThat(waited.error()).as(waited.text()).isFalse();
+        assertThat(waited.text()).contains("no reply from comando yet");
+        assertPrompted(main, b, "probe after a timeout");
+
+        final McpTools.Outcome interrupted = interrupted(b, "instance_reply", read + "30}");
+        assertThat(interrupted.error()).isTrue();
+        assertThat(interrupted.text()).contains("interrupted");
+        assertPrompted(main, b, "probe after an interrupt");
+
+        main.window.recorded.await(Intent.PromptSession.class, x -> x.text().endsWith("one?"), WAIT);
+        main.window.failTurn("consult-b");
+        final McpTools.Outcome failed = call(b, "work", "instance_reply", read + "10}");
+        assertThat(failed.error()).isTrue();
+        assertThat(failed.text()).contains("could not answer", "the turn failed");
+        assertPrompted(main, b, "probe after an error");
+    }
+
+    /// Asks `to`'s session `work` from `from` and waits until that session is prompted with `text`: a session still
+    /// marked waiting for a reply of its own is refused and never prompted.
+    private void assertPrompted(final Node from, final Node to, final String text) throws Exception {
+        final McpTools.Outcome out = call(from, "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"work\",\"text\":\"" + text + "\",\"wait_seconds\":0}");
+        assertThat(out.error()).as(out.text()).isFalse();
+        to.window.recorded.await(Intent.PromptSession.class,
+                x -> x.session().equals("work") && x.text().endsWith(text), WAIT);
+    }
+
+    /// Calls `tool` as `b`'s session `work` on a thread of its own, interrupts it once it waits, and returns what the
+    /// call returned.
+    private McpTools.Outcome interrupted(final Node n, final String tool, final String args) throws Exception {
+        final AtomicReference<McpTools.Outcome> out = new AtomicReference<>();
+        final Thread caller = Thread.ofVirtual().name("peers-test-caller").start(() -> {
+            try {
+                out.set(call(n, "work", tool, args));
+            } catch (final Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        Awaitility.await().atMost(WAIT).until(() -> caller.getState() == Thread.State.TIMED_WAITING);
+        caller.interrupt();
+        assertThat(caller.join(WAIT)).as("the call returned").isTrue();
+        assertThat(out.get()).as("the call's outcome").isNotNull();
+        return out.get();
+    }
+
     private McpTools.Outcome call(final Node n, final String tool, final String args) throws Exception {
         return call(n, "foreman", tool, args);
     }
@@ -470,9 +703,18 @@ class PeersTest {
     }
 
     private CompletableFuture<McpTools.Outcome> async(final Node n, final String tool, final String args) {
+        return async(n, "foreman", tool, args);
+    }
+
+    private CompletableFuture<McpTools.Outcome> async(
+            final Node n,
+            final String session,
+            final String tool,
+            final String args
+    ) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return call(n, tool, args);
+                return call(n, session, tool, args);
             } catch (final Exception e) {
                 throw new IllegalStateException(e);
             }
@@ -557,6 +799,14 @@ class PeersTest {
             t.append(new Block.TurnEnd(0.0, 10, 1, false, ""));
             state.updateAndGet(s -> turns(s, session, -1));
         }
+
+        /** Ends the oldest open turn of {@code session} as failed. */
+        void failTurn(final String session) {
+            final Transcript t = transcripts.of(session);
+            t.append(new Block.AssistantText("m" + t.size(), 0, "it broke", false, ""));
+            t.append(new Block.TurnEnd(0.0, 10, 1, true, ""));
+            state.updateAndGet(s -> turns(s, session, -1));
+        }
     }
 
     /** A broker in memory: retained messages, last wills, delivery to each matching subscription of a live link. */
@@ -606,6 +856,8 @@ class PeersTest {
         private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
         private final Map<String, Consumer<Message>> subscriptions = new LinkedHashMap<>();
         volatile boolean up;
+        /** Set by a test, read by the asking thread: a publish then fails while the link stays connected. */
+        volatile boolean failing;
         private Message will;
 
         Link(final Bus bus) {
@@ -666,6 +918,9 @@ class PeersTest {
         public CompletableFuture<Void> publish(final String topic, final byte[] payload, final boolean retained, final String responseTopic, final byte[] correlation) {
             if (!up) {
                 return CompletableFuture.failedFuture(new IllegalStateException("not connected"));
+            }
+            if (failing) {
+                return CompletableFuture.failedFuture(new IllegalStateException("the broker refused it"));
             }
             bus.publish(topic, payload, retained, responseTopic, correlation);
             return CompletableFuture.completedFuture(null);

@@ -77,7 +77,7 @@ class ResourceActionsTest {
     /// panel, offers `Stop and remove, Leave it`, and closing the dialog (-1) leaves it like `Leave it`.
     @Test
     void removeAsksFirstAndOffersToStopAResourceInUseOrLeaveIt() throws Exception {
-        final SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
+        final SessionState edge = SessionState.closed(SessionSpec.fresh("eden", "/w/eden"));
         final SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
         final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(edge, work));
         final JList<SessionState> list = new JList<>(model(edge, work));
@@ -85,11 +85,11 @@ class ResourceActionsTest {
 
         answer.set(1);
         actions.remove(edge);
-        assertThat(asked.getLast()).isEqualTo("Remove edge: Remove session edge? [Remove, Cancel]");
+        assertThat(asked.getLast()).isEqualTo("Remove eden: Remove session eden? [Remove, Cancel]");
         assertThat(removed).as("Cancel keeps it").isEmpty();
         answer.set(0);
         actions.remove(edge);
-        assertThat(removed).containsExactly("edge");
+        assertThat(removed).containsExactly("eden");
 
         removed.clear();
         answer.set(1);

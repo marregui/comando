@@ -1,9 +1,17 @@
 package dev.marregui.comando.app;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
@@ -22,7 +30,10 @@ import java.util.Base64;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
@@ -37,24 +48,23 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.frontear.Frontear;
-import dev.marregui.comando.frontear.control.Signer;
+import dev.marregui.comando.frontear.alexander.Signer;
 import dev.marregui.comando.ui.shell.ServerToggle;
 
 /**
- * frontear (record 184) as the instances' broker, in place of the comando Edge: a node hosted in this process on the
- * Edge's MQTT port on {@code 127.0.0.1}, so the instances connect to it as they do to the Edge, and the two never both
- * run. One node runs on the machine whichever instance started it: a registry file in the user's home
- * ({@code ~/.comando-fabric.json}, the Edge's schema rules, record 133) names the process that hosts it and that
- * instance's data root, and only that instance stops it; the others see it running and connect as clients. The node
- * lives as long as the instance that hosts it: its close stops the node and clears the registry.
+ * frontear, comando's fabric between instances (records 184, 185): a node hosted in this process on MQTT port
+ * {@value #PORT} on {@code 127.0.0.1}, where every instance connects. One node runs on the machine whichever instance
+ * started it: a registry file in the user's home ({@code ~/.comando-fabric.json}, versioned as record 133 says) names
+ * the process that hosts it and that instance's data root, and only that instance stops it; the others see it running
+ * and connect as clients. The node lives as long as the instance that hosts it: its close stops the node and clears the
+ * registry, and the next instance whose peer link finds no live host starts one ({@link #runningOrHost}).
  * <p>
  * The node's data folder is {@code fabric/} in the instance's data root (the links' logs). The one control key it
  * trusts is this instance's own, an Ed25519 pair made at the first start and kept beside them ({@code pod.key},
  * readable by the user alone, and {@code pod.pub}, base64 of the X.509 encoding as {@code Frontear.main} reads a key):
  * this comando is the control pod of the node it hosts.
  * <p>
- * It answers to the name {@code Edge}, so the window's toggle and an agent's {@code server_start edge} reach it as they
- * reach the Edge.
+ * It answers to the name {@code frontear}: the window's toggle and an agent's {@code server_start frontear}.
  */
 final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable {
 
@@ -64,8 +74,11 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     static final int REGISTRY_VERSION = 1;
     /** The registry every comando instance on this machine reads. */
     static final Path REGISTRY = Path.of(System.getProperty("user.home"), ".comando-fabric.json");
-    /** The comando Edge's MQTT port: the instances connect where they do today, and a running Edge refuses a start. */
-    static final int PORT = EmbeddedEdge.Ports.DEFAULT.mqtt();
+    /**
+     * The node's MQTT port: the one the instances' broker has had since record 123, so an instance of an older comando
+     * still finds the node, and whatever holds it refuses a start.
+     */
+    static final int PORT = 18883;
     /** The node's name, one topic level: control messages go to {@code $frontear/control/comando/<Method>}. */
     static final String NODE = "comando";
     /** The control pod's private key, PKCS#8 in base64, readable by the user alone. */
@@ -78,16 +91,37 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     private static final Duration CHECK_EVERY = Duration.ofSeconds(1);
     /**
      * A process whose start differs from the recorded one by more than this is another process on a reused pid; the
-     * Edge's registry allows the same.
+     * margin comando's instance registries have kept since the first of them.
      */
     private static final Duration SAME_PROCESS = Duration.ofSeconds(2);
     private static final long PID = ProcessHandle.current().pid();
+    private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
+    /** How long the port probe waits for a listener's answer on loopback, where one answers at once. */
+    private static final int PROBE_MILLIS = 200;
+    /**
+     * How long a start, a stop or a close waits for another's hold of the registry's lock: a node starts and stops in
+     * well under a second, so a hold this long is a comando stuck mid-start; a look that gives up tries again at the
+     * peer link's next look.
+     */
+    private static final Duration LOCK_WITHIN = Duration.ofSeconds(5);
+    /** How often a held lock is tried again; a start under way ends in tens of milliseconds. */
+    private static final Duration POLL_EVERY = Duration.ofMillis(50);
+    /**
+     * This JVM's holds of a registry's lock, by lock file: a file lock is the process's, so the instances of one
+     * process take turns here first.
+     */
+    private static final ConcurrentHashMap<Path, ReentrantLock> IN_PROCESS = new ConcurrentHashMap<>();
 
     private final Path root;
     private final String owner;
     private final String name;
     private final IntentSink intents;
     private final Path registry;
+    /**
+     * The registry's lock file beside it, never removed: whoever holds its lock alone reads and writes the registry to
+     * start or stop.
+     */
+    private final Path lock;
     private final int port;
     /** The starts, stops and registry reads under way, each on a virtual thread; closed with the fabric. */
     private final Errands errands = new Errands("fabric");
@@ -102,15 +136,28 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     private volatile Entry seen;
     /** What a start or stop under way does; written by its errand, read by the window and by agents' calls. */
     private volatile String doing = "";
+    /**
+     * This instance's user or agent stopped the node it hosted: it starts one again only when asked, not on its own.
+     * Written by the errands that start and stop and by {@link #want}, read by the peer link's strand.
+     */
+    private volatile boolean stoppedByHand;
+    /**
+     * The last start failed because another process holds the port; written by the errands that start, read by the
+     * window every second.
+     */
+    private volatile boolean portHeld;
     /** The node this instance hosts, or null. Guarded by this. */
     private Hosting hosting;
+    /**
+     * The last notice a start of this instance's own posted, so one repeated at every look of the peer link is said
+     * once; empty after a start that hosts. Guarded by this.
+     */
+    private String saidOnItsOwn = "";
 
-    /** The fabric with its data in {@code root}, for the instance on data root {@code owner} named {@code name}. */
-    FrontearFabric(final Path root, final Path owner, final String name, final IntentSink intents) {
-        this(root, owner, name, intents, REGISTRY, PORT);
-    }
-
-    /** As above, with the registry and the port given; for tests. */
+    /**
+     * The fabric with its data in {@code root}, for the instance on data root {@code owner} named {@code name}, on
+     * {@code registry} and {@code port}.
+     */
     FrontearFabric(final Path root, final Path owner, final String name, final IntentSink intents, final Path registry,
             final int port) {
         this.root = root.toAbsolutePath().normalize();
@@ -118,12 +165,25 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         this.name = name == null ? "" : name;
         this.intents = intents;
         this.registry = registry;
+        this.lock = lockFile(registry);
         this.port = port;
+    }
+
+    /**
+     * The fabric of the instance on data root {@code home} named {@code name}, its data in {@code fabric/} there. On
+     * the machine's ({@code machine}), it uses {@link #REGISTRY} and {@link #PORT}; off it, as {@code -Dcomando.peers}
+     * false keeps every test and picture tool, a registry in the data root and a port the OS picks, so neither the
+     * toggle nor {@code server_start frontear} touches the machine's.
+     */
+    static FrontearFabric of(final Path home, final String name, final IntentSink intents, final boolean machine) {
+        return machine ? new FrontearFabric(home.resolve("fabric"), home, name, intents, REGISTRY, PORT)
+                : new FrontearFabric(home.resolve("fabric"), home, name, intents, home.resolve(REGISTRY.getFileName()),
+                        0);
     }
 
     @Override
     public String name() {
-        return "Edge";
+        return "frontear";
     }
 
     /**
@@ -153,14 +213,44 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         return busy.get();
     }
 
-    /** The start or stop under way, else who hosts the fabric when another comando does; as last read. */
+    /**
+     * The node's state for the toggle's tooltip, always said, as last read: a start or stop under way, running and
+     * which comando hosts it, or stopped and, when another process holds the port, that.
+     */
     @Override
     public String status() {
         if (busy.get()) {
-            return "the fabric is " + (doing.isEmpty() ? "busy" : doing);
+            return doing.isEmpty() ? "busy" : doing;
         }
         final Entry e = seen;
-        return e != null && !ours(e) ? startedBy(e) + "; only that comando stops it" : "";
+        if (running && e != null) {
+            return ours(e) ? "running, hosted here" : "running, hosted by " + host(e) + "; only that comando stops it";
+        }
+        return portHeld ? "stopped; port " + port + " on 127.0.0.1 is in use by another process" : "stopped";
+    }
+
+    /**
+     * Whether the registry names a live host, read now; when it names none, this instance starts one on a virtual
+     * thread and returns at once (record 185). The peer link asks it at its first look and at every one after, so
+     * frontear starts at launch, and when its host quits, the next instance to look hosts it; when several look at
+     * once, the registry's claim leaves one host and the others connect to it. After this instance's own stop by hand,
+     * it starts none until asked. A start that fails says so once, not at every look.
+     */
+    boolean runningOrHost() {
+        final boolean live = running();
+        if (!live && !stoppedByHand && busy.compareAndSet(false, true)) {
+            final Thread t = errands.start("fabric-host", () -> {
+                try {
+                    flip(Boolean.TRUE, true);
+                } finally {
+                    busy.set(false);
+                }
+            });
+            if (t == null) {
+                busy.set(false);
+            }
+        }
+        return live;
     }
 
     /** Whether this instance hosts the fabric that runs, as last read; what its presence says (record 124). */
@@ -176,13 +266,13 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     @Override
     public void toggle() {
         if (!busy.compareAndSet(false, true)) {
-            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "The fabric is " + (doing.isEmpty() ? "busy" : doing)
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is " + (doing.isEmpty() ? "busy" : doing)
                     + "; wait for it", false));
             return;
         }
         final Thread t = errands.start("fabric-toggle", () -> {
             try {
-                flip(null);
+                flip(null, false);
             } finally {
                 busy.set(false);
             }
@@ -198,23 +288,26 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
      */
     @Override
     public String want(final boolean up) {
+        if (up) {
+            stoppedByHand = false;
+        }
         final boolean live = running();
         final Entry e = seen;
         if (up && live) {
-            return "the fabric already runs" + (e != null && !ours(e) ? ", " + startedBy(e) : "");
+            return "frontear already runs" + (e != null && !ours(e) ? ", " + startedBy(e) : "");
         }
         if (!up && !live) {
-            return "the fabric is not running";
+            return "frontear is not running";
         }
         if (!up && e != null && !ours(e)) {
-            return "refused: the fabric was " + startedBy(e) + ", and only that comando stops it";
+            return "refused: frontear was " + startedBy(e) + ", and only that comando stops it";
         }
         if (!busy.compareAndSet(false, true)) {
-            return "the fabric is " + (doing.isEmpty() ? "busy" : doing) + "; try again when that ends";
+            return "frontear is " + (doing.isEmpty() ? "busy" : doing) + "; try again when that ends";
         }
         final Thread t = errands.start(up ? "fabric-start" : "fabric-stop", () -> {
             try {
-                flip(up);
+                flip(up, false);
             } finally {
                 busy.set(false);
             }
@@ -223,7 +316,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             busy.set(false);
             return "refused: comando is closing";
         }
-        return (up ? "starting" : "stopping") + " the fabric; the outcome comes as a notice, and ui_get_state's servers"
+        return (up ? "starting" : "stopping") + " frontear; the outcome comes as a notice, and ui_get_state's servers"
                 + " show it";
     }
 
@@ -301,7 +394,40 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     private static String startedBy(final Entry e) {
-        return "started by " + InstanceName.display(e.name()) + " (" + e.owner() + ")";
+        return "started by " + host(e);
+    }
+
+    /** The instance that hosts the node {@code e} names, as the user knows it: its name and its data root. */
+    private static String host(final Entry e) {
+        return InstanceName.display(e.name()) + " (" + e.owner() + ")";
+    }
+
+    /**
+     * Something listens on {@code port} on loopback, or the port cannot be bound there as a listener binds it, with
+     * {@code SO_REUSEADDR}: a connection a stopped node closed lingers in TIME_WAIT for up to a minute, and a bind
+     * without it fails on that, refusing a start the node itself would make. Whatever holds the port is only probed,
+     * never signalled.
+     */
+    static boolean taken(final int port) {
+        try (final Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(LOOPBACK, port), PROBE_MILLIS);
+            return true;
+        } catch (final IOException _) {
+            // nobody answers; whether it can be bound decides
+        }
+        try (final ServerSocket s = new ServerSocket()) {
+            s.setReuseAddress(true);
+            s.bind(new InetSocketAddress(LOOPBACK, port));
+            return false;
+        } catch (final IOException _) {
+            return true;
+        }
+    }
+
+    /** The lock file of {@code registry}: beside it, its name with {@code .lock} added. */
+    static Path lockFile(final Path registry) {
+        final Path r = registry.toAbsolutePath().normalize();
+        return r.resolveSibling(r.getFileName() + ".lock");
     }
 
     /** The entry {@code tree} holds, null for a JSON {@code null}; an empty file holds none and does not read. */
@@ -330,14 +456,49 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         return h;
     }
 
-    /** Starts or stops as the registry finds it; {@code want}, when given, is the only direction it may go. */
-    private synchronized void flip(final Boolean want) {
+    /**
+     * Starts or stops as the registry finds it; {@code want}, when given, is the only direction it may go.
+     * {@code onItsOwn} is a start no one asked for ({@link #runningOrHost}): it says nothing before it starts, and a
+     * failure it met at its last try it does not say again.
+     * <p>
+     * All of it runs under the registry's lock, taken within {@link #LOCK_WITHIN}: the registry is a file no write to
+     * can be fenced, so the lock is what makes the read, a stale entry's removal, the port's probe, the claim and the
+     * node's bind one step no other comando's start or stop can come between. A start that does not get the lock
+     * starts nothing: asked, it says so; a look's tries again at the next look.
+     */
+    private synchronized void flip(final Boolean want, final boolean onItsOwn) {
+        final boolean held;
+        try {
+            held = underLock(() -> flipHeld(want, onItsOwn));
+        } catch (final IOException ex) {
+            say(onItsOwn, Notice.Level.WARN, "Cannot lock the frontear registry [lock=" + lock + ", cause="
+                    + ex.getMessage() + ']', null);
+            return;
+        } catch (final InterruptedException _) {
+            // the fabric is closing: its errands are interrupted
+            Thread.currentThread().interrupt();
+            return;
+        }
+        if (held) {
+            return;
+        }
+        if (onItsOwn) {
+            LOG.log(System.Logger.Level.INFO, "frontear registry held by another start; tried again at the next look"
+                    + " [lock=" + lock + ", waited=" + LOCK_WITHIN.toSeconds() + " s]");
+        } else {
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Another comando is starting or stopping frontear;"
+                    + " try again in a moment", false));
+        }
+    }
+
+    /** {@link #flip}'s work, under the registry's lock. */
+    private void flipHeld(final Boolean want, final boolean onItsOwn) {
         Entry e;
         try {
             e = read();
         } catch (final IOException ex) {
-            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "Cannot read the fabric registry; remove it"
-                    + " if no comando fabric runs [registry=" + registry + ", cause=" + ex.getMessage() + ']', null));
+            say(onItsOwn, Notice.Level.WARN, "Cannot read the frontear registry; remove it if no frontear runs"
+                    + " [registry=" + registry + ", cause=" + ex.getMessage() + ']', null);
             return;
         }
         if (e != null && live(e).isEmpty()) {
@@ -348,7 +509,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             e = null;
         }
         if (want != null && want != (e == null)) {
-            // what the agent asked for holds already: running when it wanted a start, gone when it wanted a stop
+            // what was asked for holds already: running when it wanted a start, gone when it wanted a stop
             running = e != null;
             checkedAtNanos = System.nanoTime();
             return;
@@ -356,15 +517,19 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         try {
             if (e == null) {
                 doing = "starting";
-                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Starting the fabric…", false));
-                start();
+                if (!onItsOwn) {
+                    stoppedByHand = false;
+                    intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Starting frontear…", false));
+                }
+                start(onItsOwn);
             } else if (ours(e)) {
                 doing = "stopping";
-                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Stopping the fabric…", false));
+                stoppedByHand = true;
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Stopping frontear…", false));
                 stop(e);
             } else {
-                intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "Cannot stop the fabric: it was "
-                        + startedBy(e) + ", and only that comando stops it", null));
+                say(false, Notice.Level.WARN, "Cannot stop frontear: only the comando that started it stops it [name="
+                        + e.name() + ", owner=" + e.owner() + ", pid=" + e.pid() + ']', null);
             }
         } finally {
             doing = "";
@@ -373,32 +538,50 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         checkedAtNanos = System.nanoTime();
     }
 
-    /** Claims the registry, then starts the node; a node that does not start gives the claim back. */
-    private void start() {
-        if (EmbeddedEdge.taken(port)) {
-            intents.dispatch(new Intent.Notify(Notice.Level.WARN, "Cannot start the fabric: port " + port
-                    + " on 127.0.0.1 is in use by another process", false));
+    /**
+     * Claims the registry, then starts the node; a node that does not start gives the claim back. A port held by
+     * another process refuses the start: that process is only probed, never signalled. Under the registry's lock, so
+     * no other comando's start probes or binds the port meanwhile, and a probe that finds it held finds a node that
+     * runs or another process.
+     */
+    private void start(final boolean onItsOwn) {
+        if (taken(port)) {
+            if (running()) {
+                // another instance claimed and bound it since the registry was read: it hosts, this one connects
+                LOG.log(System.Logger.Level.INFO, "frontear started by another comando meanwhile [port=" + port + ']');
+                return;
+            }
+            portHeld = true;
+            say(onItsOwn, Notice.Level.WARN, "Cannot start frontear: another process holds its port; comando leaves"
+                    + " it alone, and the instances reach each other once it is free [host=127.0.0.1, port=" + port
+                    + ']', null);
             return;
         }
+        portHeld = false;
         final PublicKey pod;
         try {
             pod = keys(OwnerOnly.folder(root)).getPublic();
         } catch (final IOException | RuntimeException e) {
-            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot start the fabric [root=" + root
-                    + ", cause=" + e.getMessage() + ']', e));
+            say(onItsOwn, Notice.Level.ERROR, "Cannot start frontear [root=" + root + ", cause=" + e.getMessage()
+                    + ']', e);
             return;
         }
         final Entry entry = new Entry(PID, owner, name, port, ProcessHandle.current().info().startInstant()
                 .map(Instant::toString).orElse(null));
         try {
             if (!claim(entry)) {
-                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Another comando started the fabric meanwhile;"
-                        + " this one connects to it", false));
+                if (onItsOwn) {
+                    LOG.log(System.Logger.Level.INFO, "frontear started by another comando meanwhile [port=" + port
+                            + ']');
+                } else {
+                    intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Another comando started frontear"
+                            + " meanwhile; this one connects to it", false));
+                }
                 return;
             }
         } catch (final IOException e) {
-            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot write the fabric registry [registry="
-                    + registry + ", cause=" + e.getMessage() + ']', e));
+            say(onItsOwn, Notice.Level.ERROR, "Cannot write the frontear registry [registry=" + registry + ", cause="
+                    + e.getMessage() + ']', e);
             return;
         }
         final Frontear node;
@@ -406,16 +589,32 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             node = Frontear.start(NODE, port, root, Set.of(pod), InstantSource.system());
         } catch (final IOException | RuntimeException e) {
             remove(entry);
-            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot start the fabric [port=" + port
-                    + ", root=" + root + ", cause=" + e.getMessage() + ']', e));
+            say(onItsOwn, Notice.Level.ERROR, "Cannot start frontear [port=" + port + ", root=" + root + ", cause="
+                    + e.getMessage() + ']', e);
             return;
         }
         hosting = new Hosting(node, entry);
         running = true;
+        saidOnItsOwn = "";
         LOG.log(System.Logger.Level.INFO, "fabric up [node=" + NODE + ", port=" + node.port() + ", root=" + root
-                + ", key=" + Signer.keyId(pod) + ']');
-        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "The fabric is up: MQTT 127.0.0.1:" + node.port()
-                + ", frontear node " + NODE, false));
+                + ", key=" + Signer.keyId(pod) + ", asked=" + !onItsOwn + ']');
+        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is up: MQTT 127.0.0.1:" + node.port(), false));
+    }
+
+    /**
+     * Says {@code text} at {@code level}, a warning or an error also in comando's log with {@code cause}; for a start
+     * of this instance's own, only when it is not what the last such start said, so a failure met at every look of the
+     * peer link is said once.
+     */
+    private void say(final boolean onItsOwn, final Notice.Level level, final String text, final Throwable cause) {
+        if (onItsOwn) {
+            if (text.equals(saidOnItsOwn)) {
+                return;
+            }
+            saidOnItsOwn = text;
+        }
+        intents.dispatch(level == Notice.Level.INFO ? new Intent.Notify(level, text, false)
+                : Intent.Notify.logged(LOG, level, text, cause));
     }
 
     /** Stops the node this instance hosts and gives the registry back. */
@@ -427,13 +626,13 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
                 h.node().close();
             }
         } catch (final RuntimeException ex) {
-            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "The fabric did not close cleanly [cause="
+            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "frontear did not close cleanly [cause="
                     + ex.getMessage() + ']', ex));
         } finally {
             remove(e);
         }
         LOG.log(System.Logger.Level.INFO, "fabric stopped [pid=" + e.pid() + ", port=" + e.port() + ']');
-        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "The fabric is down", false));
+        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is down", false));
     }
 
     /** Whether {@code e} names this instance in this process, the only one that holds the node it names. */
@@ -496,8 +695,73 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         try {
             h.node().close();
         } finally {
-            remove(h.entry());
+            // under the registry's lock, as a start's claim is; one that stays held leaves the entry to go stale
+            try {
+                if (!underLock(() -> remove(h.entry()))) {
+                    LOG.log(System.Logger.Level.WARNING, "registry left to go stale with this process: its lock stays"
+                            + " held [lock=" + lock + ", waited=" + LOCK_WITHIN.toSeconds() + " s]");
+                }
+            } catch (final IOException ex) {
+                LOG.log(System.Logger.Level.WARNING, "registry left to go stale with this process: cannot lock it"
+                        + " [lock=" + lock + ']', ex);
+            } catch (final InterruptedException _) {
+                Thread.currentThread().interrupt();
+                LOG.log(System.Logger.Level.WARNING, "registry left to go stale with this process: interrupted"
+                        + " [lock=" + lock + ']');
+            }
             LOG.log(System.Logger.Level.INFO, "fabric stopped with comando [port=" + h.entry().port() + ']');
+        }
+    }
+
+    /**
+     * Runs {@code action} holding this JVM's turn at the registry's lock, then the lock file's OS lock, both within
+     * {@link #LOCK_WITHIN} together; false, with nothing run, when either stays held that long.
+     */
+    private boolean underLock(final Runnable action) throws IOException, InterruptedException {
+        final long deadline = System.nanoTime() + LOCK_WITHIN.toNanos();
+        final ReentrantLock here = IN_PROCESS.computeIfAbsent(lock, _ -> new ReentrantLock());
+        if (!here.tryLock(LOCK_WITHIN.toNanos(), TimeUnit.NANOSECONDS)) {
+            return false;
+        }
+        try (final FileChannel channel = FileChannel.open(lock, StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE)) {
+            final FileLock held = tryLock(channel, deadline);
+            if (held == null) {
+                return false;
+            }
+            try {
+                action.run();
+                return true;
+            } finally {
+                held.release();
+            }
+        } finally {
+            here.unlock();
+        }
+    }
+
+    /**
+     * The lock on {@code channel}, polled every {@link #POLL_EVERY} until {@code deadline}; null when it stays held.
+     * Another process's lock answers null; one of this JVM's, taken by another route than {@link #underLock}, throws,
+     * and is waited for the same way.
+     */
+    private static FileLock tryLock(
+            final FileChannel channel,
+            final long deadline
+    ) throws IOException, InterruptedException {
+        while (true) {
+            try {
+                final FileLock held = channel.tryLock();
+                if (held != null) {
+                    return held;
+                }
+            } catch (final OverlappingFileLockException _) {
+                // held in this JVM: waited for as another process's lock is
+            }
+            if (deadline - System.nanoTime() <= 0) {
+                return null;
+            }
+            Thread.sleep(POLL_EVERY);
         }
     }
 

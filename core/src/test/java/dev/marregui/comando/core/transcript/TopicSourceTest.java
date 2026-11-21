@@ -85,16 +85,18 @@ class TopicSourceTest {
     @Test
     void aSessionPanelsTopicIsAboutItsLastParagraphWithTheRestForContext() {
         final String text = "# notes\nold idea about the cache\n\nfix ENG-1125: the browse regression\n \nnow port the fix to v1\nand open the PR";
-        final String source = TopicSource.ofPanel("work", "edge", "/Users/m/edge", "ENG-1125", text, "", TopicSource.MAX_CHARS);
-        assertThat(source).startsWith("The panel \"work\", where the user writes the prompts of a coding session named \"edge\", working in /Users/m/edge (git branch ENG-1125).");
+        final String source =
+                TopicSource.ofPanel("work", "eden", "/Users/m/edge", "ENG-1125", text, "", TopicSource.MAX_CHARS);
+        assertThat(source).startsWith("The panel \"work\", where the user writes the prompts of a coding session named"
+                + " \"eden\", working in /Users/m/edge (git branch ENG-1125).");
         assertThat(source).contains("which the summary is about:\nnow port the fix to v1\nand open the PR\n\nThe text before it, for context, oldest first:\n# notes");
         assertThat(source).endsWith("fix ENG-1125: the browse regression");
-        assertThat(TopicSource.ofPanel("work", "edge", "", "", "  \n ", "a response", TopicSource.MAX_CHARS)).isEmpty();
-        assertThat(TopicSource.ofPanel("work", "edge", "", "", "one paragraph only", "", TopicSource.MAX_CHARS))
+        assertThat(TopicSource.ofPanel("work", "eden", "", "", "  \n ", "a response", TopicSource.MAX_CHARS)).isEmpty();
+        assertThat(TopicSource.ofPanel("work", "eden", "", "", "one paragraph only", "", TopicSource.MAX_CHARS))
                 .endsWith("which the summary is about:\none paragraph only").doesNotContain("for context");
 
         final String longBefore = "x".repeat(10_000) + "\n\nthe ask";
-        final String bounded = TopicSource.ofPanel("work", "edge", "", "", longBefore, "", 200);
+        final String bounded = TopicSource.ofPanel("work", "eden", "", "", longBefore, "", 200);
         assertThat(bounded).as("the context keeps its end, within the budget").contains("the ask\n\nThe text before it");
         assertThat(bounded.length()).isLessThan(200 + 300);
     }
@@ -112,13 +114,14 @@ class TopicSourceTest {
         assertThat(TopicSource.lastResponse(t)).as("the main conversation's latest").isEqualTo("Ported to v1; PR #1790 is up and CI is green.");
         assertThat(TopicSource.lastResponse(new Transcript())).isEmpty();
 
-        final String source = TopicSource.ofPanel("work", "edge", "", "", "earlier notes\n\nport the fix to v1", TopicSource.lastResponse(t),
-                TopicSource.MAX_CHARS);
+        final String source = TopicSource.ofPanel("work", "eden", "", "", "earlier notes\n\nport the fix to v1",
+                TopicSource.lastResponse(t), TopicSource.MAX_CHARS);
         assertThat(source).contains("which the summary is about:\nport the fix to v1\n\nThe session's last response, to read with that command:\n"
                 + "Ported to v1; PR #1790 is up and CI is green.\n\nThe text before it, for context, oldest first:\nearlier notes");
 
         final String longAnswer = "y".repeat(5_000);
-        final String bounded = TopicSource.ofPanel("work", "edge", "", "", "the ask", longAnswer, TopicSource.MAX_CHARS);
+        final String bounded =
+                TopicSource.ofPanel("work", "eden", "", "", "the ask", longAnswer, TopicSource.MAX_CHARS);
         assertThat(bounded).as("a long response keeps its start, within its share").contains("y".repeat(TopicSource.MAX_RESPONSE - 1) + "…")
                 .doesNotContain("y".repeat(TopicSource.MAX_RESPONSE + 1));
     }

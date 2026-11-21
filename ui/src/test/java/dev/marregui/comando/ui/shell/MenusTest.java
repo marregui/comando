@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [Menus] declares the menu bar, the corner buttons, their icons, tooltips and the areas of commands in no menu.
 /// - The bar is Edit then Help, flat, the palette then the help items.
-/// - The corner holds the shell, the plots, and the server and the Edge only when there are.
+/// - The corner holds the shell, the plots, and the server and frontear only when there are.
 /// - Every item and button has an icon that exists and a tooltip of at most 80 characters; no tooltip outlives its
 ///   item.
 /// - A command is in a menu or in an area, never both.
@@ -74,8 +74,8 @@ class MenusTest {
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
                 "view.find", "view.findNext", "view.findPrevious", "view.findInFiles",
                 "view.nextHit", "view.previousHit",
-                "view.palette", "help.tutorial", "help.keys", "help.markdown", "help.log", "help.edgeLog",
-                "help.cdbLog", "help.dataRoot");
+                "view.palette", "help.tutorial", "help.keys", "help.markdown", "help.log", "help.cdbLog",
+                "help.dataRoot");
         assertThat(submenus(bar)).as("flat: the themes are the swatch's").isEmpty();
         assertThat(bar.get(1).entries().stream().filter(MenuEntry.Separator.class::isInstance).count())
                 .as("one separator between the view's Find and the window's").isEqualTo(1);
@@ -83,26 +83,29 @@ class MenusTest {
                 .as("one separator between the palette and the help").isEqualTo(1);
     }
 
-    /// [Menus#corner] groups plot, server and Edge buttons, the Edge's after the server's, and leaves the server or
-    /// the Edge group out when comando has none; the shell has no button, its commands are in the palette's Run area;
+    /// [Menus#corner] groups plot, server and frontear buttons, frontear's after the server's, and leaves the server
+    /// or the frontear group out when comando has none; the shell has no button, its commands are in the palette's
+    /// Run area;
     /// [Menus#toggles] lists the same pairs for the Connections tab's menu.
     @Test
-    void theCornerHoldsThePlotsTheServerAndTheEdgeOnlyWhenThereAreSomeAndNoShellButton() {
+    void theCornerHoldsThePlotsTheServerAndFrontearOnlyWhenThereAreSomeAndNoShellButton() {
         assertThat(Menus.corner(true, true).stream().flatMap(List::stream)).as("no shell button (record 114, amended)")
                 .doesNotContain("terminal.start", "terminal.stop", "terminal.restart");
         assertThat(Menus.areas()).as("the shell's commands stay in the palette")
                 .containsEntry("terminal.start", "Run").containsEntry("terminal.stop", "Run").containsEntry("terminal.restart", "Run");
         assertThat(Menus.corner(true, true)).containsExactly(List.of("run.plotStop"),
-                List.of("server.start", "server.stop"), List.of("edge.start", "edge.stop"));
-        assertThat(Menus.corner(false, false)).as("no embedded server or Edge, no button for them")
+                List.of("server.start", "server.stop"), List.of("frontear.start", "frontear.stop"));
+        assertThat(Menus.corner(false, false)).as("no embedded server or frontear, no button for them")
                 .containsExactly(List.of("run.plotStop"));
-        assertThat(Menus.corner(true, false)).as("no Edge, no button for it")
+        assertThat(Menus.corner(true, false)).as("no frontear, no button for it")
                 .containsExactly(List.of("run.plotStop"), List.of("server.start", "server.stop"));
-        assertThat(Menus.corner(false, true)).as("no embedded server, the Edge's button alone")
-                .containsExactly(List.of("run.plotStop"), List.of("edge.start", "edge.stop"));
-        assertThat(Menus.toggles(true, true)).containsExactly("server.start", "server.stop", "edge.start", "edge.stop");
+        assertThat(Menus.corner(false, true)).as("no embedded server, frontear's button alone")
+                .containsExactly(List.of("run.plotStop"), List.of("frontear.start", "frontear.stop"));
+        assertThat(Menus.toggles(true, true)).containsExactly("server.start", "server.stop", "frontear.start",
+                "frontear.stop");
         assertThat(Menus.toggles(false, false)).isEmpty();
-        assertThat(Menus.areas()).containsEntry("edge.start", "Connection").containsEntry("edge.stop", "Connection");
+        assertThat(Menus.areas()).containsEntry("frontear.start", "Connection")
+                .containsEntry("frontear.stop", "Connection");
     }
 
     /// Every placed id has an icon whose SVG is a resource and a non-blank tooltip of at most 80 characters, the bar's

@@ -163,9 +163,9 @@ class ThemeFilesTest {
         write("2-none.json", theme("plain", "Plain", "#14101A", "#FFE3EC", "#F2A7C0", "#B5627F"));
         write("3-blank.json", described("blank", "  "));
         write("4-long.json", described("long", "x".repeat(ThemeSpec.DESCRIPTION_MAX + 1)));
-        write("5-edge.json", described("edge", "x".repeat(ThemeSpec.DESCRIPTION_MAX)));
+        write("5-eden.json", described("eden", "x".repeat(ThemeSpec.DESCRIPTION_MAX)));
         final ThemeFiles.Read read = ThemeFiles.read(folder);
-        assertThat(read.themes()).extracting(t -> t.id).containsExactly("ink", "plain", "edge");
+        assertThat(read.themes()).extracting(t -> t.id).containsExactly("ink", "plain", "eden");
         assertThat(read.themes().get(0).description).as("read as written").contains("<b>Calm</b> & dim");
         assertThat(read.themes().get(1).description).as("left out").isEmpty();
         assertThat(read.problems()).containsExactly("3-blank.json: \"description\" must be a text",

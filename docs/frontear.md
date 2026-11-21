@@ -298,7 +298,7 @@ Packet.Publish request = signer.sign("$frontear/control/a/GetState",
         "{}".getBytes(StandardCharsets.UTF_8), "reply/pod", null);
 ```
 
-`Signer` is in `dev.marregui.comando.frontear.control`, `Packet` in `dev.marregui.comando.frontear.mqtt`. Publish
+`Signer` is in `dev.marregui.comando.frontear.alexander`, `Packet` in `dev.marregui.comando.frontear.protocol`. Publish
 `request` with any MQTT 5 client. frontear's own `MqttClient.publishAcknowledged(request)` completes with the PUBACK's
 reason code, `0` for an applied request.
 
@@ -481,21 +481,17 @@ The file format is in [the frontear module page](modules/frontear.md).
 
 ## 8. frontear inside comando
 
-comando can host a frontear node as the broker its instances share. Start comando with:
-
-```
--Dcomando.fabric=frontear
-```
+comando hosts a frontear node as the broker its instances share, the only one it has [record 185](adr/0185-frontear-is-the-only-fabric.md).
 
 | Fact | Value |
 |---|---|
-| Default | Without the property, or with `edge`, comando keeps the comando Edge as its broker. |
+| When | At launch when no live instance hosts it; when its host quits, the next instance to look (every 5 s) hosts it. `-Dcomando.peers=false` keeps an instance off it. |
 | Node name | `comando`. Control topics are `$frontear/control/comando/<Method>`. |
 | Address | `127.0.0.1`, port 18883. |
 | Data folder | `fabric/` in the hosting instance's data folder. |
 | Control keys | `pod.key` and `pod.pub` in `fabric/`, made at the first start. `pod.key` is readable by its owner only. |
-| How many | One node per machine. The first instance hosts it; the other instances connect as clients. |
-| Start and stop | The window's Edge toggle, or an agent's `server_start edge`. Only the hosting instance stops it. |
+| How many | One node per machine. The instance that creates the registry hosts it; the other instances connect as clients. |
+| Start and stop | The window's frontear toggle, or an agent's `server_start frontear` and `server_stop frontear`. Only the hosting instance stops it. |
 | Registry | `~/.comando-fabric.json` names the hosting process. |
 
 comando makes the key pair and gives the node its public key. comando sends no control requests itself: you

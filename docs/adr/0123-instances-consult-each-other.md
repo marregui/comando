@@ -1,8 +1,8 @@
-# 123. Instances consult each other through the comando Edge: presence, ask, reply
+# 123. Instances consult each other through a local MQTT broker: presence, ask, reply
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md); its MQTT client replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) | Miguel and Claude |
+| 2026-10-29 | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md); its MQTT client replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md); superseded in part by [record 185](0185-frontear-is-the-only-fabric.md); answering and who may ask amended by [record 186](0186-instances-trust-the-overseer.md) | Miguel and Claude |
 
 ## 1. Context
 

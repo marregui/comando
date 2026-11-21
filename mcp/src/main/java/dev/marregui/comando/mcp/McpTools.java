@@ -142,7 +142,7 @@ public final class McpTools {
     /** The first tools' names, from {@code tools.json}; the registry's other actions are {@link ActionTools}'. */
     private final Set<String> builtIn;
     private final ActionTools actions;
-    /** The other comando instances, through the comando Edge (record 123); null until the application wires them. */
+    /** The other comando instances, through frontear (records 123 and 186); null until the application wires them. */
     private volatile Peers peers;
     /**
      * The rows of the panels' runs (record 145), written once by the application thread before the server starts and
@@ -290,7 +290,7 @@ public final class McpTools {
                 case "session_read" -> sessionRead(args);
                 case "instances_list" -> peers().list();
                 case "instance_ask" -> peers().ask(session, args);
-                case "instance_reply" -> peers().replyOf(args);
+                case "instance_reply" -> peers().replyOf(session, args);
                 default -> ActionTools.handles(name, builtIn) ? actions.run(session, name, args) : Outcome.fail("unknown tool " + name);
             };
         } catch (final IllegalArgumentException e) {
@@ -767,13 +767,13 @@ public final class McpTools {
             n.put("placement", v.placement().name().toLowerCase(Locale.ROOT));
             n.put("pinned", v.pinned());
         }
-        // the other comando instances on the comando Edge (record 124)
+        // the other comando instances on frontear (record 124)
         final ObjectNode instances = root.putObject("instances");
         instances.put("connected", s.instances().connected());
         final ArrayNode others = instances.putArray("others");
         s.instances().others().forEach(o -> others.addObject().put("name", o.name()).put("instance", o.slug()).put("role", o.role())
                 .put("version", o.version()).put("busy", o.busy()).put("denied", s.instances().denied().contains(o.slug()))
-                .put("present", o.present()).put("edge", o.edge()));
+                .put("present", o.present()).put("host", o.host()));
         final ArrayNode servers = root.putArray("servers");
         for (final ServerSwitch x : actions.servers()) {
             servers.addObject().put("name", x.name().toLowerCase(Locale.ROOT)).put("running", x.isRunning()).put("status", x.status());

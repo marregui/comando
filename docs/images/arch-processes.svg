@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-  <title>What runs on your machine: comando is one JVM holding the window, the reducer, the adapters, the MCP server and an in-process cdb; each running session is a claude -p process; beside them run the machine's cdb server, your own database servers, the comando Edge and the other comando instances</title>
+  <title>What runs on your machine: comando is one JVM holding the window, the reducer, the adapters, the MCP server and an in-process cdb; each running session is a claude -p process; beside them run the machine's cdb server, your own database servers, frontear, hosted by one instance, and the other comando instances</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
     <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
@@ -79,7 +79,7 @@
   <g font-size="16">
     <text x="56" y="480" fill="#6FAEE8">the machine's cdb</text>
     <text x="291" y="480" fill="#E8E8E8">your databases</text>
-    <text x="526" y="480" fill="#AEB6C1">the comando Edge</text>
+    <text x="526" y="480" fill="#AEB6C1">frontear</text>
     <text x="761" y="480" fill="#AEB6C1">other instances</text>
   </g>
   <g font-size="13" fill="#9AA0A6">

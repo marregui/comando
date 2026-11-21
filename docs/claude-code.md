@@ -339,7 +339,7 @@ ask them as ordinary question cards. Reflect and a typed command carry no argume
 | `result_stats` | `result`, `columns` | per column: type, NULLs, smallest and largest value, distinct values; a scan over 20 s answers with the rows it reached; at most two scans run at once |
 | `session_send` | `session`, `text` | prompts another running session, headed `[from session <sender>]`, without a card ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)); returns a cursor for `session_read` |
 | `session_read` | `session`, `after`, `wait_seconds` | another session's transcript as numbered blocks after a cursor, or the last 40; can wait up to 600 s until its turns are over |
-| `instances_list` | none | the other comando instances on the comando Edge: name, id, version, busy, and their sessions ([record 123](adr/0123-instances-consult-each-other.md)) |
+| `instances_list` | none | the other comando instances on frontear: name, id, version, busy, and their sessions ([record 123](adr/0123-instances-consult-each-other.md)) |
 | `instance_ask` | `instance`, `text`, `wait_seconds` | asks another instance; the reply is Claude's text in the turn that answers; waits 300 s by default, at most 600 s, else returns an id |
 | `instance_reply` | `id`, `wait_seconds` | the reply to an earlier `instance_ask`, read once |
 
@@ -355,7 +355,7 @@ window sends an intent that has no action.
 | approvals | `approval_answer`: allow with a scope, deny with a message, or answer a question card |
 | connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`\* |
 | views and the window | `view_pin`, `view_place`, `view_close`, `notice_dismiss` |
-| servers | `server_start`, `server_stop` for `edge` or `cdb`; an Edge another instance started is not stopped |
+| servers | `server_start`, `server_stop` for `frontear` or `cdb`; a frontear another instance hosts is not stopped |
 | commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
 | terminals | `terminal_list`, `terminal_start`, `terminal_send`, `terminal_read`, `terminal_interrupt`, `terminal_stop`\* ([record 148](adr/0148-agents-drive-a-panel-terminal.md)) |
 
@@ -368,7 +368,7 @@ Tools marked \* are destructive. Notes on single tools:
 - `terminal_read` returns numbered lines of plain text, at most 64 kB, and can wait up to 120 s. `terminal_send`
   raises a card ([§4.1](#41-approval-cards)).
 - The three instance tools are not in the registry: the window has no gesture for them. They work while this
-  instance is connected to the comando Edge ([Workbench](workbench.md)).
+  instance is connected to frontear ([Workbench](workbench.md)).
 
 Rules every action follows:
 
@@ -401,7 +401,7 @@ its panel, so its user sees the question. It replies when the turn ends, with on
 | `timeout` | the turn has not ended within 600 s |
 | `error` | anything else |
 
-The deny list trusts the name an asker gives; the comando Edge does not check it. So the list refuses an instance
+The deny list trusts the name an asker gives; frontear does not check it. So the list refuses an instance
 that names itself truly, and is not access control.
 
 **The audit log.** comando appends every tool call and approval decision to `audit/audit-<UTC date>.jsonl` in the
@@ -551,7 +551,7 @@ send a network request. A link opens in the browser only at your double click.
 ## Where next
 
 - [Tutorial](tutorial.md): start a session and answer your first card.
-- [Workbench](workbench.md): the window the tools act on, and the comando Edge.
+- [Workbench](workbench.md): the window the tools act on, and frontear.
 - [claude](modules/claude.md) and [mcp](modules/mcp.md): the classes behind this page.
 - [The kit](kit.md): the root a session runs on, and what a kit adds to it.
 - [Architecture](architecture.md): intents, the reducer, and why a tool and a gesture are the same thing.

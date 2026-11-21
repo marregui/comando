@@ -32,7 +32,7 @@ import dev.marregui.comando.testkit.States;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// [InstancesTab]: the comando instances on the Edge, their sessions, and the questions between them.
+/// [InstancesTab]: the comando instances on frontear, their sessions, and the questions between them.
 /// - a peer's name, its sessions' names and its question reach the tab as text, never as HTML
 /// - an instance the user opened and selected stays so when what its row says changes
 /// - a change only the icons show draws the rows again

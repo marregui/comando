@@ -22,7 +22,7 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
  * The menu bar, the icons and tooltips of its entries, and where every other command belongs. The bar holds only what
  * has no key and no control in the window, and what macOS expects in a menu: after the application menu macOS draws,
  * Edit (the clipboard and undo), Find (the view's and the files'), and Help, the palette and the help, flat. The
- * theme, the refreshing plots, the embedded server and the Edge are buttons at the tab row's right end instead
+ * theme, the refreshing plots, the embedded server and frontear are buttons at the tab row's right end instead
  * ({@link #corner}); the shell has none (record 114, amended 2026-11-01). Every other command keeps its key, its
  * control and the palette, and is listed by
  * its area ("Session", "Results") in the palette and the keyboard shortcuts.
@@ -53,15 +53,14 @@ final class Menus {
             Map.entry("help.keys", "keyboard"),
             Map.entry("help.markdown", "markdown"),
             Map.entry("help.log", "log"),
-            Map.entry("help.edgeLog", "log"),
             Map.entry("help.cdbLog", "log"),
             Map.entry("help.dataRoot", "comando-folder"),
             // the corner's buttons
             Map.entry("run.plotStop", "chart-stop"),
             Map.entry("server.start", "database-start"),
             Map.entry("server.stop", "database-stop"),
-            Map.entry("edge.start", "edge-start"),
-            Map.entry("edge.stop", "edge-stop"),
+            Map.entry("frontear.start", "frontear-start"),
+            Map.entry("frontear.stop", "frontear-stop"),
             // in no menu: the icon of the button or tab-menu item that does the same, shown in the palette
             Map.entry("panel.openSpec", "open-file"),
             Map.entry("files.settings", "folders"),
@@ -113,13 +112,12 @@ final class Menus {
             Map.entry("run.plotStop", "Stop every refreshing plot; the plots stay as they are"),
             Map.entry("server.start", "Start the cdb every instance shares: PostgreSQL wire 8812, HTTP 9000"),
             Map.entry("server.stop", "Stop the machine's cdb this comando started; its data stays"),
-            Map.entry("edge.start", "Start the comando Edge, one per machine: MQTT 18883, WebSocket 18800, UI 18080"),
-            Map.entry("edge.stop", "Stop the comando Edge this comando started; its data stays"),
+            Map.entry("frontear.start", "Start frontear, the instances' MQTT fabric: one node per machine, port 18883"),
+            Map.entry("frontear.stop", "Stop frontear; only the comando hosting it can stop it"),
             Map.entry("help.tutorial", "A hands-on tour of comando and its database, as a document"),
             Map.entry("help.keys", "Every key, in the side pane"),
             Map.entry("help.markdown", "What a panel's Markdown may hold and how its preview shows it"),
             Map.entry("help.log", "comando's log, read-only, following its end"),
-            Map.entry("help.edgeLog", "The comando Edge's hivemq.log in this instance's data root"),
             Map.entry("help.cdbLog", "cdb's log, stdout.log in the machine folder"),
             Map.entry("help.dataRoot", "Show comando's data root: panels, sessions, settings, logs"));
 
@@ -161,21 +159,22 @@ final class Menus {
                 menu("Find", null, "view.find", "view.findNext", "view.findPrevious", SEPARATOR, "view.findInFiles",
                         "view.nextHit", "view.previousHit"),
                 menu("Help", null, "view.palette", SEPARATOR, "help.tutorial", "help.keys", "help.markdown",
-                        "help.log", "help.edgeLog", "help.cdbLog", "help.dataRoot"));
+                        "help.log", "help.cdbLog", "help.dataRoot"));
     }
 
     /**
      * The buttons left of the theme's swatch, each its commands, shown by the first that can run: the refreshing
-     * plots, then the embedded server and the Edge, each only when comando has one. The shell has no button (record 114,
-     * amended 2026-11-01): it starts when its tab is shown; Start, Stop and Restart the shell are in the palette.
+     * plots, then the embedded server and frontear, each only when comando has one. The shell has no button
+     * (record 114, amended 2026-11-01): it starts when its tab is shown; Start, Stop and Restart the shell are in the
+     * palette.
      */
-    static List<List<String>> corner(final boolean server, final boolean edge) {
+    static List<List<String>> corner(final boolean server, final boolean fabric) {
         final List<List<String>> buttons = new ArrayList<>(List.of(List.of("run.plotStop")));
         if (server) {
             buttons.add(List.of("server.start", "server.stop"));
         }
-        if (edge) {
-            buttons.add(List.of("edge.start", "edge.stop"));
+        if (fabric) {
+            buttons.add(List.of("frontear.start", "frontear.stop"));
         }
         return List.copyOf(buttons);
     }
@@ -192,14 +191,14 @@ final class Menus {
         };
     }
 
-    /** The Connections tab's menu: the embedded server's start and stop, then the Edge's, each when comando has one. */
-    static List<String> toggles(final boolean server, final boolean edge) {
+    /** The Connections tab's menu: the embedded server's start and stop, then frontear's, each when comando has one. */
+    static List<String> toggles(final boolean server, final boolean fabric) {
         final List<String> ids = new ArrayList<>();
         if (server) {
             ids.addAll(List.of("server.start", "server.stop"));
         }
-        if (edge) {
-            ids.addAll(List.of("edge.start", "edge.stop"));
+        if (fabric) {
+            ids.addAll(List.of("frontear.start", "frontear.stop"));
         }
         return List.copyOf(ids);
     }
@@ -221,8 +220,9 @@ final class Menus {
         }
         SessionSpec.MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
         SessionSpec.EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));
-        put(a, "Connection", "server.start", "server.stop", "edge.start", "edge.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog",
-                "connection.test", "connection.copyDetails", "connection.clone", "connection.remove");
+        put(a, "Connection", "server.start", "server.stop", "frontear.start", "frontear.stop", "connection.toggle",
+                "connection.schema", "panel.bindConnection", "connection.dialog", "connection.test",
+                "connection.copyDetails", "connection.clone", "connection.remove");
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive", "run.plotStop");
         put(a, "Edit", "view.copy", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings", "files.jobs");

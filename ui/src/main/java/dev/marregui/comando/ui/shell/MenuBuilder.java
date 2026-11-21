@@ -33,13 +33,14 @@ final class MenuBuilder {
     }
 
     /**
-     * The buttons left of the theme's swatch: the live plots, and the embedded server and the Edge if any.
+     * The buttons left of the theme's swatch: the live plots, and the embedded server and frontear if any.
      */
     List<CommandButton> cornerButtons() {
         final List<CommandButton> buttons = new ArrayList<>();
-        for (final List<String> ids : Menus.corner(deps.server() != null, deps.edge() != null)) {
+        for (final List<String> ids : Menus.corner(deps.server() != null, deps.fabric() != null)) {
             final List<Command> commands = ids.stream().map(actions::get).toList();
-            final ServerToggle toggle = ids.contains("edge.start") ? deps.edge() : ids.contains("server.start") ? deps.server() : null;
+            final ServerToggle toggle = ids.contains("frontear.start") ? deps.fabric()
+                    : ids.contains("server.start") ? deps.server() : null;
             buttons.add(new CommandButton(commands, Menus::tip, toggle == null ? () -> "" : toggle::status));
         }
         return buttons;
@@ -49,7 +50,7 @@ final class MenuBuilder {
     void tabMenu(final int tab, final JPopupMenu menu) {
         final List<String> ids = switch (tab) {
             case SessionsSidebar.SESSIONS -> List.of("panel.new", "panel.reopen");
-            case SessionsSidebar.CONNECTIONS -> Menus.toggles(deps.server() != null, deps.edge() != null);
+            case SessionsSidebar.CONNECTIONS -> Menus.toggles(deps.server() != null, deps.fabric() != null);
             default -> Menus.folderTab(tab);
         };
         for (final String id : ids) {

@@ -6,7 +6,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import dev.marregui.comando.frontear.mqtt.Packet;
+import dev.marregui.comando.frontear.protocol.Packet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

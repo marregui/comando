@@ -74,8 +74,8 @@ import dev.marregui.comando.ui.kit.tree.TreeView;
 
 /**
  * The sidebar's Instances tab (record 124): what the other comando instances are doing, from their presence on the
- * comando Edge alone, and the questions asked and answered. A click on a row shows its card: an instance's role,
- * version, kit, uptime and whether it started the Edge; a session's state, what its turn is doing and for how long, its
+ * frontear alone, and the questions asked and answered. A click on a row shows its card: an instance's role,
+ * version, kit, uptime and whether it hosts frontear; a session's state, what its turn is doing and for how long, its
  * model, context, folder and tasks, and the first line of its last prompt and reply. A double click does nothing. An
  * instance that left stays, greyed, as last seen, until the user forgets it. The user asks an instance and refuses
  * one from its menu, and sets this instance's role from its own; everything shown comes from
@@ -83,15 +83,15 @@ import dev.marregui.comando.ui.kit.tree.TreeView;
  */
 final class InstancesTab {
 
-    /** The comando Edge's toggle, as far as the tab needs it: whether it runs, and a start. */
-    interface Edge {
+    /** frontear's toggle, as far as the tab needs it: whether it runs, and a start. */
+    interface Fabric {
         boolean running();
 
         boolean busy();
 
         void start();
 
-        Edge NONE = new Edge() {
+        Fabric NONE = new Fabric() {
             @Override
             public boolean running() {
                 return false;
@@ -122,7 +122,8 @@ final class InstancesTab {
     private final Navigator<Row> navigator;
     /** The rows shown, by their node's link: the key of each row's card. */
     private Map<String, Row> rows = Map.of();
-    private volatile Edge edge = Edge.NONE;
+    /** Written once on the EDT by {@link #fabric}; read on the EDT by the header and the start button. */
+    private volatile Fabric fabric = Fabric.NONE;
     private final JPanel root = new JPanel(new BorderLayout());
     /**
      * Why the tab has no instances to show; clipped rather than widening the sidebar: a label's minimum is its whole
@@ -134,10 +135,10 @@ final class InstancesTab {
             return new Dimension(0, super.getMinimumSize().height);
         }
     };
-    private final JButton start = new JButton("Start the Edge");
+    private final JButton start = new JButton("Start frontear");
     private final DefaultListModel<Consult> consultModel = new DefaultListModel<>();
     private final JList<Consult> consults = new JList<>(consultModel);
-    /** Refreshes the header while shown: the Edge starts and stops without a change of state. */
+    /** Refreshes the header while shown: frontear starts and stops without a change of state. */
     private final Timer header = new Timer(1_000, e -> header());
     private AppState state;
     private InstancesState shown;
@@ -152,9 +153,9 @@ final class InstancesTab {
         head.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_XS, Theme.SPACE_S));
         status.setForeground(Theme.MUTED_STRONG);
         status.putClientProperty("html.disable", Boolean.TRUE);
-        start.setIcon(Icons.get("edge-start"));
-        start.setToolTipText("Start the comando Edge, one per machine; every instance connects to it");
-        start.addActionListener(e -> edge.start());
+        start.setIcon(Icons.get("frontear-start"));
+        start.setToolTipText("Start frontear, the instances' MQTT fabric; every instance connects to it");
+        start.addActionListener(_ -> fabric.start());
         final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         buttons.setOpaque(false);
         buttons.add(start);
@@ -225,9 +226,9 @@ final class InstancesTab {
         return root;
     }
 
-    /** The Edge's toggle, set once the window has it. */
-    void edge(final Edge e) {
-        edge = e == null ? Edge.NONE : e;
+    /** frontear's toggle, set once the window has it. */
+    void fabric(final Fabric f) {
+        fabric = f == null ? Fabric.NONE : f;
         header();
     }
 
@@ -261,7 +262,7 @@ final class InstancesTab {
         i.others().forEach(o -> nodes.add(node(o, false, i.self().version(), byKey)));
         rows = byKey;
         navigator.view().update(new ViewSpec.TreeNode("", "", "", nodes));
-        // what only the icons show (busy, refused, the Edge started) leaves the nodes equal: the rows are drawn again
+        // what only the icons show (busy, refused, hosting frontear) leaves the nodes equal: the rows are drawn again
         navigator.view().rowsChanged();
     }
 
@@ -286,19 +287,19 @@ final class InstancesTab {
         return rest.startsWith(" · ") ? rest.substring(3) : rest;
     }
 
-    /** The header says something only while this instance is not connected: why, and the Edge's start. */
+    /** The header says something only while this instance is not connected: why, and frontear's start. */
     private void header() {
         final InstancesState i = shown == null ? InstancesState.NONE : shown;
-        final Edge e = edge;
+        final Fabric e = fabric;
         String text;
         if (i.connected()) {
             text = "";
         } else if (e.busy()) {
-            text = "The comando Edge is starting or stopping…";
+            text = "frontear is starting or stopping…";
         } else if (e.running()) {
-            text = "Connecting to the comando Edge…";
+            text = "Connecting to frontear…";
         } else {
-            text = "The comando Edge is not running: instances reach each other only through it";
+            text = "frontear is not running: instances reach each other only through it";
         }
         if (!text.equals(status.getText())) {
             status.setText(text);
@@ -308,7 +309,7 @@ final class InstancesTab {
             status.setVisible(!text.isEmpty());
             root.revalidate();
         }
-        final boolean offer = !i.connected() && !e.running() && !e.busy() && e != Edge.NONE;
+        final boolean offer = !i.connected() && !e.running() && !e.busy() && e != Fabric.NONE;
         if (start.isVisible() != offer) {
             start.setVisible(offer);
             root.revalidate();
@@ -450,8 +451,8 @@ final class InstancesTab {
         if (in.present() && !up.isEmpty()) {
             f.add(Map.entry("Up", up));
         }
-        if (in.edge()) {
-            f.add(Map.entry("Edge", "started the comando Edge, and only it stops it"));
+        if (in.host()) {
+            f.add(Map.entry("Host", "hosts frontear, and only it stops it"));
         }
         f.add(Map.entry("Id", in.slug()));
         if (denied) {
@@ -463,8 +464,9 @@ final class InstancesTab {
     /** An instance's state: busy and how many of its sessions run a turn, idle, or when it was last seen. */
     static String instanceState(final Instance in, final boolean self, final long now, final ZoneId zone) {
         if (!in.present()) {
-            return self ? "not connected to the comando Edge"
-                    : in.lastSeen() > 0 ? "left; last seen " + when(in.lastSeen(), now, zone) : "not reachable: this instance is not on the Edge";
+            return self ? "not connected to frontear"
+                    : in.lastSeen() > 0 ? "left; last seen " + when(in.lastSeen(), now, zone)
+                    : "not reachable: this instance is not on frontear";
         }
         final long busy = in.sessions().stream().filter(Member::busy).count();
         final int all = in.sessions().size();
@@ -601,8 +603,8 @@ final class InstancesTab {
     }
 
     /**
-     * A dot in the colour of busy, idle or refused beside an icon, none for an instance that left; then the Edge's
-     * antenna when the instance started the comando Edge.
+     * A dot in the colour of busy, idle or refused beside an icon, none for an instance that left; then frontear's
+     * antenna when the instance hosts the frontear node.
      */
     record Dot(Icon icon, Color color, Icon mark) implements Icon {
         @Override
@@ -637,7 +639,7 @@ final class InstancesTab {
         }
     }
 
-    /** A row's icon: a session's, or an instance's, with the dot of busy, idle or refused and the Edge's antenna. */
+    /** A row's icon: a session's, or an instance's, with the dot of busy, idle or refused and frontear's antenna. */
     private Icon icon(final Row r) {
         if (r == null) {
             return null;
@@ -648,7 +650,7 @@ final class InstancesTab {
         final Instance in = r.instance();
         final boolean denied = shown != null && shown.denied().contains(in.slug());
         final Color dot = !in.present() ? null : denied ? Theme.DANGER : in.busy() ? Theme.CLAUDE : Theme.OK;
-        return new Dot(Icons.get("instances"), dot, in.edge() ? Icons.get("edge") : null);
+        return new Dot(Icons.get("instances"), dot, in.host() ? Icons.get("frontear") : null);
     }
 
     /** A row's name: muted for an instance that left, in the attention colour for another comando version. */

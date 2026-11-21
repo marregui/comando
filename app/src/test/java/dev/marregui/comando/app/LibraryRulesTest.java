@@ -7,7 +7,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 /// The libraries comando replaced with its own code stay out (record 157).
 ///
 /// - JSON is `core.json`, not Jackson
-/// - MQTT is `frontear.mqtt`, not the HiveMQ MQTT client or Netty
+/// - MQTT is `frontear.protocol`, not the HiveMQ MQTT client or Netty
 /// - diffs, SQL completion and SVG icons are comando's, not java-diff-utils, AutoComplete or FlatLaf Extras
 class LibraryRulesTest {
 

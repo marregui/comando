@@ -270,10 +270,12 @@ final class Commands {
             cmd("server.stop", "Stop the machine's cdb", null, () -> deps.server().toggle(),
                     () -> deps.server().isRunning() && !deps.server().busy());
         }
-        if (deps.edge() != null) {
+        if (deps.fabric() != null) {
             // disabled while a start or stop is under way: the button greys out and its tooltip says which
-            cmd("edge.start", "Start the comando Edge", null, () -> deps.edge().toggle(), () -> !deps.edge().isRunning() && !deps.edge().busy());
-            cmd("edge.stop", "Stop the comando Edge", null, () -> deps.edge().toggle(), () -> deps.edge().isRunning() && !deps.edge().busy());
+            cmd("frontear.start", "Start frontear", null, () -> deps.fabric().toggle(),
+                    () -> !deps.fabric().isRunning() && !deps.fabric().busy());
+            cmd("frontear.stop", "Stop frontear", null, () -> deps.fabric().toggle(),
+                    () -> deps.fabric().isRunning() && !deps.fabric().busy());
         }
         // panel: its results
         cmd("run.insertResult", "Attach to the editor", key(KeyEvent.VK_I, shortcut | SHIFT), this::insertLastResult, this::hasRun);
@@ -365,7 +367,6 @@ final class Commands {
         cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, shortcut | SHIFT), help::showKeys);
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
-        cmd("help.edgeLog", "Show the Edge's log", null, () -> help.showLog(deps.edge()), () -> deps.edge() != null);
         cmd("help.cdbLog", "Show cdb's log", null, () -> help.showLog(deps.server()), () -> deps.server() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
         // the themes, from the swatch beside New panel: a ground and its tint chosen together, each with its swatch

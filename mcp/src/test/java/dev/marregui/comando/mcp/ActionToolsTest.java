@@ -168,17 +168,17 @@ class ActionToolsTest {
     /// lists each server with whether it runs; an unknown server is answered with the ones there are.
     @Test
     void anAgentStartsAndStopsTheServersAndTheStateShowsThem() throws Exception {
-        final FakeServer edge = new FakeServer("Edge", false);
+        final FakeServer frontear = new FakeServer("frontear", false);
         final FakeServer cdb = new FakeServer("cdb", true);
-        tools.servers(List.of(edge, cdb));
-        assertThat(call("foreman", "server_start", "{\"server\":\"edge\"}").text()).isEqualTo("Edge up");
+        tools.servers(List.of(frontear, cdb));
+        assertThat(call("foreman", "server_start", "{\"server\":\"frontear\"}").text()).isEqualTo("frontear up");
         final McpTools.Outcome refused = call("foreman", "server_stop", "{\"server\":\"cdb\"}");
         assertThat(refused.error()).as("a refusal is a tool error").isTrue();
-        assertThat(edge.asked).containsExactly(true);
+        assertThat(frontear.asked).containsExactly(true);
         assertThat(cdb.asked).containsExactly(false);
-        assertThat(call("foreman", "server_start", "{\"server\":\"kafka\"}").text()).contains("one of [edge, cdb]");
+        assertThat(call("foreman", "server_start", "{\"server\":\"kafka\"}").text()).contains("one of [frontear, cdb]");
         final JsonNode servers = Json.readTree(tools.stateJson()).path("servers");
-        assertThat(servers.findValuesAsString("name")).containsExactly("edge", "cdb");
+        assertThat(servers.findValuesAsString("name")).containsExactly("frontear", "cdb");
         assertThat(servers.get(0).path("running").asBoolean()).isTrue();
         assertThat(sink.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("foreman: server start"));
     }
@@ -238,8 +238,8 @@ class ActionToolsTest {
                 .withApprovals(List.of(card(41, "users"))));
         // work, in panel one, is foreman's too: a checkpoint and a command go to a session with a panel
         state.set(state.get().withSession(state.get().session("work").orElseThrow().withSpec(States.WORK.withCreatedBy("foreman"))));
-        final FakeServer edge = new FakeServer("Edge", false);
-        tools.servers(List.of(edge));
+        final FakeServer frontear = new FakeServer("frontear", false);
+        tools.servers(List.of(frontear));
         final String dir = home.toString().replace("\\", "\\\\");
         final Map<String, String> calls = new LinkedHashMap<>();
         calls.put("session_new", "{\"name\":\"fresh-one\",\"work_dir\":\"" + dir + "\"}");
@@ -286,8 +286,8 @@ class ActionToolsTest {
         calls.put("notice_dismiss", "{}");
         calls.put("gradle_run", "{\"panel\":\"" + p1 + "\",\"tasks\":\"build\"}");
         calls.put("command_cancel", "{\"run_id\":3}");
-        calls.put("server_start", "{\"server\":\"edge\"}");
-        calls.put("server_stop", "{\"server\":\"edge\"}");
+        calls.put("server_start", "{\"server\":\"frontear\"}");
+        calls.put("server_stop", "{\"server\":\"frontear\"}");
         calls.put("folders_browse", "{}");
         calls.put("terminal_list", "{}");
         calls.put("terminal_start", "{\"panel\":\"" + p1 + "\"}");
@@ -303,7 +303,7 @@ class ActionToolsTest {
             final int before = sink.intents().size();
             final McpTools.Outcome out = call("foreman", c.getKey(), c.getValue());
             if (!c.getKey().equals("server_stop")) {
-                // the fake refuses every stop, as for an Edge another instance started: its ask is checked below
+                // the fake refuses every stop, as for frontear another instance started: its ask is checked below
                 assertThat(out.error()).as(c.getKey() + ": " + out.text()).isFalse();
             }
             if (!a.intents().isEmpty()) {
@@ -311,7 +311,7 @@ class ActionToolsTest {
                         .anyMatch(i -> a.intents().stream().anyMatch(k -> k.isInstance(i)));
             }
         }
-        assertThat(edge.asked).as("server_start, then server_stop").containsExactly(true, false);
+        assertThat(frontear.asked).as("server_start, then server_stop").containsExactly(true, false);
     }
 
     /// A connection an agent points at another host keeps the password the same call gives, even when it equals the
@@ -404,7 +404,7 @@ class ActionToolsTest {
         return tools.call(caller, tool, Json.readTree(args));
     }
 
-    /// A server that records the directions asked of it; a stop is refused, as for an Edge another instance started.
+    /// A server that records the directions asked of it; a stop is refused, as for frontear another instance started.
     private static final class FakeServer implements ServerSwitch {
         private final String name;
         private volatile boolean running;

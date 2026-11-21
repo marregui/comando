@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-19 | proposed; v1 being built in task 200 | Miguel and Claude |
+| 2026-11-19 | proposed; v1 being built in task 200; superseded in part by [record 185](0185-frontear-is-the-only-fabric.md) | Miguel and Claude |
 
 ## 1. Context
 

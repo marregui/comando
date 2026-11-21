@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="580" viewBox="0 0 1000 580" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-  <title>A question from one instance to another: the asking session calls instance_ask; its instance publishes the question to the other's inbox on the comando Edge with a response topic and correlation data; the instance asked makes or reuses a consult session and sends it the question as a prompt; the turn's closing text goes back to the asker's reply topic, where the correlation data matches it to the waiting call</title>
+  <title>A question from one instance to another: the asking session calls instance_ask; its instance publishes the question to the other's inbox on frontear with a response topic and correlation data; the instance asked makes or reuses a consult session and sends it the question as a prompt; the turn's closing text goes back to the asker's reply topic, where the correlation data matches it to the waiting call</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
     <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
   </defs>
   <rect width="1000" height="580" fill="url(#bg)"/>
   <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">INSTANCES · ONE QUESTION</text>
-  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One comando asks another, through the comando Edge</text>
+  <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One comando asks another, through frontear</text>
 
   <!-- heads: centres 120, 310, 500, 690, 880 -->
   <g fill="#1E1E1E" stroke-width="1.3">
@@ -19,7 +19,7 @@
   <g text-anchor="middle" font-size="16">
     <text x="120" y="136" fill="#D98E5F">a session</text>
     <text x="310" y="136" fill="#6FAEE8">instance a</text>
-    <text x="500" y="136" fill="#AEB6C1">comando Edge</text>
+    <text x="500" y="136" fill="#AEB6C1">frontear</text>
     <text x="690" y="136" fill="#6FAEE8">instance b</text>
     <text x="880" y="136" font-family="Menlo, Consolas, monospace" font-size="15" fill="#D98E5F">consult-a</text>
   </g>

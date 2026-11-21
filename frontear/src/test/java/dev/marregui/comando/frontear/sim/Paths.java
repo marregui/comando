@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import dev.marregui.comando.frontear.mqtt.Topics;
+import dev.marregui.comando.frontear.protocol.Topics;
 
 /// The delivery paths of a mesh whose filters do not change: every walk a message on a topic can make from the node
 /// that published it, one carrier at a time, as the link contract routes it. A carrier is a link's OUT side, from its

@@ -51,7 +51,7 @@ class ThreadRulesTest {
     /** frontear's launcher: its shutdown hook, which the JVM owns (record 184). */
     private static final String FRONTEAR = "dev.marregui.comando.frontear.Frontear";
     /** frontear's link-log force: one platform thread per log, whose forces would pin a virtual thread (record 184). */
-    private static final String FRONTEAR_LOG_FORCER = "dev.marregui.comando.frontear.queue.LogForcer";
+    private static final String FRONTEAR_LOG_FORCER = "dev.marregui.comando.frontear.store.LogForcer";
 
     /// No class but [StateLoop], [Watchdog], `ClaudeProcess`, [Main], cdb's launcher (its shutdown hook), cdb's
     /// applier, query pool and log forcer, and frontear's launcher (its shutdown hook) and link-log forcer calls

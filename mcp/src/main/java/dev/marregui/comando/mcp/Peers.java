@@ -15,7 +15,6 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -46,6 +45,7 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.Notice;
@@ -55,15 +55,16 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 
 /**
- * The comando instances on one machine consulting each other through the comando Edge (record 123). Each instance
+ * The comando instances on one machine consulting each other through frontear (records 123 and 186). Each instance
  * publishes its presence, retained, when it connects and when it changes (at most every 2 s), and clears it on close;
  * its last will clears it when the instance dies. A question goes to the peer's inbox with a response topic and
- * correlation data; the peer prompts its session {@code consult-<asker>} through that session's panel, so its user sees
- * the question, and replies with Claude's text in the turn that answers it. Only the text a session chose to send and
- * the reply's text travel, never a brain's or a kit's files. A peer the user listed in the data root's
- * {@code agents.json} ({@code {"peers": {"deny": ["<id>"]}}}) is refused.
+ * correlation data; the peer prompts the session the question names, made when missing, or else its session
+ * {@code consult-<asker>}, through that session's panel, so its user sees the question, and replies with Claude's text
+ * in the turn that answers it. Only the text a session chose to send and the reply's text travel, never a brain's or a
+ * kit's files. A peer the user listed in the data root's {@code agents.json} ({@code {"peers": {"deny": ["<id>"]}}}) is
+ * refused.
  * <p>
- * A presence says what the instance is doing, so another knows without asking: whether it started the Edge, and for
+ * A presence says what the instance is doing, so another knows without asking: whether it hosts frontear, and for
  * each session its state, what its turn is doing and for how long, its model, effort, context, folder and branch, its
  * background tasks, and the first line of its last prompt and of its last reply. Those two lines are the only words of a
  * conversation it carries; on a broker off this machine they leave it. The instances seen are remembered in the data
@@ -88,6 +89,10 @@ public final class Peers implements AutoCloseable, InstancesPort {
     static final String CONSULT = "consult-";
     /** Who a consult session is created and prompted by: {@code peer:<id>}. */
     static final String PEER = "peer:";
+    /** The main instance's id: the user's own, unnamed, the overseer of the others (record 186). */
+    static final String MAIN = "main";
+    /** The header's mark after the asker's name when the asker is {@link #MAIN}. */
+    static final String OVERSEER = " · overseer";
     static final String OK = "ok";
     static final String REFUSED = "refused";
     static final String TIMEOUT = "timeout";
@@ -109,9 +114,9 @@ public final class Peers implements AutoCloseable, InstancesPort {
     static final int QUESTION_CHARS = 4_000;
     /** How long a new consult session may take to appear in the state after it was asked for. */
     private static final Duration MAKE_WITHIN = Duration.ofSeconds(5);
-    static final String EDGE_DOWN = "this instance is not connected to the comando Edge, so it reaches no other "
-            + "instance: start the Edge with its toggle at the top of the workspace, right of cdb's, in any comando "
-            + "instance; presence resumes within seconds once it runs";
+    static final String FABRIC_DOWN = "this instance is not connected to frontear, so it reaches no other instance: "
+            + "start frontear with its toggle at the top of the workspace, right of cdb's, in any comando instance; "
+            + "presence resumes within seconds once it runs";
 
     /** This instance: its name as the Dock shows it, its id in the topics, its version, what it is for. */
     public record Me(String name, String slug, String version, String role) {
@@ -147,7 +152,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /** Another instance, as its presence says. */
     record Peer(String slug, String name, String version, String role, String kit, boolean busy, String started,
-                List<InstancesState.Member> sessions, boolean edge) {
+                List<InstancesState.Member> sessions, boolean host) {
     }
 
     /** An instance as this one last saw it: its presence, and when it was last seen present (0 while it is). */
@@ -172,6 +177,18 @@ public final class Peers implements AutoCloseable, InstancesPort {
      * reply of a later schema is read for the keys this schema has, as it is shown and never stored.
      */
     static final int PEER_SCHEMA = 1;
+    /** The presence's key saying whether the instance hosts frontear. */
+    static final String HOST_KEY = "host";
+    /**
+     * The key a comando before record 186 writes in place of {@link #HOST_KEY}, read when that one is missing; dropped
+     * one release after it.
+     */
+    static final String OLD_HOST_KEY = "edge";
+    /**
+     * The question's key naming the peer's session that answers it (record 186); a peer before it ignores the key and
+     * answers from its {@code consult-<asker>}, so the schema stays {@link #PEER_SCHEMA}.
+     */
+    static final String TO = "to";
 
     /** A reply to a question, as it travels. */
     record Reply(String status, String text, String instance, String session) {
@@ -180,11 +197,12 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /**
      * A question this instance asked, waiting for its reply.
      *
+     * @param target    the peer's session the question names; empty for the peer's {@code consult-<this instance>}
      * @param sentNanos when it was asked, by {@link System#nanoTime}: it expires {@link #EXPIRE_AFTER} past the answer's
-     *                  bound, so a reply lost with its peer (gone while this instance was off the Edge) is not waited
+     *                  bound, so a reply lost with its peer (gone while this instance was off frontear) is not waited
      *                  for until comando quits
      */
-    private record Asked(String peer, String peerName, CompletableFuture<Reply> reply, long sentNanos) {
+    private record Asked(String peer, String peerName, String target, CompletableFuture<Reply> reply, long sentNanos) {
     }
 
     private final PeerBroker broker;
@@ -208,8 +226,13 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private volatile String kit = "";
     /** What this instance is for; part of the presence, changed from the Instances tab. */
     private volatile String role;
-    /** Whether this instance started the comando Edge; part of the presence. */
-    private volatile BooleanSupplier edge = () -> false;
+    /** Whether this instance hosts frontear; part of the presence. */
+    private volatile BooleanSupplier host = () -> false;
+    /**
+     * This instance's sessions blocked now in an {@code instance_ask} or {@code instance_reply} wait, with how many
+     * waits each: a question to one of them could not be taken before both waits ran out, so it is refused at once.
+     */
+    private final Map<String, Integer> waiting = new ConcurrentHashMap<>();
     /** The data root's {@code instances-seen.json} and {@code instance.json}; null until {@link #dataRoot} names them. */
     private volatile Path seenFile;
     private volatile Path instanceFile;
@@ -282,8 +305,9 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 final JsonNode root = Json.readTree(Mapped.text(seenFile));
                 if (later(root)) {
                     seenRefused = true;
-                    LOG.log(System.Logger.Level.WARNING, seenFile + " is of a later version; kept as it is, not written, and the instances seen "
-                            + "before are not listed");
+                    LOG.log(System.Logger.Level.WARNING, "kept the instances seen as they are, not written and not "
+                            + "listed: the file is of a later version [file=" + seenFile + ", version="
+                            + root.path("version").asInt() + ", supported=" + FILE_VERSION + ']');
                     // the user is told once, naming the file, both versions and that nothing is saved to it (record 133)
                     sink.dispatch(new Intent.Notify(Notice.Level.WARN, SEEN_FILE + " is of version " + root.path("version").asInt() + ", written by a "
                             + "later comando; this one reads version " + FILE_VERSION + ". It is kept as it is and nothing is saved to it; the instances "
@@ -297,21 +321,20 @@ public final class Peers implements AutoCloseable, InstancesPort {
                     }
                 }
             } catch (final IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot read " + seenFile + "; the instances seen before are not listed", e);
+                LOG.log(System.Logger.Level.WARNING, "cannot read the instances seen; they are not listed [file="
+                        + seenFile + ']', e);
             }
         }
     }
 
-    /** Whether this instance started the comando Edge, asked at each tick; part of the presence. */
-    public void edge(final BooleanSupplier startedHere) {
-        edge = startedHere == null ? () -> false : startedHere;
+    /** Whether this instance hosts frontear, asked at each tick; part of the presence. */
+    public void host(final BooleanSupplier hostedHere) {
+        host = hostedHere == null ? () -> false : hostedHere;
     }
 
     /** An instance's id in the topics: its name in lowercase letters, digits and dashes; {@code main} when unnamed. */
     public static String slug(final String instanceName) {
-        final String s = instanceName == null ? "" : instanceName.strip().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("^-+|-+$", "");
-        return s.isEmpty() ? "main" : s;
+        return InstanceName.slug(instanceName);
     }
 
     static String presenceTopic(final String slug) {
@@ -404,15 +427,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /**
      * Ends the questions asked longer ago than the answer's bound, the send's and {@link #EXPIRE_AFTER}: the peer
      * answers within its bound or not at all, so a reply that has not come by then was lost (the peer left while this
-     * instance was off the Edge, and no presence of it comes again).
+     * instance was off frontear, and no presence of it comes again).
      */
     private void expire() {
         final long now = System.nanoTime();
         final long within = expireWithin.toNanos();
         asked.forEach((id, a) -> {
             if (now - a.sentNanos() > within) {
-                a.reply().complete(new Reply(ERROR, a.peerName() + " sent no reply within " + expireWithin.toSeconds() + " s; it may have left "
-                        + "the comando Edge", a.peerName(), ""));
+                a.reply().complete(new Reply(ERROR, a.peerName() + " sent no reply within " + expireWithin.toSeconds()
+                        + " s; it may have left frontear", a.peerName(), ""));
             }
         });
     }
@@ -427,7 +450,11 @@ public final class Peers implements AutoCloseable, InstancesPort {
         p.put("kit", kit);
         p.put("started", started);
         final AppState s = state.get();
-        p.put("edge", edge.getAsBoolean());
+        final boolean hosts = host.getAsBoolean();
+        p.put(HOST_KEY, hosts);
+        // a comando before record 186 reads only this key; written beside HOST_KEY for one release after record 186,
+        // then dropped with OLD_HOST_KEY
+        p.put(OLD_HOST_KEY, hosts);
         p.put("busy", s.sessions().stream().anyMatch(SessionState::isBusy));
         final ArrayNode sessions = p.putArray("sessions");
         for (final InstancesState.Member m : members(s)) {
@@ -494,7 +521,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         });
         return new Peer(slug, p.path("name").asString(slug), p.path("version").asString(""), p.path("role").asString(""),
                 p.path("kit").asString(""), p.path("busy").asBoolean(false), p.path("started").asString(""), List.copyOf(sessions),
-                p.path("edge").asBoolean(false));
+                p.path(HOST_KEY).asBoolean(p.path(OLD_HOST_KEY).asBoolean(false)));
     }
 
     private void presence(final PeerBroker.Message m) {
@@ -510,7 +537,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             }
             asked.forEach((id, a) -> {
                 if (a.peer().equals(slug)) {
-                    a.reply().complete(new Reply(ERROR, name + " left the comando Edge before it replied", name, ""));
+                    a.reply().complete(new Reply(ERROR, name + " left frontear before it replied", name, ""));
                 }
             });
             show();
@@ -546,41 +573,62 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         final String from = slug(q.path("from").asString(""));
         final String fromName = q.path("name").asString(from);
+        // the asker's correlation data keys the question's log lines here and in the asker's
+        final String correlation = new String(m.correlation(), StandardCharsets.UTF_8);
         // delivered at least once: the same question again (its asker and correlation data) is answered once
-        final String key = from + ' ' + new String(m.correlation(), StandardCharsets.UTF_8);
+        final String key = from + ' ' + correlation;
         synchronized (inboxSeen) {
             if (!inboxSeen.add(key)) {
-                LOG.log(System.Logger.Level.DEBUG, "a question delivered again, dropped [instance=" + from + ']');
+                LOG.log(System.Logger.Level.DEBUG, "a question delivered again, dropped [id=" + correlation
+                        + ", instance=" + from + ']');
                 return;
             }
         }
         if (q.path("schema").asInt(1) > PEER_SCHEMA) {
+            LOG.log(System.Logger.Level.INFO, "question refused: of a later schema [id=" + correlation + ", instance="
+                    + from + ", schema=" + q.path("schema") + ", supported=" + PEER_SCHEMA + ']');
             send(m.responseTopic(), m.correlation(), new Reply(REFUSED, me.name() + " reads questions of schema " + PEER_SCHEMA + " and this one is of "
                     + q.path("schema") + ": upgrade comando on " + me.name(), me.name(), ""));
             return;
         }
         final String id = UUID.randomUUID().toString();
-        record(new InstancesState.Consult(id, InstancesState.Direction.ANSWERED, from, fromName, CONSULT + from,
+        // the session the question names answers it; none named, this instance's consult session for the asker
+        final String named = q.path(TO).asString("").strip();
+        final String session = named.isEmpty() ? CONSULT + from : named;
+        LOG.log(System.Logger.Level.INFO, "question received [id=" + correlation + ", instance=" + from + ", session="
+                + session + ']');
+        record(new InstancesState.Consult(id, InstancesState.Direction.ANSWERED, from, fromName, session,
                 McpTools.clip(q.path("text").asString(""), QUESTION_CHARS), InstancesState.Status.WAITING, System.currentTimeMillis(), 0, ""));
         errands.start("peer-answer", () -> {
             Reply r;
             try {
-                r = answer(from, fromName, q.path("session").asString(""), q.path("text").asString(""));
+                r = answer(correlation, from, fromName, q.path("session").asString(""), session,
+                        q.path("text").asString(""));
             } catch (final RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "a question failed [instance=" + from + ']', e);
-                r = new Reply(ERROR, me.name() + " could not answer: " + e.getMessage(), me.name(), CONSULT + from);
+                LOG.log(System.Logger.Level.WARNING, "a question failed [id=" + correlation + ", instance=" + from
+                        + ']', e);
+                r = new Reply(ERROR, me.name() + " could not answer: " + e.getMessage(), me.name(), session);
             }
+            LOG.log(System.Logger.Level.INFO, "question ended [id=" + correlation + ", instance=" + from + ", status="
+                    + r.status() + ", session=" + r.session() + ']');
             ended(id, r);
             send(m.responseTopic(), m.correlation(), r);
         });
     }
 
     /**
-     * Prompts this instance's session {@code consult-<from>} with the question, headed with who asks, in its panel;
-     * created by {@code peer:<from>} in the default folder on the first question. Waits for the turn that answers it.
+     * Prompts this instance's {@code session}, the one the question names or {@code consult-<from>}, with the
+     * question, headed with who asks, in its panel; created by {@code peer:<from>} in the default folder when missing.
+     * Waits for the turn that answers it. A session blocked in a wait of its own for a reply is refused at once.
      */
-    private Reply answer(final String from, final String fromName, final String fromSession, final String text) {
-        final String session = CONSULT + from;
+    private Reply answer(
+            final String correlation,
+            final String from,
+            final String fromName,
+            final String fromSession,
+            final String session,
+            final String text
+    ) {
         final Optional<String> refused = refused(from);
         if (refused.isPresent()) {
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, "Refused a question from instance " + fromName + ": " + refused.get(), false));
@@ -589,7 +637,13 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (text.isBlank()) {
             return new Reply(ERROR, "the question was empty", me.name(), session);
         }
-        final String prompt = "[from instance " + fromName + (fromSession.isBlank() ? "" : " · session " + fromSession) + "]\n" + text.strip();
+        if (waiting.containsKey(session)) {
+            // the asker may be the very session that waits for this one's reply: both would wait until their bounds
+            return new Reply(ERROR, "session " + session + " of " + me.name() + " is waiting for a reply of its own "
+                    + "(instance_ask), so it cannot take this question now: put the question in your reply to it, ask "
+                    + "again once its wait ended, or name another session", me.name(), session);
+        }
+        final String prompt = header(from, fromName, fromSession) + '\n' + text.strip();
         final long deadline = System.nanoTime() + answerWithin.toNanos();
         int cursor;
         // two questions arriving together make the session once, and reach it in the order they came
@@ -598,8 +652,16 @@ public final class Peers implements AutoCloseable, InstancesPort {
             final Optional<SessionState> existing = s.session(session);
             cursor = existing.isPresent() ? transcripts.of(session).size() : 0;
             if (existing.isEmpty()) {
-                // a session comes with its own panel (record 88), where the question shows
-                sink.dispatch(new Intent.SaveSession("", SessionSpec.fresh(session, workDir).withCreatedBy(PEER + from)));
+                // a session comes with its own panel (record 88), where the question shows; a name the reducer
+                // refuses (a panel of another session's has that title) is refused here, with the reducer's reason
+                final Intent.SaveSession save =
+                        new Intent.SaveSession("", SessionSpec.fresh(session, workDir).withCreatedBy(PEER + from));
+                final Optional<String> why = Reducer.refusal(s, save);
+                if (why.isPresent()) {
+                    return new Reply(ERROR, "session " + session + " cannot be made in " + me.name() + ": " + why.get(),
+                            me.name(), session);
+                }
+                sink.dispatch(save);
                 if (!awaitSession(session, deadline)) {
                     return Thread.currentThread().isInterrupted() ? closing(session)
                             : new Reply(ERROR, "session " + session + " could not be made in " + me.name(), me.name(), session);
@@ -608,6 +670,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 sink.dispatch(new Intent.OpenSession(session, s.focused(), PanelId.random()));
             }
             sink.dispatch(new Intent.PromptSession(session, prompt, PEER + from));
+            LOG.log(System.Logger.Level.INFO, "question prompted [id=" + correlation + ", session=" + session + ']');
         }
         Block block = null;
         try {
@@ -687,6 +750,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
         return -1;
     }
 
+    /**
+     * The question's first line: {@code [from instance <name>[ · overseer][ · session <s>]]}, the mark when the asker
+     * is {@link #MAIN}; transcripts draw it as a label, so its shape stays.
+     */
+    private static String header(final String from, final String fromName, final String fromSession) {
+        return "[from instance " + fromName + (MAIN.equals(from) ? OVERSEER : "")
+                + (fromSession.isBlank() ? "" : " · session " + fromSession) + ']';
+    }
+
     private Reply timeout(final String session) {
         return new Reply(TIMEOUT, "session " + session + " of " + me.name() + " did not finish its turn within " + answerWithin.toSeconds()
                 + " s; its user sees it in that session's panel", me.name(), session);
@@ -705,7 +777,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
         p.put("session", r.session());
         broker.publish(topic, p.toString().getBytes(StandardCharsets.UTF_8), false, null, correlation).whenComplete((v, e) -> {
             if (e != null) {
-                LOG.log(System.Logger.Level.WARNING, "a reply was not sent [topic=" + topic + ']', e);
+                LOG.log(System.Logger.Level.WARNING, "a reply was not sent [id="
+                        + new String(correlation, StandardCharsets.UTF_8) + ", topic=" + topic + ']', e);
             }
         });
     }
@@ -754,14 +827,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
     }
 
-    /** {@code instances_list}: the other instances present on the comando Edge. */
+    /** {@code instances_list}: the other instances present on frontear. */
     McpTools.Outcome list() {
         if (!broker.connected()) {
-            return McpTools.Outcome.fail(EDGE_DOWN);
+            return McpTools.Outcome.fail(FABRIC_DOWN);
         }
         final List<Peer> others = others();
         if (others.isEmpty()) {
-            return McpTools.Outcome.ok("no other instance is connected to the comando Edge; this one is " + me.name() + " (instance " + me.slug() + ')');
+            return McpTools.Outcome.ok("no other instance is connected to frontear; this one is " + me.name()
+                    + " (instance " + me.slug() + ')');
         }
         final StringBuilder out = new StringBuilder();
         for (final Peer p : others) {
@@ -785,48 +859,67 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return McpTools.Outcome.fail("instance and text are required");
         }
         if (!broker.connected()) {
-            return McpTools.Outcome.fail(EDGE_DOWN);
+            return McpTools.Outcome.fail(FABRIC_DOWN);
         }
         if (to.equalsIgnoreCase(me.slug()) || to.equalsIgnoreCase(me.name())) {
             return McpTools.Outcome.fail(to + " is this instance; instance_ask asks another one");
         }
         final Optional<Peer> peer = others().stream().filter(p -> p.slug().equalsIgnoreCase(to) || p.name().equalsIgnoreCase(to)).findFirst();
         if (peer.isEmpty()) {
-            return McpTools.Outcome.fail("no instance '" + to + "' is connected to the comando Edge; instances: " + names());
+            return McpTools.Outcome.fail("no instance '" + to + "' is connected to frontear; instances: " + names());
         }
         final Peer p = peer.get();
         final String id = UUID.randomUUID().toString();
-        final Asked a = new Asked(p.slug(), p.name(), new CompletableFuture<>(), System.nanoTime());
+        final String target = args.path("session").asString("").strip();
+        final Asked a = new Asked(p.slug(), p.name(), target, new CompletableFuture<>(), System.nanoTime());
         asked.put(id, a);
         record(new InstancesState.Consult(id, InstancesState.Direction.ASKED, p.slug(), p.name(), caller, McpTools.clip(text, QUESTION_CHARS),
                 InstancesState.Status.WAITING, System.currentTimeMillis(), 0, ""));
-        a.reply().whenComplete((r, e) -> ended(id, r != null ? r : new Reply(ERROR, e == null ? "no reply" : String.valueOf(e.getMessage()),
-                p.name(), "")));
-        final ObjectNode q = Json.object();
-        q.put("schema", PEER_SCHEMA);
-        q.put("from", me.slug());
-        q.put("name", me.name());
-        q.put("session", caller);
-        q.put("text", text);
+        a.reply().whenComplete((r, e) -> {
+            final Reply done = r != null ? r : new Reply(ERROR, e == null ? "no reply" : String.valueOf(e.getMessage()),
+                    p.name(), "");
+            // every end of a question asked comes here once: its reply, a failed send, an expiry, the peer gone, close
+            LOG.log(System.Logger.Level.INFO, "question ended [id=" + id + ", instance=" + p.slug() + ", status="
+                    + done.status() + ", session=" + done.session() + ']');
+            ended(id, done);
+        });
+        hold(caller);
         try {
-            broker.publish(inboxTopic(p.slug()), q.toString().getBytes(StandardCharsets.UTF_8), false, replyTopic(me.slug()),
-                    id.getBytes(StandardCharsets.UTF_8)).get(SEND_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (final ExecutionException | TimeoutException e) {
-            asked.remove(id);
-            final String why = "the question did not reach " + p.name() + ": " + (e.getCause() == null ? e : e.getCause()).getMessage();
-            a.reply().complete(new Reply(ERROR, why, p.name(), ""));
-            return McpTools.Outcome.fail(why);
-        } catch (final InterruptedException e) {
-            asked.remove(id);
-            a.reply().complete(new Reply(ERROR, "interrupted before the question was sent", p.name(), ""));
-            Thread.currentThread().interrupt();
-            return McpTools.Outcome.fail("interrupted before the question was sent");
+            final ObjectNode q = Json.object();
+            q.put("schema", PEER_SCHEMA);
+            q.put("from", me.slug());
+            q.put("name", me.name());
+            q.put("session", caller);
+            if (!target.isEmpty()) {
+                q.put(TO, target);
+            }
+            q.put("text", text);
+            try {
+                broker.publish(inboxTopic(p.slug()), q.toString().getBytes(StandardCharsets.UTF_8), false,
+                        replyTopic(me.slug()), id.getBytes(StandardCharsets.UTF_8))
+                        .get(SEND_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
+                LOG.log(System.Logger.Level.INFO, "question sent [id=" + id + ", instance=" + p.slug() + ", session="
+                        + caller + ", to=" + target + ']');
+            } catch (final ExecutionException | TimeoutException e) {
+                asked.remove(id);
+                final String why = "the question did not reach " + p.name() + ": "
+                        + (e.getCause() == null ? e : e.getCause()).getMessage();
+                a.reply().complete(new Reply(ERROR, why, p.name(), ""));
+                return McpTools.Outcome.fail(why);
+            } catch (final InterruptedException e) {
+                asked.remove(id);
+                a.reply().complete(new Reply(ERROR, "interrupted before the question was sent", p.name(), ""));
+                Thread.currentThread().interrupt();
+                return McpTools.Outcome.fail("interrupted before the question was sent");
+            }
+            return await(id, a, waitSeconds(args));
+        } finally {
+            release(caller);
         }
-        return await(id, a, waitSeconds(args));
     }
 
     /** {@code instance_reply}: the reply to an earlier question, waiting up to {@code wait_seconds} for it. */
-    McpTools.Outcome replyOf(final JsonNode args) {
+    McpTools.Outcome replyOf(final String caller, final JsonNode args) {
         final String id = args.path("id").asString("").strip();
         if (id.isEmpty()) {
             return McpTools.Outcome.fail("id is required: the one instance_ask returned");
@@ -836,16 +929,41 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return McpTools.Outcome.fail("no question '" + id + "' waits for a reply" + (asked.isEmpty() ? "" : "; waiting: " + List.copyOf(asked.keySet()))
                     + "; a reply is read once");
         }
-        return await(id, a, waitSeconds(args));
+        hold(caller);
+        try {
+            return await(id, a, waitSeconds(args));
+        } finally {
+            release(caller);
+        }
+    }
+
+    /**
+     * Marks {@code caller}, a session of this instance (empty for the Instances tab, which marks nothing), as waiting
+     * for a reply, from before its question goes out: a peer's question to it is refused until {@link #release}, since
+     * that peer may be the one it waits for.
+     */
+    private void hold(final String caller) {
+        if (!caller.isEmpty()) {
+            waiting.merge(caller, 1, Integer::sum);
+        }
+    }
+
+    private void release(final String caller) {
+        if (!caller.isEmpty()) {
+            waiting.computeIfPresent(caller, (_, n) -> n > 1 ? n - 1 : null);
+        }
     }
 
     private McpTools.Outcome await(final String id, final Asked a, final int seconds) {
         Reply r;
         try {
             r = a.reply().get(seconds, TimeUnit.SECONDS);
-        } catch (final TimeoutException e) {
-            return McpTools.Outcome.ok("no reply from " + a.peerName() + " yet after " + seconds + " s; its session " + CONSULT + me.slug()
-                    + " is on it. Read the reply with instance_reply {\"id\": \"" + id + "\", \"wait_seconds\": " + DEFAULT_WAIT_SECONDS + "}");
+        } catch (final TimeoutException _) {
+            LOG.log(System.Logger.Level.INFO, "question still waiting [id=" + id + ", instance=" + a.peer()
+                    + ", waitSeconds=" + seconds + ']');
+            return McpTools.Outcome.ok("no reply from " + a.peerName() + " yet after " + seconds + " s; its session "
+                    + (a.target().isEmpty() ? CONSULT + me.slug() : a.target()) + " is on it. Read the reply with "
+                    + "instance_reply {\"id\": \"" + id + "\", \"wait_seconds\": " + DEFAULT_WAIT_SECONDS + "}");
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return McpTools.Outcome.fail("interrupted; read the reply later with instance_reply {\"id\": \"" + id + "\"}");
@@ -854,8 +972,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return McpTools.Outcome.fail(a.peerName() + " could not answer: " + e.getCause().getMessage());
         }
         asked.remove(id);
+        // a peer from before record 186 drops the session named and answers from the asker's consult session
+        final String older = !a.target().isEmpty() && !r.session().isEmpty() && !r.session().equals(a.target())
+                ? " (" + r.instance() + " runs a comando that does not take a session name, so its session "
+                        + r.session() + " answered, not " + a.target() + ")"
+                : "";
         return switch (r.status()) {
-            case OK -> McpTools.Outcome.ok("reply from " + r.instance() + (r.session().isEmpty() ? "" : " (its session " + r.session() + ")") + ":\n" + r.text());
+            case OK -> McpTools.Outcome.ok("reply from " + r.instance()
+                    + (r.session().isEmpty() ? "" : " (its session " + r.session() + ")") + older + ":\n" + r.text());
             case REFUSED -> McpTools.Outcome.fail("refused: " + r.text());
             case TIMEOUT -> McpTools.Outcome.fail("timeout: " + r.text());
             default -> McpTools.Outcome.fail(a.peerName() + " could not answer: " + r.text());
@@ -892,7 +1016,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, denied ? "Questions from " + who + " are refused now"
                     : "Questions from " + who + " are taken again", false));
         } catch (final IOException | RuntimeException e) {
-            sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot change " + agentsFile + ": " + e.getMessage(), e));
+            sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot change the refused instances [file="
+                    + agentsFile + ", cause=" + e.getMessage() + ']', e));
         }
         show();
     }
@@ -934,7 +1059,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
             role = r;
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, r.isEmpty() ? "This instance has no role now" : "This instance is for: " + r, false));
         } catch (final IOException | RuntimeException e) {
-            sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot change " + instanceFile + ": " + e.getMessage(), e));
+            sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot change the role [file=" + instanceFile
+                    + ", cause=" + e.getMessage() + ']', e));
         }
         onTicks();
     }
@@ -974,7 +1100,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         try {
             AtomicFiles.writeString(file, Json.pretty(root) + "\n");
         } catch (final IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot write " + file, e);
+            LOG.log(System.Logger.Level.WARNING, "cannot write the instances seen [file=" + file + ']', e);
         }
     }
 
@@ -1056,7 +1182,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         final List<Peer> present = connected ? others() : List.of();
         final Set<String> here = new HashSet<>(present.stream().map(Peer::slug).toList());
         final List<InstancesState.Instance> others = new ArrayList<>(present.stream().map(p -> new InstancesState.Instance(p.slug(), p.name(),
-                p.version(), p.role(), p.kit(), p.busy(), p.started(), p.sessions(), p.edge(), true, 0L)).toList());
+                p.version(), p.role(), p.kit(), p.busy(), p.started(), p.sessions(), p.host(), true, 0L)).toList());
         synchronized (seen) {
             seen.values().stream().filter(x -> !here.contains(x.peer().slug())).sorted(Comparator.comparingLong(Seen::lastSeen).reversed())
                     .forEach(x -> others.add(new InstancesState.Instance(x.peer().slug(), x.peer().name(), x.peer().version(), x.peer().role(),
@@ -1064,7 +1190,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         final AppState s = state.get();
         final InstancesState.Instance self = new InstancesState.Instance(me.slug(), me.name(), me.version(), role, kit,
-                s.sessions().stream().anyMatch(SessionState::isBusy), started, members(s), edge.getAsBoolean(), connected, 0L);
+                s.sessions().stream().anyMatch(SessionState::isBusy), started, members(s), host.getAsBoolean(),
+                connected, 0L);
         List<InstancesState.Consult> list;
         synchronized (consults) {
             list = List.copyOf(consults);

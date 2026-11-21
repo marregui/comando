@@ -1,7 +1,6 @@
 package dev.marregui.comando.app;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -16,21 +15,19 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import dev.marregui.comando.frontear.mqtt.FakeBroker;
-import dev.marregui.comando.frontear.mqtt.MqttClient;
-import dev.marregui.comando.frontear.mqtt.Packet;
-import dev.marregui.comando.frontear.mqtt.Relay;
+import dev.marregui.comando.frontear.protocol.FakeBroker;
+import dev.marregui.comando.frontear.protocol.MqttClient;
+import dev.marregui.comando.frontear.protocol.Packet;
+import dev.marregui.comando.frontear.protocol.Relay;
 import dev.marregui.comando.mcp.PeerBroker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /// The instances' broker on comando's own MQTT client (record 123): its message mapping and handler routing without
-/// a broker, its connect, will, resubscription, publish and following of the Edge against a fake broker on a local
-/// port, its renewal after a cut against the real broker `COMANDO_MQTT_BROKER` names, and one round trip through the
-/// running comando Edge when `-PedgeLiveTest=true` and one runs.
+/// a broker, its connect, will, resubscription, publish and following of frontear against a fake broker on a local
+/// port, and its renewal after a cut against the real broker `COMANDO_MQTT_BROKER` names.
 class MqttPeerBrokerTest {
 
     private static final String INBOX = "comando/v1/local/instance/b/inbox";
@@ -99,10 +96,10 @@ class MqttPeerBrokerTest {
         }
     }
 
-    /// While the Edge is not running, following asks the question each time and never connects, and a publish fails at
+    /// While frontear is not running, following asks the question each time and never connects, and a publish fails at
     /// once instead of waiting; a second close does nothing.
     @Test
-    void withNoEdgeRunningItNeverConnectsAndAPublishFailsAtOnce() {
+    void withFrontearDownItNeverConnectsAndAPublishFailsAtOnce() {
         final AtomicInteger looked = new AtomicInteger();
         final MqttPeerBroker broker = new MqttPeerBroker("comando-test", 1, () -> {
             looked.incrementAndGet();
@@ -132,7 +129,7 @@ class MqttPeerBrokerTest {
         assertThat(MqttPeerBroker.reconnectDelay(1_000)).isEqualTo(MqttPeerBroker.FOLLOW_EVERY.toMillis());
     }
 
-    /// Following a running Edge connects with the client id, a 60 s keep alive and the will as a retained QoS 1
+    /// Following a running frontear connects with the client id, a 60 s keep alive and the will as a retained QoS 1
     /// message; the connect listeners run, then the subscriptions made before are sent; after the broker drops the
     /// connection the client is back about a second later, and the listeners and subscriptions run again.
     @Test
@@ -191,10 +188,10 @@ class MqttPeerBrokerTest {
         }
     }
 
-    /// Once the Edge stops running, following disconnects with DISCONNECT Normal, so the broker drops the will, and a
+    /// Once frontear stops running, following disconnects with DISCONNECT Normal, so the broker drops the will, and a
     /// publish fails at once.
     @Test
-    void whenTheEdgeStopsItDisconnects() {
+    void whenFrontearStopsItDisconnects() {
         final AtomicBoolean up = new AtomicBoolean(true);
         try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake.port(), up::get)) {
             broker.follow();
@@ -206,33 +203,6 @@ class MqttPeerBrokerTest {
                     null));
             assertThat(broker.connected()).isFalse();
             assertThat(broker.publish(INBOX, bytes("{}"), false, null, null)).isCompletedExceptionally();
-        }
-    }
-
-    /// Against the running comando Edge, with `-PedgeLiveTest=true`: a message published with a response topic and
-    /// correlation data comes back to its own subscription unchanged. Skipped when the flag is unset or no Edge runs.
-    @Test
-    void aMessageRoundTripsThroughTheRunningEdge(@TempDir final Path dir) {
-        Assumptions.assumeTrue(Boolean.getBoolean("comando.edgeLiveTest"),
-                "set -PedgeLiveTest=true to run against the comando Edge");
-        final EmbeddedEdge edge = new EmbeddedEdge(dir.resolve("edge"), dir, "", _ -> { });
-        Assumptions.assumeTrue(edge.running(), "no comando Edge runs: start one in comando first");
-        final String id = "comando-test-" + ProcessHandle.current().pid() + '-' + System.nanoTime();
-        final String topic = "comando-test/" + id + "/echo";
-        final List<PeerBroker.Message> heard = new CopyOnWriteArrayList<>();
-        try (MqttPeerBroker broker = new MqttPeerBroker(id, EmbeddedEdge.Ports.DEFAULT.mqtt(), edge::running)) {
-            broker.subscribe(topic, heard::add);
-            broker.follow();
-            await().atMost(Duration.ofSeconds(30)).until(broker::connected);
-            // the subscription is granted some time after the connect; publish until one comes back
-            await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(500)).until(() -> {
-                broker.publish(topic, bytes("ping"), false, topic + "/reply", bytes(id));
-                return !heard.isEmpty();
-            });
-            final PeerBroker.Message m = heard.getFirst();
-            assertThat(m.payload()).isEqualTo(bytes("ping"));
-            assertThat(m.responseTopic()).isEqualTo(topic + "/reply");
-            assertThat(m.correlation()).isEqualTo(bytes(id));
         }
     }
 

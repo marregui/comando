@@ -728,7 +728,7 @@ public sealed interface Intent {
         }
     }
 
-    /** The comando instances on the comando Edge and the questions between them, read again after any change (record 124). */
+    /** The comando instances on frontear and the questions between them, read again after any change (record 124). */
     record InstancesChanged(InstancesState instances) implements Intent {
     }
 

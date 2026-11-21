@@ -122,9 +122,9 @@ class SessionBarTest {
     @Test
     void theModelAndTheEffortAreMenusThatChangeThem() throws Exception {
         final List<Intent> intents = new CopyOnWriteArrayList<>();
-        final SessionState x = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("sonnet"))
+        final SessionState x = SessionState.closed(SessionSpec.fresh("eden", "/w/eden").withModel("sonnet"))
                 .withInfo(new SessionInfo("", "claude-opus-4-5", "", "", "", List.of()), 1L);
-        final PanelState own = new PanelState(A, "edge", "", "edge");
+        final PanelState own = new PanelState(A, "eden", "", "eden");
         final SessionBar[] bar = new SessionBar[1];
         final List<String> checked = new ArrayList<>();
         SwingUtilities.invokeAndWait(() -> {
@@ -141,7 +141,8 @@ class SessionBarTest {
         assertThat(button(bar[0], "Model").getText()).as("named as the session's row names it").isEqualTo(SessionRow.modelName(x) + " ▾").isEqualTo("sonnet ▾");
         assertThat(button(bar[0], "Model").getToolTipText()).endsWith("click to change");
         assertThat(checked).containsExactly("sonnet");
-        assertThat(intents).containsExactly(new Intent.SetSessionModel("edge", "opus"), new Intent.SetSessionEffort("edge", "max"));
+        assertThat(intents).containsExactly(new Intent.SetSessionModel("eden", "opus"),
+                new Intent.SetSessionEffort("eden", "max"));
         assertThat(button(bar[0], "Effort").getText()).isEqualTo("default ▾");
     }
 

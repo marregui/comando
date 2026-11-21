@@ -19,11 +19,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import dev.marregui.comando.core.files.Mapped;
-import dev.marregui.comando.frontear.broker.Broker;
-import dev.marregui.comando.frontear.broker.BrokerOptions;
-import dev.marregui.comando.frontear.control.ControlPlane;
-import dev.marregui.comando.frontear.link.Links;
-import dev.marregui.comando.frontear.queue.LogOptions;
+import dev.marregui.comando.frontear.alexander.ControlPlane;
+import dev.marregui.comando.frontear.gateway.Broker;
+import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.octopus.Links;
+import dev.marregui.comando.frontear.store.LogOptions;
 
 /**
  * One frontear node: an MQTT 5 broker, the links to its peers and the control plane that changes them, started

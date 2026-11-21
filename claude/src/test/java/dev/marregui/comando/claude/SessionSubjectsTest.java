@@ -322,7 +322,7 @@ class SessionSubjectsTest {
 
     private ClaudeAdapter adapterAt(final String executable) {
         adapter = new ClaudeAdapter(sink, new TranscriptRegistry(), gateway,
-                new ClaudeSettings(executable, tmp.resolve("run"), projects, UiInstructions.TEXT));
+                new ClaudeSettings(executable, tmp.resolve("run"), projects, UiInstructions.text("")));
         return adapter;
     }
 }

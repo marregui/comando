@@ -13,7 +13,7 @@ feature. The [tutorial](tutorial.md) is the guided walk. Keys are written as mac
 1. [The window](#1-the-window)
 2. [Running text](#2-running-text)
 3. [The database](#3-the-database)
-4. [Instances and the comando Edge](#4-instances-and-the-comando-edge)
+4. [Instances and frontear](#4-instances-and-frontear)
 5. [Development tools](#5-development-tools)
 6. [The Kit, Brain and Scratchpad tabs](#6-the-kit-brain-and-scratchpad-tabs)
 7. [Persistence](#7-persistence)
@@ -26,7 +26,7 @@ The window has eight regions. The numbers match the picture above.
 |---|---|---|
 | 1 | Sidebar | seven tabs: Sessions, Connections, Kit, Brain, Scratchpad, Logbook, Instances ([§1.4](#14-the-sidebar)) |
 | 2 | Panel tabs | one tab per open panel ([§1.2](#12-panels)) |
-| 3 | Corner | Stop refreshing plots, the machine's cdb, the comando Edge, the theme button, New panel |
+| 3 | Corner | Stop refreshing plots, the machine's cdb, frontear, the theme button, New panel |
 | 4 | Header and editor | the focused panel's icons and its text, with a gutter that marks each block's target |
 | 5 | Side pane | what sits beside the editor: the schema, Changes, Search, any tab you move there |
 | 6 | Lower panel | Session, Approvals, Terminal, Results, then view tabs ([§1.5](#15-the-lower-panel-and-views)) |
@@ -214,7 +214,7 @@ buttons: each row's menu holds its actions.
 | Tab | Shows | Its menu |
 |---|---|---|
 | Sessions | every session, grouped by what it asks of you; panels without a session | New session…, Import stored conversations…, Sort, New panel, Reopen closed panel |
-| Connections | every connection | New connection…; start and stop the machine's cdb and the comando Edge |
+| Connections | every connection | New connection…; start and stop the machine's cdb and frontear |
 | Kit, Brain, Scratchpad | folder trees ([§6](#6-the-kit-brain-and-scratchpad-tabs)) | the folders window; **Configure kit jobs** on Kit |
 | Logbook | the scratchpad's open tasks | none; each task has a menu |
 | Instances | the comando instances on this machine ([§4.3](#43-the-instances-tab)) | none; each instance has a menu |
@@ -407,10 +407,10 @@ or a click elsewhere closes. Commands sit under areas: Panels, Run, Session, Con
 Window, comando and Theme. Every command and its key is in [§2.3](#23-keys).
 
 **The menu bar** has three menus: Edit, Find and Help. Help holds Command palette (⌘⇧P), Tutorial, Keyboard shortcuts
-(⌘⇧/), Markdown sheet, Show the log, Show the Edge's log, Show cdb's log and Reveal comando folder.
+(⌘⇧/), Markdown sheet, Show the log, Show cdb's log and Reveal comando folder.
 
 **The corner** has three buttons left of the theme button: Stop refreshing plots, the machine's cdb
-([§3.4](#34-the-machines-cdb)) and the comando Edge ([§4.1](#41-the-comando-edge)). Each shows what a click does
+([§3.4](#34-the-machines-cdb)) and frontear ([§4.1](#41-frontear)). Each shows what a click does
 now, and is off when it cannot run.
 
 A session reaches the same commands through its tools: an agent has every action you have
@@ -520,12 +520,12 @@ Commands without a key, reached from the palette or a menu:
 | Panels | Rename panel… |
 | Run | Start the shell, Stop the shell, Restart the shell |
 | Session | Start or stop the session; Clear the Session tab; Reflect; Compact the conversation; Clear the conversation; Start a new conversation; Rewrite the panel as a document; Copy the session's details; Clone the session…; Remove the session…; Checkpoint threshold…; Open a session…; Import conversations…; Model (`fable`, `opus`, `sonnet`, `haiku`); Effort (`low`, `medium`, `high`, `xhigh`, `max`) |
-| Connection | Connect or disconnect; Bind a connection…; Test the connection; Copy the connection's details; Clone…; Remove…; Start and Stop the machine's cdb; Start and Stop the comando Edge |
+| Connection | Connect or disconnect; Bind a connection…; Test the connection; Copy the connection's details; Clone…; Remove…; Start and Stop the machine's cdb; Start and Stop frontear |
 | Results | Stop refreshing plots |
 | Files | Configure Sidebar folders (the folders window); Configure kit jobs |
 | Kit | Upgrade the kit…; Back up the brain; Back up the kit; Repair comando-kit.json… |
 | Window | Files (a folder tab, with the keyboard in its filter); Files written by the session; Restore layout; Transcript above the prompt, Transcript below the prompt; Recent notices |
-| Help | Tutorial; Markdown sheet; Show the log; Show the Edge's log; Show cdb's log; Reveal comando folder |
+| Help | Tutorial; Markdown sheet; Show the log; Show cdb's log; Reveal comando folder |
 | comando | About comando; Quit comando |
 | Theme | one command per theme |
 
@@ -629,37 +629,39 @@ in the corner starts and stops it; so does the Connections tab's menu.
 It keeps running when the comando that started it quits. A new data root comes with a connection named **local cdb**
 to it. Its SQL, its access secrets, backup and restore are in [cdb](cdb.md) and [cdb SQL](cdb-sql.md).
 
-## 4. Instances and the comando Edge
+## 4. Instances and frontear
 
 You may run more than one comando on a machine. Each instance is a specialist with its own name, data root, kit and
 brain ([why](adr/0122-instances-name-kit-brain-data-root-edge.md)). The instances find each other through one local
-MQTT broker, the comando Edge. Through it, a session of one instance asks another instance a question.
+MQTT broker, frontear. Through it, a session of one instance asks another instance a question.
 
-### 4.1 The comando Edge
+### 4.1 frontear
 
-The antenna button in the corner starts the comando Edge; so does the Connections tab's menu. It is the open-source
-HiveMQ Edge, run as the local broker of every comando instance on the machine.
+frontear is comando's fabric between instances: an MQTT 5 broker of comando's own, run as one node per machine inside
+the process of one comando instance, the host. Every instance connects to it. It runs by itself: no click is needed
+for the instances to find each other ([why](adr/0185-frontear-is-the-only-fabric.md)). The antenna button in the
+corner starts and stops it; so does the Connections tab's menu. How the broker works is in [frontear](frontear.md).
 
 | Fact | Value |
 |---|---|
-| Distribution | the zip named by `-Dcomando.edge.zip` or `COMANDO_EDGE_ZIP`, else the pinned release 2026.15, downloaded once and checked by SHA-256 |
-| Installed in | `edge/` of the data root; data, logs and configuration sit beside the home and survive a newer zip |
-| Ports | MQTT 18883, WebSocket 18800 (`/mqtt`), admin API and UI 18080, JMX 18010, all on `127.0.0.1` |
-| Admin account | user `admin`; a password made for this install, kept in `edge/admin-password`, owner-only |
-| One per machine | `~/.comando-edge.json` names the running Edge, who started it and its ports |
-| Up | when the admin API answers, within 60 s |
-| Stops | from the instance that started it: SIGTERM, then up to 30 s; also when that instance exits |
-| Log | `edge/stdout.log`; Help ▸ **Show the Edge's log** |
+| Port | MQTT 18883 on `127.0.0.1` |
+| One per machine | `~/.comando-fabric.json` names the host: its process, its name, its data root and the port. The instance that creates the file hosts; the others connect to it |
+| Data | `fabric/` of the host's data root: the node's link logs and the control key pair, `pod.key` (owner-only) and `pod.pub` |
+| Starts | at launch, when no live instance hosts it; and when the host quits, in the next instance that looks (each looks every 5 s) |
+| Stops | only from the host: its button, an agent's `server_stop frontear`, or its quit. After a stop by hand that instance starts it again only when asked; another instance hosts it at its next look |
+| Log | comando's own log; Help ▸ **Show the log** |
 
-A port taken by anything else refuses the start, with a notice naming it. Every instance's button shows the Edge
-running. On another instance's button the tooltip says whose Edge it is. comando signals only the recorded process.
-An Edge of your own, on the default ports, runs beside it undisturbed.
+The button's tooltip names frontear, says what it is and gives its state: running and hosted here, running and hosted
+by another instance (which alone stops it), or stopped. A port held by another process (an older comando's broker,
+say) refuses the start with one notice and shows in the tooltip; comando never signals that process, and the
+instances meet once the port is free. `-Dcomando.peers=false` keeps an instance off frontear: it neither starts a node
+nor joins one.
 
 ### 4.2 What travels between instances
 
-![A question from one instance to another through the comando Edge: instance_ask publishes to the other's inbox, the instance asked prompts its consult session, and the turn's text returns as the reply](images/instance-ask.svg)
+![A question from one instance to another through frontear: instance_ask publishes to the other's inbox, the instance asked prompts the session named, or its consult session, and the turn's text returns as the reply](images/instance-ask.svg)
 
-Every instance connects to the Edge while it runs, over MQTT 5, and leaves when it stops. An instance's id is its
+Every instance connects to frontear while it runs, over MQTT 5, and again after another instance takes it over. An instance's id is its
 name in lower case with dashes, `main` for the main instance. Each instance has three topics under
 `comando/v1/local/instance/<id>/`:
 
@@ -673,9 +675,23 @@ A question carries only the text a session chose to send, and an answer only the
 carries the first line of each session's last prompt and of its last reply. Those two lines are the only words of a
 conversation that travel without a session sending them. A brain's or a kit's files never travel.
 
-The instance asked makes or reuses a session named `consult-<asker>`, prompts it, waits for the turn's end and
-replies with that turn's text ([why](adr/0123-instances-consult-each-other.md)). The Edge has no per-instance
-credentials: any local process of yours could publish there. How MQTT works is in
+The instance asked prompts the session the asker names (`instance_ask`'s `session`), made when it is missing, or
+else a session named `consult-<asker>`; it waits for the turn's end and replies with that turn's text
+([why](adr/0123-instances-consult-each-other.md)). A session that is itself waiting on its own question is refused at
+once, so two instances never wait on each other for the full 600 s.
+
+The instances trust each other ([why](adr/0186-instances-trust-the-overseer.md)). Every session is told so in the
+instructions comando gives it:
+
+- **main is the overseer.** A question from your own instance, `main`, carries your authority: the other instances act
+  on it as on your own request, creating, prompting and reading their sessions. You overrule main at any time.
+- **The others are peers.** They talk, create sessions in each other and relay to them without asking you; anything
+  destructive (deleting files, killing processes, pushing) needs main's or your word.
+- **Folders stay private.** Each instance keeps its own kit and brain; only messages cross.
+- **Messages are Markdown.** The receiving panel draws a question as Markdown under a "from <instance> · <session>"
+  line; the header marks main as ` · overseer`.
+
+frontear has no per-instance credentials: any local process of yours could publish there. How MQTT works is in
 [Architecture](architecture.md); the tool is in [Claude Code](claude-code.md).
 
 ### 4.3 The Instances tab
@@ -685,7 +701,7 @@ The Instances tab shows what the other instances do, from their presence alone. 
 - **The tree** lists this instance first, then the others present, then those that left, greyed with when they were
   last seen. **Forget** removes one that left.
 - **An instance row** has a dot (green idle, orange while a session runs a turn, red when its questions are refused
-  here), its role, its version when it differs, and the antenna when it started the Edge.
+  here), its role, its version when it differs, and the antenna when it hosts frontear.
 - **Its sessions** sit under it, each with a dot and what its turn does.
 - **A click** shows a row's card: an instance's state, role, version, kit, uptime and id; a session's state, turn,
   model, effort, context, folder and branch.
@@ -694,7 +710,7 @@ The Instances tab shows what the other instances do, from their presence alone. 
 - **Below the tree**, the questions asked and answered since start, newest first. A double click shows a question
   and its reply, or opens the session here that answered it.
 
-A header shows only while this instance is not connected, with **Start the Edge** while the Edge is down.
+A header shows only while this instance is not connected, with **Start frontear** while frontear is down.
 
 ## 5. Development tools
 
@@ -846,10 +862,10 @@ its own data root and its own kit. Help ▸ **Reveal comando folder** opens the 
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ **Show the log** opens it |
 | `help/tutorial.md` | the tutorial |
 | `cache/mermaid/`, `cache/images/` | drawn diagrams and pictures; safe to delete |
-| `edge/` | the comando Edge ([§4.1](#41-the-comando-edge)) |
+| `fabric/` | frontear's data, in the instance that hosts it ([§4.1](#41-frontear)); an `edge/` folder an older comando left is neither read nor removed |
 
 Outside the root: connection passwords in the macOS keychain for the default data root (elsewhere they stay in
-`connections.json`); `~/.comando-edge.json`, the registry of the one comando Edge; `~/.comando-cdb/`, the machine's
+`connections.json`); `~/.comando-fabric.json`, the registry of the one frontear node, and its lock file `~/.comando-fabric.json.lock`; `~/.comando-cdb/`, the machine's
 cdb.
 
 ### 7.2 Store files

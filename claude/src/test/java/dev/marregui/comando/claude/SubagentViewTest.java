@@ -63,7 +63,7 @@ class SubagentViewTest {
         }
         exe.toFile().setExecutable(true);
         adapter = new ClaudeAdapter(sink, transcripts, McpGateway.NONE,
-                new ClaudeSettings(exe.toString(), tmp.resolve("run"), projects, UiInstructions.TEXT));
+                new ClaudeSettings(exe.toString(), tmp.resolve("run"), projects, UiInstructions.text("")));
         adapter.tailEveryMillis = PERIOD_MILLIS;
     }
 

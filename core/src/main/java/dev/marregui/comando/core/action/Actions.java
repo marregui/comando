@@ -24,8 +24,8 @@ public final class Actions {
     private static final Arg SESSION = Arg.required("session", Type.STRING, "the session's name");
     private static final Arg PANEL = Arg.required("panel", Type.STRING, "the panel's title or id");
     private static final Arg SERVER = Arg.required("server", Type.STRING,
-            "edge: the comando Edge; cdb: the machine's cdb")
-            .among(List.of("edge", "cdb"));
+            "frontear: comando's fabric between instances; cdb: the machine's cdb")
+            .among(List.of("frontear", "cdb"));
 
     /** Every action, in the order the tools are listed. */
     public static final List<Action> ALL = List.of(
@@ -208,13 +208,14 @@ public final class Actions {
 
             // ---- servers: the toggles at the top of the workspace, which call the server and send no intent
             new Action("server_start", Kind.ACT,
-                    "Starts a local server, as its toggle at the top of the workspace does: the comando Edge "
-                            + "(one per machine, the instances' link) or the machine's cdb. Answers at once; the "
+                    "Starts a local server, as its toggle at the top of the workspace does: frontear "
+                            + "(one node per machine, the instances' link) or the machine's cdb. Answers at once; the "
                             + "outcome comes as a notice, and ui_get_state's servers show it.",
                     List.of(SERVER), Set.of()),
             new Action("server_stop", Kind.ACT,
-                    "Stops a local server this instance started, as its toggle does; an Edge another instance started is refused. "
-                            + "Stopping the Edge ends every instance's consults.",
+                    "Stops a local server this instance started, as its toggle does; frontear hosted by another "
+                            + "instance is refused. Stopping frontear ends the consults under way, and another "
+                            + "instance running hosts it again within seconds.",
                     List.of(SERVER), Set.of()),
 
             // ---- commands and folders

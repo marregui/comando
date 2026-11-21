@@ -16,18 +16,19 @@ import java.util.function.Consumer;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.frontear.mqtt.MqttClient;
-import dev.marregui.comando.frontear.mqtt.Packet;
-import dev.marregui.comando.frontear.mqtt.Topics;
+import dev.marregui.comando.frontear.protocol.MqttClient;
+import dev.marregui.comando.frontear.protocol.Packet;
+import dev.marregui.comando.frontear.protocol.Topics;
 import dev.marregui.comando.mcp.PeerBroker;
 
 /**
- * The comando Edge as the instances' broker (record 123), on comando's own MQTT client: MQTT 5 to {@code 127.0.0.1},
- * client id {@code comando-<instance>}. It follows the Edge rather than the window: every {@link #FOLLOW_EVERY}, on a
- * strand of its own, it reads whether the registry names a live Edge, whichever instance started it; it connects when
- * one does and disconnects when none does. While the Edge runs the client reconnects by itself, 1 s after a drop and
- * then at most every {@link #FOLLOW_EVERY}, and renews its subscriptions after every connect; once the Edge stops it
- * stops trying. Messages reach their handlers on one strand, in order.
+ * frontear as the instances' broker (records 123, 185), on comando's own MQTT client: MQTT 5 to {@code 127.0.0.1},
+ * client id {@code comando-<instance>}. It follows frontear rather than the window: every {@link #FOLLOW_EVERY}, on a
+ * strand of its own, it asks whether the registry names a live frontear node, whichever instance hosts it, and the
+ * answer may start one here when none runs; it connects when one runs and disconnects when none does. While the node
+ * runs the client reconnects by itself, 1 s after a drop and then at most every {@link #FOLLOW_EVERY}, and renews its
+ * subscriptions after every connect; once the node stops it stops trying. Messages reach their handlers on one
+ * strand, in order.
  */
 final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
@@ -37,7 +38,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     /** The keep alive the HiveMQ client sent, which this client replaced. */
     private static final int KEEP_ALIVE_SECONDS = 60;
     /**
-     * The largest message the Edge may hand this instance, in bytes: the protocol's own, so none is announced, as the
+     * The largest message frontear may hand this instance, in bytes: the protocol's own, so none is announced, as the
      * client before comando's own announced none. A question to another instance is not clipped, and a smaller limit
      * would make the broker drop a long one unseen while its sender waits for an answer.
      */
@@ -45,7 +46,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
     private final String clientId;
     private final int port;
-    private final BooleanSupplier edgeUp;
+    private final BooleanSupplier fabricUp;
     private final ScheduledExecutorService follow = Threads.timedStrand("peer-broker");
     private final ExecutorService messages = Threads.strand("peer-messages");
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
@@ -53,27 +54,27 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     private final Map<String, Consumer<Message>> handlers = new LinkedHashMap<>();
     /** Written by whoever sets the will, read by the follow strand when it connects. */
     private volatile Packet.Publish will;
-    /** The client while the Edge runs; null while it does not. Guarded by this. */
+    /** The client while frontear runs; null while it does not. Guarded by this. */
     private MqttClient client;
     private boolean closed;
 
-    /** Client {@code clientId} on the Edge's MQTT {@code port}, connected while {@code edgeUp} says the Edge runs. */
-    MqttPeerBroker(final String clientId, final int port, final BooleanSupplier edgeUp) {
+    /** Client {@code clientId} on frontear's MQTT {@code port}, connected while {@code fabricUp} says it runs. */
+    MqttPeerBroker(final String clientId, final int port, final BooleanSupplier fabricUp) {
         this.clientId = clientId;
         this.port = port;
-        this.edgeUp = edgeUp;
+        this.fabricUp = fabricUp;
     }
 
-    /** Starts following the Edge: a first look at once, then every {@link #FOLLOW_EVERY}. */
+    /** Starts following frontear: a first look at once, then every {@link #FOLLOW_EVERY}. */
     void start() {
         follow.scheduleWithFixedDelay(this::follow, 0, FOLLOW_EVERY.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    /** Connects when the registry names a live Edge and no client exists, disconnects when it names none. */
+    /** Connects when the registry names a live frontear node and no client exists, disconnects when it names none. */
     void follow() {
         // an exception escaping a periodic task cancels every later run
         try {
-            final boolean up = edgeUp.getAsBoolean();
+            final boolean up = fabricUp.getAsBoolean();
             synchronized (this) {
                 if (closed) {
                     return;
@@ -84,11 +85,11 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
                     final MqttClient gone = client;
                     client = null;
                     gone.disconnect().whenComplete((v, e) -> LOG.log(System.Logger.Level.INFO,
-                            "left the comando Edge: it no longer runs"));
+                            "left frontear: it no longer runs"));
                 }
             }
         } catch (final RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot follow the comando Edge", e);
+            LOG.log(System.Logger.Level.WARNING, "cannot follow frontear", e);
         }
     }
 
@@ -109,7 +110,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
                 deliver(message);
             }
 
-            // reconnects, a first connect that failed included, for as long as it is the client of a running Edge
+            // reconnects, a first connect that failed included, for as long as it is the client of a running node
             @Override
             public Duration disconnected(final int attempts, final Throwable cause) {
                 return wanted(self.get()) ? Duration.ofMillis(reconnectDelay(attempts)) : null;
@@ -118,14 +119,14 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         self.set(c);
         c.connect().whenComplete((v, e) -> {
             if (e != null) {
-                LOG.log(System.Logger.Level.DEBUG, "not connected to the comando Edge yet, retrying [cause="
+                LOG.log(System.Logger.Level.DEBUG, "not connected to frontear yet, retrying [cause="
                         + e.getMessage() + ']');
             }
         });
         return c;
     }
 
-    /** Whether {@code c} is still the client to keep connected: this broker is open and has not left the Edge since. */
+    /** Whether {@code c} is still the client to keep connected: this broker is open and has not left frontear since. */
     private synchronized boolean wanted(final MqttClient c) {
         return !closed && c != null && c == client;
     }
@@ -137,7 +138,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
     /** Connected, first or again: the listeners first, then the subscriptions, whose retained messages follow. */
     private void onConnect() {
-        LOG.log(System.Logger.Level.INFO, "connected to the comando Edge [client=" + clientId + ", port=" + port + ']');
+        LOG.log(System.Logger.Level.INFO, "connected to frontear [client=" + clientId + ", port=" + port + ']');
         for (final Runnable l : listeners) {
             try {
                 l.run();
@@ -222,7 +223,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
             final String responseTopic, final byte[] correlation) {
         final MqttClient c = current();
         if (c == null || !c.connected()) {
-            return CompletableFuture.failedFuture(new IllegalStateException("not connected to the comando Edge"));
+            return CompletableFuture.failedFuture(new IllegalStateException("not connected to frontear"));
         }
         return c.publish(publishOf(topic, payload, retained, responseTopic, correlation));
     }

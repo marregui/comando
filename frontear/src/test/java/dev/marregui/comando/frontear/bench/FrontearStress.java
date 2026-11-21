@@ -34,11 +34,11 @@ import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.frontear.Frontear;
-import dev.marregui.comando.frontear.control.Signer;
-import dev.marregui.comando.frontear.mqtt.MqttClient;
-import dev.marregui.comando.frontear.mqtt.MqttException;
-import dev.marregui.comando.frontear.mqtt.Packet;
-import dev.marregui.comando.frontear.mqtt.PublishRecord;
+import dev.marregui.comando.frontear.alexander.Signer;
+import dev.marregui.comando.frontear.protocol.MqttClient;
+import dev.marregui.comando.frontear.protocol.MqttException;
+import dev.marregui.comando.frontear.protocol.Packet;
+import dev.marregui.comando.frontear.protocol.PublishRecord;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;

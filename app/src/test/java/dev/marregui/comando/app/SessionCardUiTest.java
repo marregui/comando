@@ -231,8 +231,8 @@ class SessionCardUiTest {
     /// in its folder, and Save adds the session with that conversation, FORK and the folder.
     @Test
     void newSessionOffersTheStoredConversationsByTitleAndCopiesThePickedOne() throws Exception {
-        final Path folder = Files.createDirectories(home.resolve("edge"));
-        final Path project = Files.createDirectories(home.resolve("projects").resolve("-edge"));
+        final Path folder = Files.createDirectories(home.resolve("eden"));
+        final Path project = Files.createDirectories(home.resolve("projects").resolve("-eden"));
         Files.writeString(project.resolve(ID + ".jsonl"), """
                 {"type":"user","cwd":"%s","gitBranch":"main","message":{"role":"user","content":"draft the release notes"}}
                 {"type":"ai-title","aiTitle":"Edge release notes"}

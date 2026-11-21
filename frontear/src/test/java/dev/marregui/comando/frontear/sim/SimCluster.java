@@ -37,16 +37,16 @@ import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.frontear.Frontear;
-import dev.marregui.comando.frontear.broker.Broker;
-import dev.marregui.comando.frontear.broker.BrokerOptions;
-import dev.marregui.comando.frontear.control.Signer;
-import dev.marregui.comando.frontear.link.LinkOptions;
-import dev.marregui.comando.frontear.link.LinkState;
-import dev.marregui.comando.frontear.mqtt.MqttClient;
-import dev.marregui.comando.frontear.mqtt.Names;
-import dev.marregui.comando.frontear.mqtt.Packet;
-import dev.marregui.comando.frontear.mqtt.Relay;
-import dev.marregui.comando.frontear.mqtt.Topics;
+import dev.marregui.comando.frontear.alexander.Signer;
+import dev.marregui.comando.frontear.gateway.Broker;
+import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.octopus.LinkOptions;
+import dev.marregui.comando.frontear.octopus.LinkState;
+import dev.marregui.comando.frontear.protocol.MqttClient;
+import dev.marregui.comando.frontear.protocol.Names;
+import dev.marregui.comando.frontear.protocol.Packet;
+import dev.marregui.comando.frontear.protocol.Relay;
+import dev.marregui.comando.frontear.protocol.Topics;
 
 import static org.awaitility.Awaitility.await;
 

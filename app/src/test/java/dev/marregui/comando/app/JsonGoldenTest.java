@@ -62,12 +62,11 @@ class JsonGoldenTest {
         });
     }
 
-    /// The two registries' entries, and a record of every shape a file could hold, write as their goldens through
-    /// the files' mapping, and read back equal.
+    /// The machine cdb's registry entry, and a record of every shape a file could hold, write as their goldens
+    /// through the files' mapping, and read back equal.
     @Test
     void theRegistriesAndTheMixedRecordWriteAsTheirGoldens() throws IOException {
         pretty("machine-server.json", JsonSamples.machineServer(), MachineCdb.Entry.class);
-        pretty("edge-registry.json", JsonSamples.edge(), EmbeddedEdge.Entry.class);
         pretty("mixed-file.json", JsonSamples.mixed(), JsonSamples.Mixed.class);
     }
 
@@ -183,7 +182,6 @@ class JsonGoldenTest {
         t.put("FolderRoot", FolderRoot.class);
         t.put("StoredPanel", Store.StoredPanel.class);
         t.put("MachineServerEntry", MachineCdb.Entry.class);
-        t.put("EdgeEntry", EmbeddedEdge.Entry.class);
         t.put("ListFolderRoot", new TypeRef<List<FolderRoot>>() {
         }.type());
         t.put("Mixed", JsonSamples.Mixed.class);

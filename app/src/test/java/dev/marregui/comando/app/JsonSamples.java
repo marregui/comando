@@ -37,9 +37,9 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
 /// The values the JSON goldens under `json-golden/` were written from, by the mappers comando used before its own
-/// binder: an [AppState] with every component set, the four store lists with every field set, the two registries'
-/// entries, and two records of shapes the files do not hold today (`Optional`, `Path`, a `double[]`, nulls, `NaN`,
-/// nested `@type` values). Each map holds one entry: a `Map.copyOf` iterates in an order of its own per JVM.
+/// binder: an [AppState] with every component set, the four store lists with every field set, the machine cdb's
+/// registry entry, and two records of shapes the files do not hold today (`Optional`, `Path`, a `double[]`, nulls,
+/// `NaN`, nested `@type` values). Each map holds one entry: a `Map.copyOf` iterates in an order of its own per JVM.
 final class JsonSamples {
 
     /// The time every golden line of the intent log carries in place of the moment it was written.
@@ -54,9 +54,9 @@ final class JsonSamples {
         final PanelId one = new PanelId("p1");
         final PanelId two = new PanelId("p2");
         final ConnectionSpec lab = new ConnectionSpec("lab", "db.lab", 8813, "qdb", "admin", "", true, "verify-full");
-        final SessionSpec edge = new SessionSpec("edge", "/w/edge", "opus", "high", 2.5, "abc", StartMode.RESUME,
+        final SessionSpec edge = new SessionSpec("eden", "/w/eden", "opus", "high", 2.5, "abc", StartMode.RESUME,
                 "/reflect --auto", "carried text", "lead", "family-1", 1_700_000_000_123L);
-        final SessionInfo info = new SessionInfo("abc", "opus", "/w/edge", "2.1.296", "default",
+        final SessionInfo info = new SessionInfo("abc", "opus", "/w/eden", "2.1.296", "default",
                 List.of("interrupt", "rewind"), "high", "xhigh", "opus-4", "medium");
         final SessionState session = new SessionState(edge, Status.OPEN, "no error", info, 2, 0.75, 120_000L,
                 1_000_000L, 1_700_000_000_500L, "running Bash", "main", 1_700_000_000_400L, "last failed",
@@ -66,44 +66,44 @@ final class JsonSamples {
                 new SessionEta("build", 1_700_000_060_000L, "shipped", 1_700_000_600_000L, 30, 1_699_999_000_000L, 1_700_000_000_000L));
         final SqlRun run = new SqlRun(7L, one, "lab", "SELECT 1", RunStatus.RUNNING, 10, 2L, true, 3L, 4L, 5L, "boom",
                 6L, "a note", true, true);
-        final Approval approval = new Approval(9L, "edge", ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", 11L,
+        final Approval approval = new Approval(9L, "eden", ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", 11L,
                 "toolu_1");
         final Logbook logbook = new Logbook("/brain/INDEX.md", List.of(new LogbookTask(137, "JSON", "harness",
                 "replace Jackson", "open", "write the binder", List.of("plan.md"), List.of("Miguel"), "#### 137. JSON",
                 "2026-11-14", "Claude", "Miguel", List.of("EDG-2"))), "no problem");
         final List<ViewState> views = List.of(
                 new ViewState(1L, "table", new ViewSpec.Table(List.of("a", "b"), List.of(Arrays.asList("1", null))),
-                        Placement.LOWER, true, "edge", 2L, Placement.SIDE),
+                        Placement.LOWER, true, "eden", 2L, Placement.SIDE),
                 new ViewState(2L, "plot", new ViewSpec.Plot("x", "y", true, List.of(new ViewSpec.Series("s",
                         new double[]{1, 2.5}, new double[]{-3, Double.NaN}))), Placement.SIDE, false, "", 1L),
-                new ViewState(3L, "diff", new ViewSpec.Diff("a.txt", "before", "after"), Placement.LOWER, false, "edge",
+                new ViewState(3L, "diff", new ViewSpec.Diff("a.txt", "before", "after"), Placement.LOWER, false, "eden",
                         1L),
-                new ViewState(4L, "md", new ViewSpec.Markdown("# title"), Placement.LOWER, false, "edge", 1L),
+                new ViewState(4L, "md", new ViewSpec.Markdown("# title"), Placement.LOWER, false, "eden", 1L),
                 new ViewState(5L, "text", new ViewSpec.Text("a.java", "class A {}", "java", 3), Placement.LOWER, false,
-                        "edge", 1L),
+                        "eden", 1L),
                 new ViewState(6L, "tree", new ViewSpec.Tree(new ViewSpec.TreeNode("r", "d", "comando-file:/a#1",
                         List.of(new ViewSpec.TreeNode("c", "", List.of())))), Placement.SIDE, false, "", 1L),
-                new ViewState(7L, "changes", new ViewSpec.Changes("/w", "sub", "edge"), Placement.SIDE, false, "", 1L),
+                new ViewState(7L, "changes", new ViewSpec.Changes("/w", "sub", "eden"), Placement.SIDE, false, "", 1L),
                 new ViewState(8L, "search", new ViewSpec.Search(), Placement.SIDE, false, "", 1L),
                 new ViewState(9L, "files", new ViewSpec.Deliverables(), Placement.SIDE, false, "", 1L),
                 new ViewState(10L, "console", new ViewSpec.Console(4L, "gradle build", ViewSpec.RunState.FAILED, 1, 99L,
                         new ViewSpec.TreeNode("tests", "1 failed", List.of()), Map.of("A.b", "boom"), "p1"),
-                        Placement.LOWER, false, "edge", 1L),
-                new ViewState(11L, "agent", new ViewSpec.Agent("edge", "toolu_2", "explore", "running"),
-                        Placement.LOWER, false, "edge", 1L));
+                        Placement.LOWER, false, "eden", 1L),
+                new ViewState(11L, "agent", new ViewSpec.Agent("eden", "toolu_2", "explore", "running"),
+                        Placement.LOWER, false, "eden", 1L));
         final InstancesState instances = new InstancesState(true,
                 new InstancesState.Instance("me", "Comando", "1.0", "lead", "/kit", true, "2026-11-14T08:00:00Z",
-                        List.of(new InstancesState.Member("edge", true, "OPEN", "thinking", 5L, "opus", "high", 40,
+                        List.of(new InstancesState.Member("eden", true, "OPEN", "thinking", 5L, "opus", "high", 40,
                                 "~/w", "main", List.of("build"), "do it", "done")), true, true, 0L),
                 List.of(new InstancesState.Instance("peer", "Peer", "0.9", "", "", false, "",
                         List.of(new InstancesState.Member("s", false)), false, false, 12L)),
-                List.of(new InstancesState.Consult("c1", InstancesState.Direction.ASKED, "peer", "Peer", "edge", "why?",
+                List.of(new InstancesState.Consult("c1", InstancesState.Direction.ASKED, "peer", "Peer", "eden", "why?",
                         InstancesState.Status.OK, 1L, 2L, "because")),
                 List.of("intruder"));
         return new AppState(
-                List.of(new PanelState(one, "one", "lab", "edge", false, false, false),
+                List.of(new PanelState(one, "one", "lab", "eden", false, false, false),
                         new PanelState(two, "two", "", "", true, true, true)),
-                List.of(new PanelState(new PanelId("p3"), "closed", "lab", "edge", false, false, false)),
+                List.of(new PanelState(new PanelId("p3"), "closed", "lab", "eden", false, false, false)),
                 two,
                 List.of(new ConnectionState(lab, Status.FAILED, "refused")),
                 List.of(session),
@@ -114,7 +114,7 @@ final class JsonSamples {
                 views,
                 LowerTab.view(10L),
                 Map.of("p1", LowerTab.APPROVALS),
-                new Notice(Notice.Level.ERROR, "it failed", 13L, "edge"),
+                new Notice(Notice.Level.ERROR, "it failed", 13L, "eden"),
                 List.of(new Notice(Notice.Level.WARN, "careful", 14L),
                         new Notice(Notice.Level.INFO, "fine", 15L, "lab")),
                 instances,
@@ -130,7 +130,7 @@ final class JsonSamples {
 
     /// Two sessions, every field set on the first, the second fresh, with non-ASCII text in its name.
     static List<SessionSpec> sessions() {
-        return List.of(new SessionSpec("edge", "/Users/me/edge", "opus", "xhigh", 12.5, "0e952c0a-3aa6-4026",
+        return List.of(new SessionSpec("eden", "/Users/me/edge", "opus", "xhigh", 12.5, "0e952c0a-3aa6-4026",
                         StartMode.RESUME, "/reflect", "the summary\nof two lines", "lead", "family",
                         1_763_100_000_000L),
                 SessionSpec.fresh("Ünïcode ✓ 😀", "/tmp/a b"));
@@ -155,12 +155,6 @@ final class JsonSamples {
     static MachineCdb.Entry machineServer() {
         return new MachineCdb.Entry(1, 4242L, "Comando", "Comando Expert", "2026-11-14T08:00:00Z",
                 new MachineCdb.Ports(9000, 9003, 8812, 9009), "tok-123", "9.3.2");
-    }
-
-    /// The comando Edge's registry entry, every field set.
-    static EmbeddedEdge.Entry edge() {
-        return new EmbeddedEdge.Entry(1, 4343L, "Comando", "Comando Expert",
-                new EmbeddedEdge.Ports(18883, 18800, 18080, 18010), "2026-11-14T08:00:00Z");
     }
 
     /// Shapes no store file holds today: a present and an empty `Optional`, a `Path`, enums, a `double[]` with `NaN`,

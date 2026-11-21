@@ -152,7 +152,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             PanelTexts texts,
             Supplier<List<StoredConversation>> catalogue,
             ServerToggle server,
-            ServerToggle edge,
+            ServerToggle fabric,
             Setup setup,
             String version,
             Path home,
@@ -483,10 +483,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         });
         sidebar.onFolderMenu(menus::folderMenu);
-        final ServerToggle edge = deps.edge();
-        sidebar.instances(instances, () -> edge != null && edge.isRunning(), () -> edge != null && edge.busy(), () -> {
-            if (edge != null && !edge.isRunning() && !edge.busy()) {
-                edge.toggle();
+        final ServerToggle fabric = deps.fabric();
+        sidebar.instances(instances, () -> fabric != null && fabric.isRunning(), () -> fabric != null && fabric.busy(),
+                () -> {
+            if (fabric != null && !fabric.isRunning() && !fabric.busy()) {
+                fabric.toggle();
             }
         });
         jobs.attach(sidebar);

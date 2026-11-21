@@ -80,5 +80,5 @@ modules: about 139 000 lines of Java and 134 000 lines of tests.
 ## Licence
 
 comando is under the [Apache License 2.0](LICENSE). Third-party components keep their licences: JediTerm (LGPL-3.0)
-and pty4j (EPL-1.0) for the terminal; Apache 2.0: FlatLaf, HiveMQ Edge; BSD: RSyntaxTextArea, commonmark-java, the
+and pty4j (EPL-1.0) for the terminal; Apache 2.0: FlatLaf; BSD: RSyntaxTextArea, commonmark-java, the
 PostgreSQL JDBC driver; MIT: jsvg, SLF4J.

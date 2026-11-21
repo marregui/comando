@@ -45,7 +45,7 @@ class FileReadRulesTest {
     // cdb's one class that opens files; package-private, so named rather than referenced
     private static final String CDB_STORE_FILES = "dev.marregui.comando.cdb.store.StoreFiles";
     // frontear's link log's one class that opens files, to write, force and force its folder; package-private, so named
-    private static final String FRONTEAR_DISK_FILES = "dev.marregui.comando.frontear.queue.DiskFiles";
+    private static final String FRONTEAR_DISK_FILES = "dev.marregui.comando.frontear.store.DiskFiles";
     // cdb's readers of its own mapped column files, which copy them in bulk; package-private, so named
     private static final String CDB_VERSION = "dev.marregui.comando.cdb.store.Version";
     private static final String CDB_TEXT_CACHE = "dev.marregui.comando.cdb.store.TextCache";
@@ -58,8 +58,9 @@ class FileReadRulesTest {
     private static final String CDB_ROW_BLOCK = "dev.marregui.comando.cdb.store.RowBlock";
 
     /// No class hands a `File` to a JSON reader, or opens a channel on a file but the lock on the data root, the
-    /// machine's cdb's start lock (record 146), and cdb's store, which owns its column files and depends on the JDK
-    /// alone (record 158). comando's own `core.json.Json` takes no `File` (record 157).
+    /// machine's cdb's start lock (record 146), frontear's registry lock (record 185), and cdb's store, which owns its
+    /// column files and depends on the JDK alone (record 158). comando's own `core.json.Json` takes no `File` (record
+    /// 157).
     @Test
     void noClassReadsAFileByAnotherRoute() {
         noClasses().should().callMethodWhere(target(name("readTree")).and(target(rawParameterTypes(File.class))))
@@ -70,6 +71,7 @@ class FileReadRulesTest {
         noClasses().that().doNotHaveFullyQualifiedName(Mapped.class.getName())
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
                 .and().doNotHaveFullyQualifiedName(MachineCdb.class.getName())
+                .and().doNotHaveFullyQualifiedName(FrontearFabric.class.getName())
                 .and().doNotHaveFullyQualifiedName(CDB_STORE_FILES)
                 .and().doNotHaveFullyQualifiedName(FRONTEAR_DISK_FILES)
                 .should().callMethodWhere(target(name("open")).and(target(owner(assignableTo(FileChannel.class)))))

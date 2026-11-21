@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; built; amended the same day (§4) | Miguel and Claude |
+| 2026-10-30 | accepted; built; amended the same day (§4); superseded in part by [record 185](0185-frontear-is-the-only-fabric.md) | Miguel and Claude |
 
 ## 1. Context
 

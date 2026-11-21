@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-  <title>comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, edge, fabric) and the instance's identity; outside it sit the machine's cdb, the Edge registry, and Claude Code's root with the kit and the conversations</title>
+  <title>comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, fabric) and the instance's identity; outside it sit the machine's cdb, the fabric registry, and Claude Code's root with the kit and the conversations</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
   </defs>
@@ -34,8 +34,7 @@
     <text x="366" y="244">audit/</text>
     <text x="366" y="264">cache/</text>
     <text x="76" y="376">cdb/</text>
-    <text x="76" y="396">edge/</text>
-    <text x="76" y="416">fabric/</text>
+    <text x="76" y="396">fabric/</text>
     <text x="366" y="376">instance.json</text>
     <text x="366" y="396">comando.lock</text>
     <text x="366" y="416">agents.json</text>
@@ -49,8 +48,7 @@
     <text x="420" y="264">drawn pictures</text>
     <text x="366" y="292">safe to lose between runs</text>
     <text x="140" y="376">the local cdb's tables</text>
-    <text x="140" y="396">the comando Edge</text>
-    <text x="140" y="416">a frontear node's data</text>
+    <text x="140" y="396">the frontear node's data</text>
     <text x="76" y="464">each server keeps its own files</text>
     <text x="366" y="464">name, role, lock, grants, peers</text>
   </g>
@@ -63,18 +61,18 @@
   </g>
   <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
     <text x="696" y="162">~/.comando-cdb/</text>
-    <text x="696" y="298">~/.comando-edge.json</text>
+    <text x="696" y="298">~/.comando-fabric.json</text>
     <text x="696" y="434">~/.claude/</text>
   </g>
   <g font-size="13" letter-spacing="2.5">
     <text x="696" y="136" fill="#6FAEE8">THE MACHINE'S CDB</text>
-    <text x="696" y="272" fill="#AEB6C1">THE EDGE REGISTRY</text>
+    <text x="696" y="272" fill="#AEB6C1">THE FABRIC REGISTRY</text>
     <text x="696" y="408" fill="#D98E5F">CLAUDE CODE'S ROOT</text>
   </g>
   <g font-size="13" fill="#9AA0A6">
     <text x="696" y="184">one database server for the machine:</text>
     <text x="696" y="202">its launcher, data, registry, secrets</text>
-    <text x="696" y="320">which instance started the one Edge;</text>
+    <text x="696" y="320">which instance hosts frontear;</text>
     <text x="696" y="338">shared by every instance</text>
     <text x="696" y="456">the kit and every conversation;</text>
     <text x="696" y="474">Claude Code owns these files</text>

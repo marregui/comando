@@ -47,7 +47,7 @@ class ChangesWidgetTest {
         return new RepoStatus.FileChange(path, "", kind);
     }
 
-    private static final RepoStatus REPO = new RepoStatus("/w/edge", "ENG-1", List.of(
+    private static final RepoStatus REPO = new RepoStatus("/w/eden", "ENG-1", List.of(
             change("server/src/main/java/a/A.java", RepoStatus.Kind.MODIFIED),
             change("server/src/main/java/a/B.java", RepoStatus.Kind.ADDED),
             change("README.md", RepoStatus.Kind.DELETED),
@@ -68,7 +68,7 @@ class ChangesWidgetTest {
         final Map<String, ChangesWidget.Target> targets = new HashMap<>();
         final ViewSpec.TreeNode root = ChangesWidget.build(List.of(REPO), targets);
         final ViewSpec.TreeNode repo = root.children().getFirst();
-        assertThat(repo.label()).isEqualTo("edge");
+        assertThat(repo.label()).isEqualTo("eden");
         assertThat(repo.detail()).isEqualTo("ENG-1 · 4 changes");
         assertThat(repo.children()).extracting(ViewSpec.TreeNode::label)
                 .containsExactly(ChangesWidget.CHANGED, ChangesWidget.UNTRACKED, ChangesWidget.REMOVED);
@@ -87,9 +87,9 @@ class ChangesWidgetTest {
     /// Two repositories with the same folder name are labelled by full path, and a clean one says so.
     @Test
     void twoRepositoriesOfOneNameAreToldApartByPath() {
-        final RepoStatus other = new RepoStatus("/z/edge", "main", List.of(), false, "");
+        final RepoStatus other = new RepoStatus("/z/eden", "main", List.of(), false, "");
         final ViewSpec.TreeNode root = ChangesWidget.build(List.of(REPO, other), new HashMap<>());
-        assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("/w/edge", "/z/edge");
+        assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("/w/eden", "/z/eden");
         assertThat(root.children().get(1).detail()).isEqualTo("main · " + ChangesWidget.CLEAN);
     }
 
@@ -134,7 +134,8 @@ class ChangesWidgetTest {
     /// A failed read shows its reason under the repository; no repositories shows the empty-state row.
     @Test
     void aRepositoryThatCannotBeReadSaysWhy() {
-        final ViewSpec.TreeNode root = ChangesWidget.build(List.of(RepoStatus.failed("/w/edge", "not a git repository")), new HashMap<>());
+        final ViewSpec.TreeNode root =
+                ChangesWidget.build(List.of(RepoStatus.failed("/w/eden", "not a git repository")), new HashMap<>());
         assertThat(root.children().getFirst().children().getFirst().label()).isEqualTo("✗ cannot be read: not a git repository");
         assertThat(ChangesWidget.build(List.of(), new HashMap<>()).children().getFirst().label()).isEqualTo(ChangesWidget.NO_REPOS);
     }
@@ -149,10 +150,10 @@ class ChangesWidgetTest {
         assertThat(tree.getRowCount()).as("repository, three groups, two folders, four files").isEqualTo(10);
         final int row = rowOf(tree, "A.java");
         tree.setSelectionRow(row);
-        assertThat(sent).containsExactly(new Intent.OpenChange("/w/edge", REPO.changes().getFirst(), ChangeAsk.FOLLOW));
+        assertThat(sent).containsExactly(new Intent.OpenChange("/w/eden", REPO.changes().getFirst(), ChangeAsk.FOLLOW));
         sent.clear();
         w.tree().tree().getActionMap().get("activate").actionPerformed(null);
-        assertThat(sent).containsExactly(new Intent.OpenChange("/w/edge", REPO.changes().getFirst(), ChangeAsk.OPEN));
+        assertThat(sent).containsExactly(new Intent.OpenChange("/w/eden", REPO.changes().getFirst(), ChangeAsk.OPEN));
     }
 
     /// With nothing selected F7 selects the first file; then F7 selects the next file, past the Untracked group's
@@ -172,7 +173,7 @@ class ChangesWidgetTest {
         sent.clear();
         press(tree, next);
         assertThat(selectedLabel(tree)).as("past the group's and the folder's rows").isEqualTo("x.md");
-        assertThat(sent).containsExactly(new Intent.OpenChange("/w/edge", REPO.changes().get(3), ChangeAsk.FOLLOW));
+        assertThat(sent).containsExactly(new Intent.OpenChange("/w/eden", REPO.changes().get(3), ChangeAsk.FOLLOW));
         press(tree, next);
         press(tree, next);
         assertThat(selectedLabel(tree)).as("the last file stays").isEqualTo("README.md");
@@ -240,9 +241,11 @@ class ChangesWidgetTest {
         answer[0] = 0;
         ((JMenuItem) menu.getComponent(0)).doClick();
         assertThat(asked.getLast()).startsWith("Roll back 3 files to HEAD? The versions you have go to the Trash");
-        assertThat(calls).containsExactly("rollBack /w/edge server/src/main/java/a/A.java,server/src/main/java/a/B.java,notes/x.md");
+        assertThat(calls).containsExactly(
+                "rollBack /w/eden server/src/main/java/a/A.java,server/src/main/java/a/B.java,notes/x.md");
         ((JMenuItem) menu.getComponent(1)).doClick();
-        assertThat(calls.getLast()).isEqualTo("remove /w/edge server/src/main/java/a/A.java,server/src/main/java/a/B.java,notes/x.md");
+        assertThat(calls.getLast())
+                .isEqualTo("remove /w/eden server/src/main/java/a/A.java,server/src/main/java/a/B.java,notes/x.md");
 
         final TreePath readme = tree.getPathForRow(rowOf(tree, "README.md"));
         tree.setSelectionPath(readme);

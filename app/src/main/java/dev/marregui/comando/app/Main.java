@@ -8,6 +8,7 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Optional;
 import javax.swing.JOptionPane;
 
 import dev.marregui.comando.core.files.Mapped;
@@ -30,6 +31,16 @@ public final class Main {
         // and badge, and a preferences node of its own (record 122)
         final String given = System.getProperty("comando.name", System.getenv("COMANDO_NAME"));
         final String name = InstanceName.of(config.home(), given == null || given.isBlank() ? nameFile(config.home()) : given);
+        // no instance but the main one passes for it, or for its overseer role, in another's headers
+        final Optional<String> refused = InstanceName.refusal(name);
+        if (refused.isPresent()) {
+            final String message = "comando cannot start: " + refused.get();
+            System.err.println(message);
+            if (!GraphicsEnvironment.isHeadless()) {
+                JOptionPane.showMessageDialog(null, message, "comando", JOptionPane.ERROR_MESSAGE);
+            }
+            System.exit(1);
+        }
         System.setProperty(InstanceName.PROPERTY, name);
         System.setProperty("apple.awt.application.name", InstanceName.display(name));
         if (System.getProperty("comando.prefsNode") == null) {

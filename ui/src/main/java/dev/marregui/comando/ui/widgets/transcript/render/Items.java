@@ -12,6 +12,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.transcript.Block;
@@ -91,6 +93,79 @@ final class Items {
         g.fillRoundRect(x, y, w, h, Theme.RADIUS * 2, Theme.RADIUS * 2);
     }
 
+    /**
+     * Lays out {@code paras} one under another at {@code w}, the first at {@code y}, a list's items closer together
+     * than paragraphs; each one's top goes to {@code tops}. Returns the bottom of the last.
+     */
+    private static int stack(final List<Paras.View> paras, final int[] tops, final int y, final int w, final Style s) {
+        int at = y;
+        for (int i = 0; i < paras.size(); i++) {
+            if (i > 0) {
+                final boolean listRun = paras.get(i).para() instanceof Para.Text t
+                        && t.kind() == Para.Kind.ITEM
+                        && paras.get(i - 1).para() instanceof Para.Text p
+                        && p.kind() == Para.Kind.ITEM;
+                at += listRun ? s.paraGap / 3 : s.paraGap;
+            }
+            tops[i] = at;
+            at += paras.get(i).layout(w, s);
+        }
+        return at;
+    }
+
+    /**
+     * Paints the paragraphs {@link #stack} placed below {@code y} that cross the clip; the last ends at {@code
+     * bottom}.
+     */
+    private static void paintStack(
+            final Graphics2D g,
+            final List<Paras.View> paras,
+            final int[] tops,
+            final int x,
+            final int y,
+            final int bottom,
+            final Rectangle clip,
+            final Marks marks
+    ) {
+        for (int i = 0; i < paras.size(); i++) {
+            final int top = y + tops[i];
+            final int end = i + 1 < paras.size() ? y + tops[i + 1] : bottom;
+            if (end < clip.y || top > clip.y + clip.height) {
+                continue;
+            }
+            paras.get(i).paint(g, x, top, clip, marks);
+        }
+    }
+
+    private static void collectStack(
+            final List<Paras.View> paras,
+            final int[] tops,
+            final int x,
+            final int y,
+            final Item owner,
+            final List<Placed> out
+    ) {
+        for (int i = 0; i < paras.size(); i++) {
+            paras.get(i).collect(x, y + tops[i], owner, out);
+        }
+    }
+
+    /**
+     * The text of each box {@link #collectStack} places: from {@code views} when laid out, else {@code markdown}
+     * parsed and not kept.
+     */
+    private static void findStack(final List<Paras.View> views, final String markdown, final List<String> out) {
+        if (views != null) {
+            for (final Paras.View v : views) {
+                Paras.findTexts(v.para(), out);
+            }
+        } else {
+            for (final Para p : MarkdownDoc.parse(markdown, false)) {
+                Paras.findTexts(p, out);
+            }
+        }
+    }
+
     // ---- prompt
 
     static final class PromptItem extends Item {
@@ -98,24 +173,92 @@ final class Items {
         private static final int BOTTOM = 4;
         private static final int IN_X = 10;
         private static final int IN_Y = 6;
+        private static final String FROM_SESSION = "[from session ";
+        private static final String FROM_INSTANCE = "[from instance ";
+        private static final String SESSION_PART = " · session ";
+        private static final String OVERSEER_PART = " · overseer";
+        private static final String PEER = "peer:";
         private TextBox origin;
+        /** The prompt as one box, as typed: the user's own prompts and a subagent's task. */
         private TextBox text;
+        /** Null for the user's own prompts and a subagent's task, which read as typed. */
+        private Sender sender;
+        /** A sent prompt's body as paragraphs; null until its first layout: one far from the view is not parsed. */
+        private List<Paras.View> views;
+        private int[] tops = new int[0];
         private Style built;
 
         PromptItem(final Block.UserPrompt b) {
             super(b);
+            sender = sender(b.text(), b.origin());
+        }
+
+        /**
+         * The sender a prompt names on its first line, {@code [from session <s>]} or {@code [from instance <name>[ ·
+         * overseer][ · session <s>]]}, where the name itself may hold {@code " · "} (a surrogate's {@code comando ·
+         * b}), so the session and the overseer mark are taken off its end; else, for a prompt a peer instance sent
+         * ({@code peer:<slug>}) without that line, the peer, its whole text the body. Null for anything else: the
+         * user's own prompts, a subagent's task, a first line that does not close or names no one.
+         */
+        static Sender sender(final String text, final String origin) {
+            final int eol = text.indexOf('\n');
+            final String first = eol < 0 ? text : text.substring(0, eol);
+            final String body = eol < 0 ? "" : text.substring(eol + 1);
+            if (first.endsWith("]") && first.startsWith(FROM_SESSION)) {
+                final String name = first.substring(FROM_SESSION.length(), first.length() - 1).strip();
+                return name.isEmpty() ? null : new Sender(name, false, "", body);
+            }
+            if (first.endsWith("]") && first.startsWith(FROM_INSTANCE)) {
+                String rest = first.substring(FROM_INSTANCE.length(), first.length() - 1);
+                String session = "";
+                // the last one: a name may read "session lab", shown as "comando · session lab"
+                final int at = rest.lastIndexOf(SESSION_PART);
+                if (at >= 0) {
+                    session = rest.substring(at + SESSION_PART.length()).strip();
+                    rest = rest.substring(0, at);
+                }
+                final boolean overseer = rest.endsWith(OVERSEER_PART);
+                final String name = (overseer ? rest.substring(0, rest.length() - OVERSEER_PART.length()) : rest)
+                        .strip();
+                return name.isEmpty() ? null : new Sender(name, overseer, session, body);
+            }
+            return origin.startsWith(PEER) && origin.length() > PEER.length()
+                    ? new Sender(origin.substring(PEER.length()), false, "", text) : null;
         }
 
         private Block.UserPrompt prompt() {
             return (Block.UserPrompt) block;
         }
 
-        /** The line above the prompt: who sent it, from which panel, and when ({@link #clock}), when that is known. */
+        /** True when the prompt came from another session or instance, its body drawn as Markdown. */
+        @TestOnly
+        boolean sent() {
+            return sender != null;
+        }
+
+        /**
+         * The line above the prompt: who sent it, from which panel or which session or instance, and when ({@link
+         * #clock}), when that is known.
+         */
         String label() {
             final String o = prompt().origin();
-            final String who = o.isEmpty() ? "you" : o.equals("subagent") ? "task for the subagent" : "you · " + o;
+            final String who = sender != null ? sender.label()
+                    : o.isEmpty() ? "you" : o.equals("subagent") ? "task for the subagent" : "you · " + o;
             final String at = clock(prompt().atMillis());
             return at.isEmpty() ? who : who + " · " + at;
+        }
+
+        /** Whether a sent prompt's body is parsed: at its first layout, until it lets its layout go; for tests. */
+        @TestOnly
+        boolean parsed() {
+            return views != null;
+        }
+
+        private List<Paras.View> views() {
+            if (views == null) {
+                views = Paras.reuse(MarkdownDoc.parse(sender.body()), List.of());
+            }
+            return views;
         }
 
         /** Over the line above the prompt, the whole time it was sent. */
@@ -126,16 +269,25 @@ final class Items {
                     || px >= IN_X + Math.ceil(origin.naturalWidth()) ? null : fullClock(prompt().atMillis());
         }
 
+        /** A sent prompt's paragraphs that did not change keep their views; one never parsed waits for its layout. */
         @Override
         void changed(final Block previous, final Block next) {
             built = null;
+            final Block.UserPrompt p = (Block.UserPrompt) next;
+            sender = sender(p.text(), p.origin());
+            if (views != null) {
+                views = sender == null ? null : Paras.reuse(MarkdownDoc.parse(sender.body()), views);
+            }
         }
 
+        /** The paragraphs go too: parsed again from the block at the next layout. */
         @Override
         void dropLayout() {
             built = null;
             origin = null;
             text = null;
+            views = null;
+            tops = new int[0];
         }
 
         @Override
@@ -143,27 +295,50 @@ final class Items {
             if (built != s) {
                 built = s;
                 origin = new TextBox(new Rich(s.small, s.muted).append(label()));
-                text = new TextBox(new Rich(s.mono, s.text).append(prompt().text()).linked(s.link));
+                text = sender != null ? null
+                        : new TextBox(new Rich(s.mono, s.text).append(prompt().text()).linked(s.link));
             }
             final int inner = Math.max(40, w - 2 * IN_X);
-            return TOP + IN_Y + origin.layout(inner, s) + 2 + text.layout(inner, s) + IN_Y + BOTTOM;
+            final int head = TOP + IN_Y + origin.layout(inner, s) + 2;
+            if (sender == null) {
+                return head + text.layout(inner, s) + IN_Y + BOTTOM;
+            }
+            final List<Paras.View> paras = views();
+            tops = new int[paras.size()];
+            return head + stack(paras, tops, 0, inner, s) + IN_Y + BOTTOM;
+        }
+
+        private int bodyTop(final int y) {
+            return y + TOP + IN_Y + origin.height() + 2;
         }
 
         @Override
         void paint(final Graphics2D g, final int x, final int y, final Rectangle clip, final Marks marks) {
             fillRound(g, Theme.USER_BUBBLE, x, y + TOP, width(), height - TOP - BOTTOM);
             Paras.paintBox(g, origin, x + IN_X, y + TOP + IN_Y, clip, marks);
-            Paras.paintBox(g, text, x + IN_X, y + TOP + IN_Y + origin.height() + 2, clip, marks);
+            if (sender == null) {
+                Paras.paintBox(g, text, x + IN_X, bodyTop(y), clip, marks);
+            } else {
+                paintStack(g, views(), tops, x + IN_X, bodyTop(y), y + height - IN_Y - BOTTOM, clip, marks);
+            }
         }
 
         @Override
         void collect(final int x, final int y, final List<Placed> out) {
-            out.add(new Placed(text, x + IN_X, y + TOP + IN_Y + origin.height() + 2, this));
+            if (sender == null) {
+                out.add(new Placed(text, x + IN_X, bodyTop(y), this));
+            } else {
+                collectStack(views(), tops, x + IN_X, bodyTop(y), this, out);
+            }
         }
 
         @Override
         void findTexts(final List<String> out) {
-            out.add(Rich.detab(prompt().text()));
+            if (sender == null) {
+                out.add(Rich.detab(prompt().text()));
+            } else {
+                findStack(views, sender.body(), out);
+            }
         }
 
         @Override
@@ -179,6 +354,24 @@ final class Items {
         @Override
         String markdown() {
             return "> " + prompt().text().replace("\n", "\n> ");
+        }
+
+        /**
+         * Who sent a prompt on someone's behalf, and what they wrote: another session or instance, named on the
+         * prompt's first line, its body Markdown.
+         *
+         * @param name     the sending session, or the sending instance
+         * @param overseer true when the instance asked as the overseer
+         * @param session  the instance's session; empty when not named
+         * @param body     the prompt after its first line
+         */
+        record Sender(String name, boolean overseer, String session, String body) {
+
+            /** {@code from alice · Comando G}, {@code from comando (overseer) · Comando UI}, {@code from foreman}. */
+            String label() {
+                final String who = "from " + name + (overseer ? " (overseer)" : "");
+                return session.isEmpty() ? who : who + " · " + session;
+            }
         }
     }
 
@@ -253,61 +446,28 @@ final class Items {
             final List<Paras.View> paras = views();
             tops = new int[paras.size()];
             final int inner = report ? w - GUTTER - FRAME : w;
-            int y = report ? FRAME : 4;
-            for (int i = 0; i < paras.size(); i++) {
-                if (i > 0) {
-                    final boolean listRun = paras.get(i).para() instanceof Para.Text t
-                            && t.kind() == Para.Kind.ITEM
-                            && paras.get(i - 1).para() instanceof Para.Text p
-                            && p.kind() == Para.Kind.ITEM;
-                    y += listRun ? s.paraGap / 3 : s.paraGap;
-                }
-                tops[i] = y;
-                y += paras.get(i).layout(inner, s);
-            }
-            return y + (report ? FRAME : 4);
+            return stack(paras, tops, report ? FRAME : 4, inner, s) + (report ? FRAME : 4);
         }
 
         @Override
-        void paint(final Graphics2D g, int x, final int y, final Rectangle clip, final Marks marks) {
+        void paint(final Graphics2D g, final int x, final int y, final Rectangle clip, final Marks marks) {
             if (report) {
                 // on the transcript's own ground, framed by the tint's bar alone (record 96)
                 g.setPaint(style().tint.ramp(y, y + height, false));
                 g.fillRect(x, y, 3, height);
             }
-            x += inset();
-            final List<Paras.View> paras = views();
-            for (int i = 0; i < paras.size(); i++) {
-                final int top = y + tops[i];
-                final int bottom = i + 1 < paras.size() ? y + tops[i + 1] : y + height;
-                if (bottom < clip.y || top > clip.y + clip.height) {
-                    continue;
-                }
-                paras.get(i).paint(g, x, top, clip, marks);
-            }
+            paintStack(g, views(), tops, x + inset(), y, y + height, clip, marks);
         }
 
         @Override
-        void collect(int x, final int y, final List<Placed> out) {
-            x += inset();
-            final List<Paras.View> paras = views();
-            for (int i = 0; i < paras.size(); i++) {
-                paras.get(i).collect(x, y + tops[i], this, out);
-            }
+        void collect(final int x, final int y, final List<Placed> out) {
+            collectStack(views(), tops, x + inset(), y, this, out);
         }
 
         /** The paragraphs the views hold when laid out; else parsed for this find and not kept. */
         @Override
         void findTexts(final List<String> out) {
-            if (views != null) {
-                for (final Paras.View v : views) {
-                    Paras.findTexts(v.para(), out);
-                }
-            } else {
-                for (final Para p : MarkdownDoc.parse(text(), false)) {
-                    Paras.findTexts(p, out);
-                }
-            }
+            findStack(views, text(), out);
         }
 
         @Override

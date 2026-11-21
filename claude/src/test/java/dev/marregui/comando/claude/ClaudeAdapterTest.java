@@ -90,7 +90,7 @@ class ClaudeAdapterTest {
         }
         exe.toFile().setExecutable(true);
         adapter = new ClaudeAdapter(sink, transcripts, gateway,
-                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
+                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.text("")));
         return adapter;
     }
 
@@ -154,7 +154,8 @@ class ClaudeAdapterTest {
                 cat > /dev/null
                 """);
         exe.toFile().setExecutable(true);
-        adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
+        adapter = new ClaudeAdapter(sink, transcripts, gateway,
+                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.text("")));
         final Path off = Files.createDirectories(tmp.resolve("off"));
         adapter.start(SessionSpec.fresh("off", off.toString()));
         Awaitility.await("the session off").atMost(WAIT).until(() -> Files.exists(off.resolve("checkpoint-by.txt"))
@@ -184,7 +185,8 @@ class ClaudeAdapterTest {
                 cat >> "$PWD/stdin.txt"
                 """);
         exe.toFile().setExecutable(true);
-        adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
+        adapter = new ClaudeAdapter(sink, transcripts, gateway,
+                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.text("")));
         final Path work = Files.createDirectories(tmp.resolve("work"));
         final Path stdin = work.resolve("stdin.txt");
         adapter.start(SessionSpec.fresh("work", work.toString()));
@@ -276,7 +278,8 @@ class ClaudeAdapterTest {
         Files.writeString(exe, "#!/bin/sh\necho $$ > claude.pid.tmp && mv claude.pid.tmp claude.pid\n"
                 + "while IFS= read -r line; do :; done\nexit 0\n");
         assertThat(exe.toFile().setExecutable(true)).isTrue();
-        adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
+        adapter = new ClaudeAdapter(sink, transcripts, gateway,
+                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.text("")));
         adapter.start(SessionSpec.fresh("work", tmp.toString()));
         sink.await(Intent.SessionStarted.class, WAIT);
         final Path pidFile = tmp.resolve("claude.pid");
@@ -353,7 +356,8 @@ class ClaudeAdapterTest {
                 """);
         exe.toFile().setExecutable(true);
         adapter = new ClaudeAdapter(sink, transcripts, gateway,
-                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT), Duration.ofMinutes(1));
+                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.text("")),
+                Duration.ofMinutes(1));
         final Path release = tmp.resolve("release");
         try {
             final SessionSpec spec = SessionSpec.fresh("work", tmp.toString());
@@ -484,7 +488,8 @@ class ClaudeAdapterTest {
     }
 
     private ClaudeAdapter adapterAt(final String executable, final Path run) {
-        adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(executable, run, tmp.resolve("projects"), UiInstructions.TEXT));
+        adapter = new ClaudeAdapter(sink, transcripts, gateway,
+                new ClaudeSettings(executable, run, tmp.resolve("projects"), UiInstructions.text("")));
         return adapter;
     }
 

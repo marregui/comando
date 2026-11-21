@@ -2,6 +2,8 @@ package dev.marregui.comando.core.model;
 
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * The name of a comando instance, so several on one machine tell themselves apart: in the Dock, the menu bar, the
@@ -16,6 +18,15 @@ public final class InstanceName {
     /** The data root's file naming the instance: {@code {"name": "Comando Expert"}}. */
     public static final String FILE = "instance.json";
     private static final String APP = "comando";
+    /** The main instance's id in the peers' topics: the slug of no name. */
+    private static final String MAIN = "main";
+    /**
+     * Names no instance but the main one may carry: the main instance's id, the role its headers mark, and the
+     * application's own name, which {@link #display} shows as the main instance's.
+     */
+    private static final Set<String> RESERVED = Set.of(MAIN, "overseer", APP);
+    /** The separator {@link #display} and the peers' headers put between the parts of a name. */
+    private static final String SEPARATOR = "·";
 
     private InstanceName() {
     }
@@ -61,6 +72,38 @@ public final class InstanceName {
      */
     public static String prefsNode(final String name) {
         return name == null || name.isBlank() ? "dev/marregui/comando" : "dev/marregui/comando-" + name.replaceAll("[^A-Za-z0-9_.-]", "_");
+    }
+
+    /**
+     * An instance's id in the peers' topics: its name in lowercase letters, digits and dashes; {@code main} when
+     * unnamed.
+     */
+    public static String slug(final String name) {
+        final String s = name == null ? "" : name.strip().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        return s.isEmpty() ? MAIN : s;
+    }
+
+    /**
+     * Why {@code name} cannot name an instance, or empty when it can. Only the main instance, which has no name, is
+     * {@code main} to the others and the overseer their headers mark: a name equal to {@code main}, {@code overseer} or
+     * {@code comando} in any case, or whose id is {@code main}, would pass for it, and one holding {@code ·} would
+     * pass for a role or a session in a header.
+     */
+    public static Optional<String> refusal(final String name) {
+        if (name == null || name.isEmpty()) {
+            return Optional.empty();
+        }
+        if (RESERVED.contains(name.strip().toLowerCase(Locale.ROOT)) || MAIN.equals(slug(name))) {
+            return Optional.of("refused: only the main instance, which has no name, is known by this one; choose"
+                    + " another [name=" + name + ", reserved=" + String.join("|", RESERVED.stream().sorted().toList())
+                    + ']');
+        }
+        if (name.contains(SEPARATOR)) {
+            return Optional.of("refused: the name holds the separator of a header's parts; remove it [name=" + name
+                    + ", separator=U+00B7]");
+        }
+        return Optional.empty();
     }
 
     /** The name {@code Main} recorded for this process; empty for the main instance or before it is set. */

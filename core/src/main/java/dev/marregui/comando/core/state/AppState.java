@@ -33,7 +33,7 @@ import dev.marregui.comando.core.model.PanelId;
  *                replaces it, or an event about the same subject clears it
  * @param notices the most recent notices, oldest first, at most {@link #NOTICE_HISTORY}, including those that did
  *                not reach the status bar because an error was standing
- * @param instances the other comando instances on the comando Edge and the questions between them (record 124)
+ * @param instances the other comando instances on frontear and the questions between them (record 124)
  * @param logbook the scratchpad's open tasks the Logbook tab shows, read from the newest day folder's index
  * @param lowerTab  the lower tab selected for the focused panel
  * @param panelTabs the lower tab each other open panel had when it was last focused, by panel id: a panel focused
@@ -369,7 +369,7 @@ public record AppState(
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, logbook, views, lowerTab, panelTabs, notice, notices, instances, nextId + 1);
     }
 
-    /** The instances on the comando Edge as last read. */
+    /** The instances on frontear as last read. */
     public AppState withInstances(final InstancesState newInstances) {
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, logbook, views, lowerTab, panelTabs, notice, notices, newInstances,
                 nextId);

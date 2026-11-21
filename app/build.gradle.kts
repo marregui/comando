@@ -34,13 +34,14 @@ configurations.runtimeClasspath {
     exclude(group = "org.checkerframework", module = "checker-qual")
 }
 
-// no test of this module joins the comando Edge or the machine's cdb: a developer's own comando may be running them
-// (records 123, 146)
+// no test of this module joins or starts frontear, or the machine's cdb: a developer's own comando may be running them
+// (records 123, 146, 185)
 tasks.withType<Test>().configureEach {
-    // FrontearParityTest runs frontear's BrokerInteropTest in a child JVM from frontear's compiled test classes
-    dependsOn(":frontear:testClasses")
     systemProperty("comando.peers", "false")
     systemProperty("comando.metrics", "false")
+    // FrontearFabricTest's stale-entry takeovers: COMANDO_FABRIC_SEED0/1 replay a printed seed pair
+    System.getenv("COMANDO_FABRIC_SEED0")?.let { systemProperty("comando.fabric.seed0", it) }
+    System.getenv("COMANDO_FABRIC_SEED1")?.let { systemProperty("comando.fabric.seed1", it) }
 }
 
 tasks.jar {

@@ -68,7 +68,7 @@ class StoreTest {
             Files.deleteIfExists(home.resolve("sessions.json"));
             Files.createDirectories(home.resolve("sessions.json"));
             Files.writeString(home.resolve("sessions.json").resolve("keep"), "x");
-            store.saveSessions(List.of(SessionSpec.imported("edge", "/w", "abc")));
+            store.saveSessions(List.of(SessionSpec.imported("eden", "/w", "abc")));
             store.saveNow().get(5, TimeUnit.SECONDS);
         }
         assertThat(notices).anyMatch(n -> n.startsWith("Cannot write sessions.json"));
@@ -101,15 +101,15 @@ class StoreTest {
         try (final Store store = new Store(home)) {
             store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "10.0.0.2", 8812, "qdb", "admin", "pw", true)));
-            store.saveSessions(List.of(SessionSpec.imported("edge", "/w", "abc")));
-            store.savePanels(List.of(new PanelState(id, "work", "lab", "edge")), List.of());
+            store.saveSessions(List.of(SessionSpec.imported("eden", "/w", "abc")));
+            store.savePanels(List.of(new PanelState(id, "work", "lab", "eden")), List.of());
             store.changed(id, "SELECT 42;");
         }
         try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             assertThat(loaded.connections()).singleElement().extracting(ConnectionSpec::prod).isEqualTo(true);
             assertThat(loaded.sessions()).singleElement().extracting(SessionSpec::claudeSessionId).isEqualTo("abc");
-            assertThat(loaded.panels()).containsExactly(new PanelState(id, "work", "lab", "edge"));
+            assertThat(loaded.panels()).containsExactly(new PanelState(id, "work", "lab", "eden"));
             assertThat(store.load(id)).isEqualTo("SELECT 42;");
         }
     }
@@ -472,14 +472,15 @@ class StoreTest {
     @Test
     void aSessionBoundToSeveralPanelsKeepsItsFirstAtTheStart() {
         final List<PanelState> panels = List.of(new PanelState(new PanelId("a"), "one", "", "work"),
-                new PanelState(new PanelId("b"), "two", "", "work"), new PanelState(new PanelId("c"), "three", "", "edge"),
+                new PanelState(new PanelId("b"), "two", "", "work"),
+                new PanelState(new PanelId("c"), "three", "", "eden"),
                 new PanelState(new PanelId("d"), "four", "", "work"));
         final List<String> unbound = new ArrayList<>();
         assertThat(Store.oneBindingPerSession(panels, unbound)).extracting(PanelState::session)
-                .containsExactly("work", "", "edge", "");
+                .containsExactly("work", "", "eden", "");
         assertThat(unbound).containsExactly("work stays in one; two, four are detached");
         assertThat(Store.oneBindingPerSession(panels.subList(0, 3), new ArrayList<>())).extracting(PanelState::session)
-                .containsExactly("work", "", "edge");
+                .containsExactly("work", "", "eden");
     }
 
     /// A settings file that does not parse loads as empty and is kept aside under a `.corrupt-` name instead of being
@@ -546,12 +547,12 @@ class StoreTest {
         try (final Store store = new Store(home)) {
             store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "10.0.0.2", 8812, "qdb", "admin", "", false)));
-            store.saveSessions(List.of(SessionSpec.fresh("edge", "/w")));
-            store.savePanels(List.of(new PanelState(id, "edge", "lab", "edge")), List.of());
+            store.saveSessions(List.of(SessionSpec.fresh("eden", "/w")));
+            store.savePanels(List.of(new PanelState(id, "eden", "lab", "eden")), List.of());
             store.changed(id, "SELECT 42;");
         }
         assertThat(Json.readTree(Files.readString(home.resolve("panels.json"))).path("panels").get(0).path("session")
-                .asString()).isEqualTo("edge");
+                .asString()).isEqualTo("eden");
         final ObjectNode later = (ObjectNode) Json.readTree(Files.readString(home.resolve("sessions.json")));
         later.put("version", 2);
         Files.writeString(home.resolve("sessions.json"), Json.pretty(later));
@@ -563,7 +564,7 @@ class StoreTest {
         }
         assertThat(Json.readTree(Files.readString(home.resolve("panels.json"))).path("panels").get(0).path("session")
                 .asString())
-                .as("the binding to a session of the later file survives the downgrade").isEqualTo("edge");
+                .as("the binding to a session of the later file survives the downgrade").isEqualTo("eden");
         assertThat(told).anyMatch(t -> t.startsWith("panels.json is kept as it is"));
     }
 

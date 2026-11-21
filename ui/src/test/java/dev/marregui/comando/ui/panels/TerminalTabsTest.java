@@ -38,9 +38,9 @@ class TerminalTabsTest {
     /// panel is focused.
     @Test
     void aTerminalNotStartedTakesItsPanelsCurrentDirectoryOnEveryRender(@TempDir final Path root) throws Exception {
-        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path edge = Files.createDirectory(root.resolve("eden"));
         final Path lane2 = Files.createDirectory(root.resolve("lane2"));
-        final List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString())),
+        final List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("eden", edge.toString())),
                 SessionState.closed(SessionSpec.fresh("lane2", lane2.toString())));
         final TerminalTabs tabs = new TerminalTabs();
 
@@ -48,7 +48,8 @@ class TerminalTabsTest {
         tabs.render(unbound, false);
         assertThat(tabs.terminal(P1).directory()).isEqualTo(HOME);
 
-        final AppState bound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge"), new PanelState(P2, "two", "", "")), List.of(), sessions);
+        final AppState bound = AppState.initial(
+                List.of(new PanelState(P1, "one", "", "eden"), new PanelState(P2, "two", "", "")), List.of(), sessions);
         tabs.render(bound, false);
         assertThat(tabs.terminal(P1).directory()).as("bound after the terminal was created").isEqualTo(edge);
 
@@ -66,11 +67,11 @@ class TerminalTabsTest {
     /// exit bar and Restart use the directory the panel is bound to now.
     @Test
     void anExitedShellRestartsWhereItsPanelIsBoundNow(@TempDir final Path root) throws Exception {
-        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path edge = Files.createDirectory(root.resolve("eden"));
         final Path lane2 = Files.createDirectory(root.resolve("lane2"));
-        final List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString())),
+        final List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("eden", edge.toString())),
                 SessionState.closed(SessionSpec.fresh("lane2", lane2.toString())));
-        final AppState bound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge")), List.of(), sessions);
+        final AppState bound = AppState.initial(List.of(new PanelState(P1, "one", "", "eden")), List.of(), sessions);
         final AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "lane2")), List.of(), sessions);
         final TerminalTabs tabs = new TerminalTabs(dir -> new TerminalWidget(dir, List.of("/bin/sh", "-c", "sleep 1")));
         final AtomicBoolean runningAtRebind = new AtomicBoolean();
@@ -173,9 +174,10 @@ class TerminalTabsTest {
     /// the one in front; a second call gives the same terminal.
     @Test
     void aTerminalMadeForAPanelNotFocusedIsNotShown(@TempDir final Path root) throws Exception {
-        final Path edge = Files.createDirectory(root.resolve("edge"));
-        final AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "edge")), List.of(),
-                List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString()))));
+        final Path edge = Files.createDirectory(root.resolve("eden"));
+        final AppState s = AppState.initial(
+                List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "eden")), List.of(),
+                List.of(SessionState.closed(SessionSpec.fresh("eden", edge.toString()))));
         final TerminalTabs tabs = new TerminalTabs();
         final AtomicReference<TerminalWidget> made = new AtomicReference<>();
         final AtomicReference<TerminalWidget> front = new AtomicReference<>();

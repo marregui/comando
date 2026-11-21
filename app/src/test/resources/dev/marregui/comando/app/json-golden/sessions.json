@@ -1,7 +1,7 @@
 {
   "version" : 1,
   "sessions" : [ {
-    "name" : "edge",
+    "name" : "eden",
     "workDir" : "/Users/me/edge",
     "model" : "opus",
     "effort" : "xhigh",

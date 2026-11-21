@@ -549,7 +549,7 @@ public final class SessionsSidebar {
             tabs.add(shelf.title(), shelf.icon(), shelf.tip(), section(folderTabs.get(shelf.ordinal()).component()));
         }
         tabs.add("Logbook", "logbook", LogbookTab.tip(Logbook.NONE), logbook.component());
-        tabs.add("Instances", "instances", "the comando instances on the Edge and the questions between them",
+        tabs.add("Instances", "instances", "the comando instances on frontear and the questions between them",
                 instances.component());
         tabs.trailing(ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
         tabs.onMenu((tab, e) -> tabMenu(tab).show(e.getComponent(), e.getX(), e.getY()));
@@ -771,25 +771,30 @@ public final class SessionsSidebar {
     }
 
     /**
-     * What the Instances tab acts through: the other instances ({@code port}) and the comando Edge's toggle, which it
-     * offers to start while the Edge is down.
+     * What the Instances tab acts through: the other instances ({@code port}) and frontear's toggle, which it offers
+     * to start while frontear is down.
      */
-    public void instances(final InstancesPort port, final BooleanSupplier edgeRunning, final BooleanSupplier edgeBusy, final Runnable startEdge) {
+    public void instances(
+            final InstancesPort port,
+            final BooleanSupplier fabricRunning,
+            final BooleanSupplier fabricBusy,
+            final Runnable startFabric
+    ) {
         instancesPort = port == null ? InstancesPort.NONE : port;
-        instances.edge(new InstancesTab.Edge() {
+        instances.fabric(new InstancesTab.Fabric() {
             @Override
             public boolean running() {
-                return edgeRunning.getAsBoolean();
+                return fabricRunning.getAsBoolean();
             }
 
             @Override
             public boolean busy() {
-                return edgeBusy.getAsBoolean();
+                return fabricBusy.getAsBoolean();
             }
 
             @Override
             public void start() {
-                startEdge.run();
+                startFabric.run();
             }
         });
     }

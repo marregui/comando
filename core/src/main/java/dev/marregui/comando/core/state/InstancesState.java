@@ -4,10 +4,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The comando instances this one sees on the comando Edge, and the questions between them (record 124): what the
+ * The comando instances this one sees on frontear, and the questions between them (record 124): what the
  * sidebar's Instances tab shows and {@code ui_get_state} lists. The peers' part comes from their retained presence.
  *
- * @param connected whether this instance is connected to the comando Edge now
+ * @param connected whether this instance is connected to frontear now
  * @param self      this instance, as its own presence says it
  * @param others    the other instances, by name: those present, then those seen before and remembered
  * @param consults  the questions this instance asked and answered since it started, oldest first, at most
@@ -35,12 +35,12 @@ public record InstancesState(boolean connected, Instance self, List<Instance> ot
      * @param role     what the instance is for, from its data root's {@code instance.json}; empty when unset
      * @param kit      its kit's commit, short; empty when the kit is not a git checkout
      * @param started  when it started, ISO-8601
-     * @param edge     it started the comando Edge, which it stops
-     * @param present  its presence is on the Edge now; false for an instance this one saw before and remembers
+     * @param host     it hosts the frontear node, which it alone stops
+     * @param present  its presence is on frontear now; false for an instance this one saw before and remembers
      * @param lastSeen when this instance last saw it present, epoch milliseconds; 0 while it is present
      */
     public record Instance(String slug, String name, String version, String role, String kit, boolean busy, String started,
-                           List<Member> sessions, boolean edge, boolean present, long lastSeen) {
+                           List<Member> sessions, boolean host, boolean present, long lastSeen) {
 
         public static final Instance NONE = new Instance("", "", "", "", "", false, "", List.of());
 
@@ -54,7 +54,7 @@ public record InstancesState(boolean connected, Instance self, List<Instance> ot
             sessions = sessions == null ? List.of() : List.copyOf(sessions);
         }
 
-        /** A present instance that did not start the Edge. */
+        /** A present instance that does not host frontear. */
         public Instance(final String slug, final String name, final String version, final String role, final String kit, final boolean busy, final String started, final List<Member> sessions) {
             this(slug, name, version, role, kit, busy, started, sessions, false, true, 0L);
         }

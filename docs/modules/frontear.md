@@ -31,12 +31,12 @@ command line.
 | Package | Role | Main classes |
 |---|---|---|
 | `frontear` | One node, started and stopped as a unit | `Frontear` |
-| `broker` | Connections, sessions, retained messages, routing | `Broker`, `BrokerOptions`, `Connection`, `Session`, `InternalSubscriber`, `Gate` |
-| `tree` | Which subscriber matches which topic | `TopicTree`, `Entry`, `Match` |
-| `link` | Forwarding to and from a peer broker | `Links`, `Link`, `LinkSpec`, `LinkFile`, `LinkOptions`, `LinkState`, `Forwarding` |
-| `queue` | A link's log on disk | `LinkLog`, `LogForcer`, `LogOptions`, `LogFiles`, `WholeFile`, `Record` |
-| `control` | Signed requests that change the links | `ControlPlane`, `ControlGate`, `Seal`, `Signer`, `Request`, `Refusal`, `StateTopic` |
-| `mqtt` | The wire format and a client | `Codec`, `Wire`, `Packet`, `MqttClient`, `Topics`, `PublishRecord` |
+| `gateway` | Connections, sessions, retained messages, routing | `Broker`, `BrokerOptions`, `Connection`, `Session`, `InternalSubscriber`, `Gate` |
+| `channels` | Which subscriber matches which topic | `TopicTree`, `Entry`, `Match` |
+| `octopus` | Forwarding to and from a peer broker | `Links`, `Link`, `LinkSpec`, `LinkFile`, `LinkOptions`, `LinkState`, `Forwarding` |
+| `store` | A link's log on disk | `LinkLog`, `LogForcer`, `LogOptions`, `LogFiles`, `WholeFile`, `Record` |
+| `alexander` | Signed requests that change the links | `ControlPlane`, `ControlGate`, `Seal`, `Signer`, `Request`, `Refusal`, `StateTopic` |
+| `protocol` | The wire format and a client | `Codec`, `Wire`, `Packet`, `MqttClient`, `Topics`, `PublishRecord` |
 
 What the broker speaks, and what it declines:
 
@@ -178,7 +178,7 @@ kind of thread is a platform thread: the log forcer, because a force blocks in t
 ## 7. Dependencies allowed
 
 - `frontear` depends on the JDK and on `core`, of which it uses three packages: `loop`, `json` and `files`.
-- `app` depends on `frontear`: it can host a node, and its peer client is `frontear.mqtt`'s `MqttClient`.
+- `app` depends on `frontear`: it can host a node, and its peer client is `frontear.protocol`'s `MqttClient`.
 - Test fixtures (`FakeBroker`, `Recorder`, `Relay`) are published for `app`'s tests.
 
 ## 8. Tests

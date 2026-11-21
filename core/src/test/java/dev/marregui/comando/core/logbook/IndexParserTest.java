@@ -195,7 +195,7 @@ class IndexParserTest {
         assertThat(List.of(
                 headed("EDG-1227: Sam's review of the EDG-1217 plan, 34 findings (Miguel, 2026-11-04)"),
                 headed("Friction log batch 2026-11-08..10, second (Miguel, 2026-11-10 /reflect: \"Now\")"),
-                headed("EDG-1232 follow-up: Martin's hivemq-edge #1804 + testsuite #1701 "
+                headed("EDG-1232 follow-up: Martin's hivemq-mesh #1804 + testsuite #1701 "
                         + "(Martin, `#C08JYBMQ821` ts `1794243728.342979`, 2026-11-09)"),
                 headed("Some synthetic follow-up (Martin's ask, 2026-10-27)"),
                 headed("EDG-1176: polling adapter stops after 10 poll timeouts (Dominic, `#edge-team`, 2026-10-26)")))
@@ -205,7 +205,7 @@ class IndexParserTest {
                                 "Miguel, 2026-11-04"),
                         tuple("Friction log batch 2026-11-08..10, second", "Miguel", "2026-11-10",
                                 "Miguel, 2026-11-10 /reflect: \"Now\""),
-                        tuple("EDG-1232 follow-up: Martin's hivemq-edge #1804 + testsuite #1701", "Martin",
+                        tuple("EDG-1232 follow-up: Martin's hivemq-mesh #1804 + testsuite #1701", "Martin",
                                 "2026-11-09",
                                 "Martin, `#C08JYBMQ821` ts `1794243728.342979`, 2026-11-09"),
                         tuple("Some synthetic follow-up", "Martin", "2026-10-27", "Martin's ask, 2026-10-27"),
@@ -247,8 +247,8 @@ class IndexParserTest {
     /// A parenthetical that does not close the title is no attribution, the last one is, and a date alone is one.
     @Test
     void onlyTheParentheticalThatClosesTheTitleIsTheAttribution() {
-        final LogbookTask t = headed("hivemq-edge2#122 (EDG-1148 + EDG-1146): open, waiting on approval (2026-11-04)");
-        assertThat(t.name()).isEqualTo("hivemq-edge2#122 (EDG-1148 + EDG-1146): open, waiting on approval");
+        final LogbookTask t = headed("hivemq-mesh2#122 (EDG-1148 + EDG-1146): open, waiting on approval (2026-11-04)");
+        assertThat(t.name()).isEqualTo("hivemq-mesh2#122 (EDG-1148 + EDG-1146): open, waiting on approval");
         assertThat(t.started()).isEqualTo("2026-11-04");
         assertThat(t.by()).isEmpty();
         assertThat(headed("Draft (Miguel, 2026-11-04) then more").from()).isEmpty();

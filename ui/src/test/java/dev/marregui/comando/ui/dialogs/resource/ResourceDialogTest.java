@@ -95,9 +95,11 @@ class ResourceDialogTest {
     /// holds what was filled, so a started session's new id and start mode arrive.
     @Test
     void aStartedSessionsNewIdReachesTheFormAndTheUsersEditStays() {
-        final Map<String, String> filled = Map.of("name", "edge", "effort", "", "sessionId", "A", "startMode", "FORK");
-        final Map<String, String> form = Map.of("name", "edge", "effort", "high", "sessionId", "A", "startMode", "FORK");
-        final Map<String, String> stored = Map.of("name", "edge", "effort", "", "sessionId", "B", "startMode", "RESUME");
+        final Map<String, String> filled = Map.of("name", "eden", "effort", "", "sessionId", "A", "startMode", "FORK");
+        final Map<String, String> form =
+                Map.of("name", "eden", "effort", "high", "sessionId", "A", "startMode", "FORK");
+        final Map<String, String> stored =
+                Map.of("name", "eden", "effort", "", "sessionId", "B", "startMode", "RESUME");
 
         assertThat(ResourceDialog.merge(form, filled, stored))
                 .containsEntry("effort", "high")
@@ -183,8 +185,9 @@ class ResourceDialogTest {
     // ---- unsaved changes on every path that replaces the form
 
     private static AppState twoSessions() {
-        return AppState.initial(List.of(new PanelState(States.P1, "one", "", "edge")), List.of(),
-                List.of(SessionState.closed(SessionSpec.fresh("edge", "/tmp")), SessionState.closed(SessionSpec.fresh("lane2", "/var"))));
+        return AppState.initial(List.of(new PanelState(States.P1, "one", "", "eden")), List.of(),
+                List.of(SessionState.closed(SessionSpec.fresh("eden", "/tmp")),
+                        SessionState.closed(SessionSpec.fresh("lane2", "/var"))));
     }
 
     /// With unsaved edits, opening another session, a new one or a copy asks first: Keep editing keeps the edits,
@@ -197,13 +200,13 @@ class ResourceDialogTest {
         final JRootPane root = new JRootPane();
         d.install(root);
         final AppState s = twoSessions();
-        d.prepare(s, "edge");
+        d.prepare(s, "eden");
         combo(d, "model").setSelectedItem("opus");
         text(d, "checkpoint").setText("/compact");
 
         d.prepare(s, "lane2");
-        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
-        assertThat(text(d, "name").getText()).isEqualTo("edge");
+        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to eden?");
+        assertThat(text(d, "name").getText()).isEqualTo("eden");
         click(d, "Keep editing", confirmRow(d));
         assertThat(text(d, "checkpoint").getText()).isEqualTo("/compact");
         assertThat(combo(d, "model").getSelectedItem()).isEqualTo("opus");
@@ -211,7 +214,7 @@ class ResourceDialogTest {
 
         d.prepareNew(s);
         d.escape();
-        assertThat(text(d, "name").getText()).as("Esc keeps editing too").isEqualTo("edge");
+        assertThat(text(d, "name").getText()).as("Esc keeps editing too").isEqualTo("eden");
         assertThat(d.isDirty()).isTrue();
 
         d.prepareClone(s, "lane2");
@@ -237,14 +240,14 @@ class ResourceDialogTest {
         final JRootPane root = new JRootPane();
         d.install(root);
         final AppState s = twoSessions();
-        d.prepare(s, "edge");
+        d.prepare(s, "eden");
         text(d, "name").setText("mine");
 
         d.close();
-        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
+        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to eden?");
         click(d, "Discard", confirmRow(d));
-        d.prepare(s, "edge");
-        assertThat(text(d, "name").getText()).as("the stored name, not the edit").isEqualTo("edge");
+        d.prepare(s, "eden");
+        assertThat(text(d, "name").getText()).as("the stored name, not the edit").isEqualTo("eden");
         assertThat(d.isDirty()).isFalse();
         assertThat(sink.intents()).isEmpty();
 
@@ -252,7 +255,7 @@ class ResourceDialogTest {
         text(d, "name").setText("mine");
         d.prepare(s, "lane2");
         d.close();
-        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
+        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to eden?");
         assertThat(sink.intents()).isEmpty();
     }
 
@@ -263,9 +266,9 @@ class ResourceDialogTest {
         final RecordingSink sink = new RecordingSink();
         final ResourceDialog<SessionSpec> d = sessions(sink);
         final AppState s = twoSessions();
-        d.prepare(s, "edge");
+        d.prepare(s, "eden");
 
-        assertThat(d.title()).isEqualTo("Session edge");
+        assertThat(d.title()).isEqualTo("Session eden");
 
         d.prepareNew(s);
         assertThat(text(d, "name").getText()).isEqualTo("new session");
@@ -286,9 +289,9 @@ class ResourceDialogTest {
     void openingOnTheResourceBeingEditedKeepsTheEdits() {
         final ResourceDialog<SessionSpec> d = sessions(new RecordingSink());
         final AppState s = twoSessions();
-        d.prepare(s, "edge");
+        d.prepare(s, "eden");
         text(d, "checkpoint").setText("/compact");
-        d.prepare(s, "edge");
+        d.prepare(s, "eden");
         assertThat(confirmRow(d).isVisible()).isFalse();
         assertThat(text(d, "checkpoint").getText()).isEqualTo("/compact");
     }

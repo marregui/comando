@@ -8,11 +8,9 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 import dev.marregui.comando.claude.ClaudeAdapter;
@@ -45,7 +43,6 @@ import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.result.ResultRegistry;
@@ -74,15 +71,14 @@ import dev.marregui.comando.ui.kit.desktop.DesktopTrash;
 import dev.marregui.comando.ui.kit.text.LocalImages;
 import dev.marregui.comando.ui.kit.text.MermaidDiagrams;
 import dev.marregui.comando.ui.shell.ComandoUi;
-import dev.marregui.comando.ui.shell.ServerToggle;
 import dev.marregui.comando.ui.shell.Setup;
 
 /**
  * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: this instance's
- * presence among the other instances and its link to the comando Edge, the tool runs, Claude's processes, the MCP
- * server, the database lanes, the reducer, the intent log, the store (which writes the panels last), the Edge (or the
- * frontear fabric) this instance started, the machine cdb's errands, and last the window, which stays up, greyed,
- * until the rest has closed; quitting has already ended its shells and live plots.
+ * presence among the other instances and its link to frontear, the tool runs, Claude's processes, the MCP server,
+ * the database lanes, the reducer, the intent log, the store (which writes the panels last), the frontear node this
+ * instance hosts, the machine cdb's errands, and last the window, which stays up, greyed, until the rest has closed;
+ * quitting has already ended its shells and live plots.
  */
 public final class App implements AutoCloseable {
 
@@ -107,13 +103,12 @@ public final class App implements AutoCloseable {
     static final Duration KIT_EVERY = Duration.ofHours(6);
     /** How often the unbounded queues are read for the metrics log; a reading is written only when it changed. */
     static final Duration QUEUES_EVERY = Duration.ofMinutes(1);
-    /** {@code -Dcomando.peers=false}, set by window tests and picture tools, keeps this instance off the Edge. */
-    static final String PEERS_PROPERTY = "comando.peers";
     /**
-     * {@code -Dcomando.fabric=frontear} puts frontear (record 184), hosted in this process, where the comando Edge is;
-     * {@code edge}, the default, keeps the Edge.
+     * {@code -Dcomando.peers=false}, set by every test and picture tool, keeps this instance off frontear: it neither
+     * connects to the node nor starts one, so none binds the machine's port; the toggle and {@code server_start
+     * frontear} work on a registry in the data root and a port the OS picks, never the machine's.
      */
-    static final String FABRIC_PROPERTY = "comando.fabric";
+    static final String PEERS_PROPERTY = "comando.peers";
     /**
      * {@code -Dcomando.metrics=false}, set by every test and picture tool, keeps this instance off the machine's cdb:
      * no metrics are kept, and the toggle works on a folder in the data root, never on the machine's.
@@ -129,7 +124,7 @@ public final class App implements AutoCloseable {
     private final KitRoot root;
     private final RootLaunch launch;
     private final RootSetup setup;
-    /** The comando Edge as the instances' broker, and this instance among them (record 123); null when left out. */
+    /** frontear as the instances' broker, and this instance among them (record 123); null when left out. */
     private final MqttPeerBroker peerBroker;
     private final Peers peers;
     /** Reads the kit's version at start and every {@link #KIT_EVERY}, and the queues every {@link #QUEUES_EVERY}. */
@@ -226,7 +221,8 @@ public final class App implements AutoCloseable {
                 throw new UncheckedIOException("cannot start the MCP server", e);
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
-                    new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
+                    new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(),
+                            UiInstructions.text(InstanceName.current()), launch)));
             // the shadow switch is read here alone, so no log a test builds reads the user's machine folder
             metrics = own(metricsLog(machineCdb, config.home(), cdb, loop,
                     machineCdb ? MetricsLog.machineShadow() : null));
@@ -235,19 +231,18 @@ public final class App implements AutoCloseable {
             claude.checkpointByComando();
             final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
-            // the property is read here alone: the instances' broker is the comando Edge or frontear, never both
-            final Fabric edge = usesFrontear()
-                    ? Fabric.of(new FrontearFabric(config.home().resolve("fabric"), config.home(),
-                            InstanceName.current(), loop))
-                    : Fabric.of(new EmbeddedEdge(config.edgeRoot(), config.home(), InstanceName.current(), loop));
+            // the instances' broker, one node on the machine whichever instance hosts it (record 185); off the peers,
+            // one of the data root's own, so no toggle of a test or picture tool touches the machine's
+            final boolean onPeers = Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"));
+            final FrontearFabric fabric = FrontearFabric.of(config.home(), InstanceName.current(), loop, onPeers);
             // agents start and stop them as the toggles do (record 121)
-            mcpTools.servers(List.of(edge.server(), cdb));
+            mcpTools.servers(List.of(fabric, cdb));
             final SessionCatalogue catalogue = new SessionCatalogue(root.projects());
             ui = new ComandoUi(new ComandoUi.Dependencies(
                     loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
-                    cdb, edge.toggle(), setup, version, config.home(), config.logDir(), onQuit));
+                    cdb, fabric, setup, version, config.home(), config.logDir(), onQuit));
             // the tabs' topics: one reader, one Haiku process at a time, whatever the number of panels
             ui.topics(own(new ClaudeTopics(config.claudeExecutable(), launch, config.runDir())));
             // the search window's answers: its threads end with the application (record 139)
@@ -256,16 +251,18 @@ public final class App implements AutoCloseable {
             ui.checkpointThreshold(checkpointThreshold::set);
             // agents reach the panels' Terminals through the window, which refuses them until it is built (record 148)
             mcpTools.terminals(ui.terminals());
-            // the instances consult each other through the comando Edge while it runs, whichever instance started it
-            // (record 123); this instance's presence is cleared, and its link closed, before the Edge stops
-            if (Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"))) {
+            // the instances consult each other through frontear, whichever instance hosts it (record 123); the link
+            // starts it when none runs, at launch and when its host quits (record 185); this instance's presence is
+            // cleared, and its link closed, before the node it hosts stops
+            if (onPeers) {
                 final Peers.Me me = Peers.Me.of(InstanceName.current(), version, Main.roleFile(config.home()));
-                peerBroker = own(new MqttPeerBroker(me.clientId(), edge.mqttPort(), edge.running()));
+                peerBroker = own(new MqttPeerBroker(me.clientId(), fabric.mqttPort(), fabric::runningOrHost));
                 // a consult session is made where a new session is: the home folder
                 peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
-                // the instances seen are remembered in the data root, and the presence says whether this one started the Edge (record 124)
+                // the instances seen are remembered in the data root, and the presence says whether this one hosts
+                // frontear (record 124)
                 peers.dataRoot(config.home());
-                peers.edge(edge.startedHere());
+                peers.host(fabric::startedHere);
                 mcpTools.peers(peers);
                 // the sidebar's Instances tab asks and refuses through it (record 124)
                 ui.instances(peers);
@@ -276,8 +273,8 @@ public final class App implements AutoCloseable {
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the kit check uses KitGit, Peers and the window: its strand stops before them
             own(() -> ExecutorStop.now("app", kitCheck));
-            // the Edge this instance started stops before the machine's cdb; one another instance started keeps running
-            owned.addLast(edge.owner());
+            // the node this instance hosts stops before the machine's cdb; one another instance hosts keeps running
+            owned.addLast(fabric);
             // the machine's cdb is left running: its errands stop last, after the metrics log that writes to it
             owned.addLast(cdb);
             // the window closes last: it stays, greyed and titled "closing…", until everything behind it has closed
@@ -415,35 +412,6 @@ public final class App implements AutoCloseable {
     /** Whether this instance uses the machine's cdb: unless {@link #METRICS_PROPERTY} is false. */
     static boolean usesMachineCdb() {
         return Boolean.parseBoolean(System.getProperty(METRICS_PROPERTY, "true"));
-    }
-
-    /**
-     * Whether the instances' broker is frontear: {@link #FABRIC_PROPERTY} is {@code frontear}. Any other value keeps
-     * the comando Edge; one that is not {@code edge} is logged, so a misspelt flag does not pass unseen.
-     */
-    static boolean usesFrontear() {
-        final String fabric = System.getProperty(FABRIC_PROPERTY, "edge").strip().toLowerCase(Locale.ROOT);
-        if (!"frontear".equals(fabric) && !"edge".equals(fabric)) {
-            LOG.log(System.Logger.Level.WARNING, "unknown fabric, the comando Edge kept [" + FABRIC_PROPERTY + '='
-                    + fabric + ']');
-        }
-        return "frontear".equals(fabric);
-    }
-
-    /**
-     * The instances' broker as the parts that take it see it: the window's toggle, the agents' switch, what closes it,
-     * its MQTT port, whether it runs and whether this instance started it.
-     */
-    private record Fabric(ServerToggle toggle, ServerSwitch server, AutoCloseable owner, int mqttPort,
-            BooleanSupplier running, BooleanSupplier startedHere) {
-
-        static Fabric of(final EmbeddedEdge e) {
-            return new Fabric(e, e, e, EmbeddedEdge.Ports.DEFAULT.mqtt(), e::running, e::startedHere);
-        }
-
-        static Fabric of(final FrontearFabric f) {
-            return new Fabric(f, f, f, f.mqttPort(), f::running, f::startedHere);
-        }
     }
 
     /**

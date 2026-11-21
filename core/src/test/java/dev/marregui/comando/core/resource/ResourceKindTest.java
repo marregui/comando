@@ -131,12 +131,13 @@ class ResourceKindTest {
     /// a stored session that has none.
     @Test
     void aSessionSurvivesItsDialogFieldsWithItsCheckpoint() {
-        final SessionSpec spec = new SessionSpec("edge", "/Users/x/edge", "opus", "high", 15.0, "id-1", StartMode.RESUME, "/reflect", "");
+        final SessionSpec spec = new SessionSpec("eden", "/Users/x/edge", "opus", "high", 15.0, "id-1",
+                StartMode.RESUME, "/reflect", "");
         assertThat(SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(spec))).isEqualTo(spec);
-        final SessionSpec silent = new SessionSpec("edge", "/Users/x/edge", "", "", 0.0, "", StartMode.NEW, "", "");
+        final SessionSpec silent = new SessionSpec("eden", "/Users/x/edge", "", "", 0.0, "", StartMode.NEW, "", "");
         assertThat(SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(silent)).checkpoint())
                 .as("an emptied checkpoint stays empty: the button is hidden").isEmpty();
-        assertThat(new SessionSpec("edge", "/Users/x/edge", "", "", 0.0, "", StartMode.NEW, null, null).checkpoint())
+        assertThat(new SessionSpec("eden", "/Users/x/edge", "", "", 0.0, "", StartMode.NEW, null, null).checkpoint())
                 .as("a spec read from a file written before the field existed gets the default").isEqualTo("/reflect");
     }
 
@@ -261,8 +262,8 @@ class ResourceKindTest {
     /// Cloning a session with a conversation switches it to FORK, while a fresh session clone remains NEW.
     @Test
     void cloningASessionWithAConversationForksIt() {
-        final SessionSpec spec = SessionSpec.imported("edge", "/x", "id-1");
-        assertThat(SessionKind.INSTANCE.cloneOf(spec, "edge 2").startMode()).isEqualTo(StartMode.FORK);
+        final SessionSpec spec = SessionSpec.imported("eden", "/x", "id-1");
+        assertThat(SessionKind.INSTANCE.cloneOf(spec, "eden 2").startMode()).isEqualTo(StartMode.FORK);
         assertThat(SessionKind.INSTANCE.cloneOf(SessionSpec.fresh("n", "/x"), "n 2").startMode()).isEqualTo(StartMode.NEW);
         assertThat(SessionSpec.imported("t", "/x", "c0ffee").startMode()).isEqualTo(StartMode.FORK);
     }

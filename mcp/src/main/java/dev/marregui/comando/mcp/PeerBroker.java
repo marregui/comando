@@ -4,7 +4,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * The broker the comando instances on one machine reach each other through (record 123): the comando Edge, over MQTT 5.
+ * The broker the comando instances on one machine reach each other through (record 123): frontear, over MQTT 5.
  * {@code app} implements it on an MQTT client; {@link Peers} sees only this, so its tests run without a broker.
  */
 public interface PeerBroker {
@@ -27,6 +27,10 @@ public interface PeerBroker {
     /** At least once; fails at once when not connected. {@code responseTopic} and {@code correlation} may be null. */
     CompletableFuture<Void> publish(String topic, byte[] payload, boolean retained, String responseTopic, byte[] correlation);
 
-    /** Delivers messages on topics matching {@code filter} to {@code handler}, now and after every reconnect. */
+    /**
+     * Delivers messages on topics matching {@code filter} to {@code handler}, now and after every reconnect, at least
+     * once: a message may come again, after a reconnect or a redelivery, so {@code handler} must take a repeat as a
+     * no-op (a retained message comes again at every subscribe).
+     */
     void subscribe(String filter, Consumer<Message> handler);
 }

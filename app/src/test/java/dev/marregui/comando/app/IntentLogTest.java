@@ -51,15 +51,17 @@ class IntentLogTest {
             new Intent.SqlCompleted(3L, 10, -1L, false, 1, 2, 3),
             new Intent.SaveConnection("", new ConnectionSpec("lab", "h", 8812, "qdb", "u", "", true, "require")),
             new Intent.TestConnection(new ConnectionSpec("t", "h", 8812, "qdb", "u", "", false)),
-            new Intent.SaveSession("", SessionSpec.imported("edge", "/w", "abc")),
+            new Intent.SaveSession("", SessionSpec.imported("eden", "/w", "abc")),
             new Intent.ImportSessions(List.of(SessionSpec.fresh("a", "/a"))),
-            new Intent.SessionInit("edge", new SessionInfo("abc", "opus", "/w", "2.1.296", "default", List.of("interrupt"))),
-            new Intent.SessionTurnEnded("edge", 0, 0.5, 1000L, 1_000_000L, false, ""),
-            new Intent.ApprovalRequested(new Approval(1L, "edge", ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", 5L)),
+            new Intent.SessionInit("eden",
+                    new SessionInfo("abc", "opus", "/w", "2.1.296", "default", List.of("interrupt"))),
+            new Intent.SessionTurnEnded("eden", 0, 0.5, 1000L, 1_000_000L, false, ""),
+            new Intent.ApprovalRequested(
+                    new Approval(1L, "eden", ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", 5L)),
             new Intent.ApprovalAnswered(1L, new ApprovalDecision.Deny("no")),
             new Intent.ApprovalAnswered(2L, new ApprovalDecision.Answer(Map.of("Q?", "A"))),
-            new Intent.ShowView("edge", "t", new ViewSpec.Table(List.of("a"), List.of(List.of("1"))), Placement.LOWER),
-            new Intent.ShowView("edge", "p", new ViewSpec.Plot("x", "y", true,
+            new Intent.ShowView("eden", "t", new ViewSpec.Table(List.of("a"), List.of(List.of("1"))), Placement.LOWER),
+            new Intent.ShowView("eden", "p", new ViewSpec.Plot("x", "y", true,
                     List.of(new ViewSpec.Series("s", new double[]{1, 2}, new double[]{3, Double.NaN}))), Placement.LOWER),
             new Intent.ShowView("", "tree", new ViewSpec.Tree(new ViewSpec.TreeNode("r", "d", "comando-file:/a#1", List.of())), Placement.SIDE),
             new Intent.ShowView("", "c", ViewSpec.Console.running(4L, "gradle build"), Placement.LOWER),
@@ -77,7 +79,7 @@ class IntentLogTest {
     /// kept.
     @Test
     void everyIntentRoundTrips(@TempDir final Path dir) throws Exception {
-        final AppState initial = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "lab", "edge")),
+        final AppState initial = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "lab", "eden")),
                 List.of(), List.of());
         try (final IntentLog log = new IntentLog(dir, initial, () -> 40)) {
             SAMPLE.forEach(log::observe);

@@ -130,8 +130,11 @@ card. The exception is a `Bash` command that contains the word `rm` or `rmdir`, 
 `Peers` connects this comando to the others through a `PeerBroker`, an interface `app` implements over MQTT.
 It publishes this instance's presence every 2 s and keeps a list of the instances it sees.
 
-- `instance_ask` sends a question to another instance and waits for the answer.
-- The asked instance answers in a session of its own, named `consult-<asker>`.
+- `instance_ask` sends a question to another instance, optionally to a named session there (`session`, sent as
+  `to`), and waits for the answer.
+- The asked instance answers in the session named, made when it is missing, else in `consult-<asker>`. A session
+  waiting on its own question is refused at once.
+- Every session is told the trust rules (record 186) through `UiInstructions.text`: main is the overseer.
 - A question delivered twice is answered once.
 
 ## 7. The audit log
