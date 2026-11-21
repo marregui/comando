@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -54,6 +55,8 @@ public final class Links implements Mesh, AutoCloseable {
     private final Object lock = new Object();
     /** Written under {@link #lock}; read from any thread by {@link #state}. */
     private final Map<String, Link> links = new ConcurrentHashMap<>();
+    /** Told each client the broker accepts: a peer's link to this node wakes this node's link to that peer. */
+    private final Consumer<String> connectListener = this::peerConnected;
     /** Guarded by {@link #lock}. */
     private boolean closed;
 
@@ -103,6 +106,7 @@ public final class Links implements Mesh, AutoCloseable {
         this.clock = Objects.requireNonNull(clock, "clock");
         try {
             restore();
+            broker.addConnectListener(connectListener);
         } catch (final RuntimeException | Error e) {
             try {
                 close();
@@ -230,6 +234,7 @@ public final class Links implements Mesh, AutoCloseable {
                 return;
             }
             closed = true;
+            broker.removeConnectListener(connectListener);
             for (final Link link : List.copyOf(links.values())) {
                 links.remove(link.id());
                 try {
@@ -276,6 +281,22 @@ public final class Links implements Mesh, AutoCloseable {
             if (!Topics.validFilter(f)) {
                 throw new IllegalArgumentException("link filter not valid [link=" + id + ", filter=" + f + ']');
             }
+        }
+    }
+
+    /**
+     * Client {@code clientId} connected to this node's broker: when it is a peer's link to this node,
+     * {@code <peer>~<localId>}, the peer runs again, so this node's link {@code <peer>} reconnects now rather than at
+     * the end of its backoff. On the connection's reader; never blocks.
+     */
+    private void peerConnected(final String clientId) {
+        final int mark = clientId.length() - localId.length() - 1;
+        if (mark <= 0 || clientId.charAt(mark) != '~' || !clientId.endsWith(localId)) {
+            return;
+        }
+        final Link link = links.get(clientId.substring(0, mark));
+        if (link != null) {
+            link.wake();
         }
     }
 

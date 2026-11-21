@@ -9,8 +9,9 @@ import dev.marregui.comando.core.port.LabPort.Packet;
 
 /**
  * The rows of the frontear tab's packet log, from the packets kept: those whose topic holds the filter's text and whose
- * kind is the one chosen, and, unless every presence is asked for, a run of presences one origin published in a row as
- * one row with its count. Plain values, so the rules are tested without Swing.
+ * kind is the one chosen, frontear's own control traffic only when asked for, and, unless every presence is asked for,
+ * a run of presences one origin published in a row as one row with its count. Plain values, so the rules are tested
+ * without Swing.
  */
 public final class TrafficRows {
 
@@ -19,6 +20,12 @@ public final class TrafficRows {
      * milliseconds; the record's bound (record 187).
      */
     public static final long PATH_MILLIS = 5_000L;
+
+    /**
+     * The topics of frontear's own traffic, by their start: the links' checks every 5 s and their replies, and the
+     * nodes' state and presence. In a live run they are most of the packets.
+     */
+    public static final List<String> CONTROL_TOPICS = List.of("$frontear/", "comando/v1/local/fabric/");
 
     private TrafficRows() {
     }
@@ -32,17 +39,20 @@ public final class TrafficRows {
 
     /**
      * The rows of {@code packets}, oldest first: {@code topic} a substring of the packet's topic ("" for any),
-     * {@code kind} its kind (null for any), and the presences collapsed unless {@code everyPresence}.
+     * {@code kind} its kind (null for any), the {@link #control} packets left out unless {@code control}, and the
+     * presences collapsed unless {@code everyPresence}.
      */
     public static List<Row> of(
             final Collection<Packet> packets,
             final String topic,
             final Kind kind,
+            final boolean control,
             final boolean everyPresence
     ) {
         final List<Row> rows = new ArrayList<>();
         for (final Packet p : packets) {
-            if ((kind != null && p.kind() != kind) || (!topic.isEmpty() && !p.topic().contains(topic))) {
+            if ((kind != null && p.kind() != kind) || (!topic.isEmpty() && !p.topic().contains(topic))
+                    || (!control && control(p))) {
                 continue;
             }
             if (!everyPresence && presence(p) && !rows.isEmpty()) {
@@ -55,6 +65,16 @@ public final class TrafficRows {
             rows.add(new Row(p, 1, p.seq()));
         }
         return rows;
+    }
+
+    /** Whether {@code p} is frontear's own control traffic: its topic starts with one of {@link #CONTROL_TOPICS}. */
+    public static boolean control(final Packet p) {
+        for (final String start : CONTROL_TOPICS) {
+            if (p.topic().startsWith(start)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether {@code p} is a presence: published on a topic whose level is {@code presence}. */

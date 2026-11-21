@@ -24,6 +24,7 @@ class LabWindowTest {
         assertThat(all.packets()).hasSize(LabWindow.CAPACITY);
         assertThat(all.packets().getFirst().seq()).isEqualTo(51L);
         assertThat(all.packets().getFirst().topic()).isEqualTo("t/50");
+        assertThat(all.packets().getFirst().payload()).isEqualTo("m50");
         assertThat(all.packets().getLast().seq()).isEqualTo(10_050L);
         assertThat(all.missed()).isEqualTo(50L);
         assertThat(all.last()).isEqualTo(10_050L);
@@ -61,6 +62,6 @@ class LabWindowTest {
     }
 
     private static Packet packet(final int i) {
-        return new Packet(999L, i, Kind.PUBLISHED, "pub", "", "t/" + i, 1, false, 3, 0, -1L, "", "m", "");
+        return new Packet(999L, i, Kind.PUBLISHED, "pub", "", "t/" + i, 1, false, 3, 0, -1L, "", "m", "", "m" + i);
     }
 }

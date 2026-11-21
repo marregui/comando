@@ -228,7 +228,7 @@ The server itself: [the `cdb` module](cdb.md) and [the cdb guide](../cdb.md). Wh
 
 ## 7. The fabric
 
-![The fabric: one frontear node inside the JVM of the instance that hosts it, started at launch and taken over when its host quits, one address, and each instance a client](../images/mod-app-fabric.svg)
+![The fabric: three instances, each with a frontear node inside its own JVM on its own port and its MqttPeerBroker as that node's client; each node has a link to every other node, one each way, and each link keeps a log at its sender until the peer acknowledges](../images/mod-app-fabric.svg)
 
 Several comando instances can run on one machine and consult each other. They meet on the fabric: one frontear node
 inside each instance's JVM, hosted by its `FrontearFabric`, and a link from each node to every other one

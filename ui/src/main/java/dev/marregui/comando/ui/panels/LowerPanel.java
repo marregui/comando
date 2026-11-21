@@ -63,8 +63,6 @@ public final class LowerPanel {
     private final TerminalTabs terminals = new TerminalTabs();
     private final FrontearTab frontear = new FrontearTab();
     private AppState state;
-    /** The state's tab at the last render: while it stays, a frontear tab the user brought forward stays in front. */
-    private LowerTab renderedTab;
     private boolean rendering;
     private String transcriptSession = "";
     /** The transcript version the user last saw on the Session tab, by session. */
@@ -102,7 +100,7 @@ public final class LowerPanel {
                 case SESSION -> LowerTab.SESSION;
                 case APPROVALS -> LowerTab.APPROVALS;
                 case TERMINAL -> LowerTab.TERMINAL;
-                case FRONTEAR -> null;
+                case FRONTEAR -> LowerTab.FRONTEAR;
                 default -> {
                     final long id = views.viewAt(i);
                     yield id < 0 ? null : LowerTab.view(id);
@@ -145,6 +143,11 @@ public final class LowerPanel {
     /** The node the frontear tab shows; the application sets it once its node's watch is built. */
     public void lab(final LabPort port) {
         frontear.lab(port);
+    }
+
+    /** The frontear tab's views, which take the keyboard when the tab is chosen by its key. */
+    public JComponent frontear() {
+        return frontear.component();
     }
 
     /** The component of the tab in front: a fixed tab's view or a placed view. */
@@ -208,13 +211,12 @@ public final class LowerPanel {
                 case SESSION -> SESSION;
                 case APPROVALS -> APPROVALS;
                 case TERMINAL -> TERMINAL;
+                case FRONTEAR -> FRONTEAR;
                 case VIEW -> views.indexOf(s.lowerTab().viewId());
             };
-            final boolean keepFrontear = tabs.getSelectedIndex() == FRONTEAR && s.lowerTab().equals(renderedTab);
-            if (!keepFrontear && want >= 0 && tabs.getSelectedIndex() != want) {
+            if (want >= 0 && tabs.getSelectedIndex() != want) {
                 tabs.setSelectedIndex(want);
             }
-            renderedTab = s.lowerTab();
             terminals.render(s, s.lowerTab().kind() == LowerTab.Kind.TERMINAL);
             markResults(s);
             markSession();

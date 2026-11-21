@@ -89,10 +89,10 @@ class WatchTest {
         assertThat(inside.missed()).isZero();
     }
 
-    /// A published message is kept with its correlation data and payload head cut to their bounds, its hops and the
-    /// subscriptions it matched.
+    /// A published message is kept with its correlation data cut to its bound, its payload by reference (not copied
+    /// on the publisher's thread), its head and text decoded from it, its hops and the subscriptions it matched.
     @Test
-    void aPublishedMessageKeepsItsBoundedCorrelationAndHead() {
+    void aPublishedMessageKeepsItsBoundedCorrelationAndItsPayloadByReference() {
         final Watch watch = on(8);
         final byte[] payload = "x".repeat(Watch.HEAD_BYTES + 10).getBytes(StandardCharsets.UTF_8);
         final byte[] correlation = new byte[Watch.CORRELATION_BYTES + 4];
@@ -103,10 +103,30 @@ class WatchTest {
             assertThat(p.qos()).isEqualTo(1);
             assertThat(p.bytes()).isEqualTo(payload.length);
             assertThat(p.matches()).isEqualTo(2);
+            assertThat(p.payload()).isSameAs(payload);
             assertThat(p.head()).hasSize(Watch.HEAD_BYTES);
+            assertThat(p.text()).isEqualTo(new String(payload, StandardCharsets.UTF_8));
             assertThat(p.correlation()).hasSize(Watch.CORRELATION_BYTES);
             assertThat(p.hops()).isZero();
         });
+    }
+
+    /// A payload past the bound is kept as a copy of its first `PAYLOAD_BYTES`, its length still the whole one, so the
+    /// ring's memory has a bound; one at the bound is kept by reference.
+    @Test
+    void aPayloadPastTheBoundIsKeptCutAndOneAtItByReference() {
+        final Watch watch = on(8);
+        final byte[] large = new byte[Watch.PAYLOAD_BYTES + 1];
+        final byte[] atBound = new byte[Watch.PAYLOAD_BYTES];
+        watch.published("pub", new Packet.Publish("t/a", large, 0, false, false, 0, null, null), 1);
+        watch.published("pub", new Packet.Publish("t/b", atBound, 0, false, false, 0, null, null), 1);
+        final List<Observation> events = watch.since(0, 2).events();
+        assertThat(events.get(0)).isInstanceOfSatisfying(Published.class, p -> {
+            assertThat(p.bytes()).isEqualTo(large.length);
+            assertThat(p.payload()).isNotSameAs(large).hasSize(Watch.PAYLOAD_BYTES);
+        });
+        assertThat(events.get(1)).isInstanceOfSatisfying(Published.class,
+                p -> assertThat(p.payload()).isSameAs(atBound));
     }
 
     /// Off, the hooks keep nothing and allocate nothing on the calling thread; turned on, the first event kept is

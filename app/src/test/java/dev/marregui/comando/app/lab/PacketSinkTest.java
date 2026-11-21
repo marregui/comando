@@ -14,12 +14,14 @@ import org.junit.jupiter.api.Test;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.port.LabPort.Kind;
 import dev.marregui.comando.core.port.LabPort.Packet;
+import dev.marregui.comando.frontear.watch.Watch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /// The lab's cdb sink: an offer never waits for the writer, a full queue drops and counts, a failing writer is backed
-/// off and its lines counted as dropped, and each packet becomes one line of table `frontear_packet`.
+/// off and the lines it did not land counted as dropped, and each packet becomes one line of table
+/// `frontear_packet`, its payload in the JSON column or the text one.
 class PacketSinkTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
@@ -39,6 +41,7 @@ class PacketSinkTest {
             if (!released.await(30, TimeUnit.SECONDS)) {
                 throw new IOException("not released");
             }
+            return 1;
         };
         final PacketSink sink = new PacketSink(blocked);
         try (sink) {
@@ -95,6 +98,7 @@ class PacketSinkTest {
                 throw new IOException("cdb is starting");
             }
             lines.addAll(batch);
+            return batch.size();
         })) {
             sink.offer("a", published(1));
             await().atMost(WAIT).until(() -> sink.droppedDown() == 1L);
@@ -121,6 +125,89 @@ class PacketSinkTest {
                 "the link's queue is full [queued=64]");
         assertThat(PacketSink.line("a", dropped)).isEqualTo("frontear_packet,node=a,kind=dropped,link=b"
                 + " topic=\"t/\\\"q\\\"\",qos=-1i,retain=f,bytes=7i,hops=-1i,offset=3i,code=1i 5000000");
+    }
+
+    /// A publish's payload that is not JSON, here an unknown escape, as a string field of the text column after the
+    /// correlation: quotes, backslashes and line breaks escaped, other text as it is; the head stays out of the line.
+    @Test
+    void aPublishWhosePayloadIsNotJsonCarriesItInTheTextColumn() {
+        final Packet published = new Packet(9L, 2L, Kind.PUBLISHED, "pub", "", "t", 1, false, 17, 0, -1L, "", "{\"a\"",
+                "", "{\"a\":\"b\\c\"}\nend é");
+        assertThat(PacketSink.line("a", published)).isEqualTo("frontear_packet,node=a,kind=published,origin=pub"
+                + " topic=\"t\",qos=1i,retain=f,bytes=17i,hops=0i,"
+                + "payload_text=\"{\\\"a\\\":\\\"b\\\\c\\\"}\\\nend é\",code=0i 2000000");
+    }
+
+    /// A payload kept whole that is one JSON document goes to the JSON column, escaped the same way.
+    @Test
+    void aPublishWhosePayloadIsJsonCarriesItInTheJsonColumn() {
+        final Packet published = new Packet(9L, 2L, Kind.PUBLISHED, "pub", "", "t", 1, false, 16, 0, -1L, "", "{",
+                "", "{\"k\":[\"v\",1.5]}\n");
+        assertThat(PacketSink.line("a", published)).isEqualTo("frontear_packet,node=a,kind=published,origin=pub"
+                + " topic=\"t\",qos=1i,retain=f,bytes=16i,hops=0i,"
+                + "payload=\"{\\\"k\\\":[\\\"v\\\",1.5]}\\\n\",code=0i 2000000");
+    }
+
+    /// The JSON column takes a payload kept whole that parses as one document, a bare value included; a cut payload
+    /// goes to text even when its first bytes parse, and so do whitespace, two documents and text that is not JSON.
+    @Test
+    void onlyAWholePayloadThatParsesGoesToTheJsonColumn() {
+        assertThat(PacketSink.json(payload("{\"a\":{\"b\":[1,true,null]}}", 25))).isTrue();
+        assertThat(PacketSink.json(payload("42", 2))).isTrue();
+        assertThat(PacketSink.json(payload("\"text\"", 6))).isTrue();
+        assertThat(PacketSink.json(payload("{\"a\":1}", Watch.PAYLOAD_BYTES))).isTrue();
+        assertThat(PacketSink.json(payload("{\"a\":1}", Watch.PAYLOAD_BYTES + 1))).isFalse();
+        assertThat(PacketSink.json(payload("  \n", 3))).isFalse();
+        assertThat(PacketSink.json(payload("{} {}", 5))).isFalse();
+        assertThat(PacketSink.json(payload("{\"a\":1,}", 8))).isFalse();
+        assertThat(PacketSink.json(payload("temperature=21.5", 16))).isFalse();
+    }
+
+    /// A writer that lands some of a batch and drops a line too long for a request: the sink counts what it landed
+    /// as written and the dropped line as dropped, the batches as the writer saw them.
+    @Test
+    void theLinesAWriterDropsAreCountedAsDroppedAndTheRestAsWritten() {
+        try (PacketSink sink = new PacketSink(batch -> (int) batch.stream()
+                .filter(l -> !l.contains("topic=\"t/2\""))
+                .count())) {
+            for (int i = 1; i <= 3; i++) {
+                sink.offer("a", published(i));
+            }
+            await().atMost(WAIT).until(() -> sink.written() + sink.droppedDown() == 3L);
+            assertThat(sink.written()).isEqualTo(2L);
+            assertThat(sink.droppedDown()).isEqualTo(1L);
+        }
+    }
+
+    /// A batch of three whose write fails after one landed: one line written, two dropped, not the whole batch
+    /// either way. The first write holds the writer until all three are queued, so the second takes them together.
+    @Test
+    void aWriteThatFailsPartWayCountsWhatLandedAsWritten() throws Exception {
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch released = new CountDownLatch(1);
+        final List<Integer> sizes = new CopyOnWriteArrayList<>();
+        try (PacketSink sink = new PacketSink(batch -> {
+            sizes.add(batch.size());
+            if (sizes.size() == 1) {
+                entered.countDown();
+                if (!released.await(30, TimeUnit.SECONDS)) {
+                    throw new IOException("not released");
+                }
+                return batch.size();
+            }
+            throw new PacketSink.PartialWrite("second request refused", 1, null);
+        })) {
+            sink.offer("a", published(0));
+            assertThat(entered.await(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+            for (int i = 1; i <= 3; i++) {
+                sink.offer("a", published(i));
+            }
+            released.countDown();
+            await().atMost(WAIT).until(() -> sink.written() + sink.droppedDown() == 4L);
+            assertThat(sizes).containsExactly(1, 3);
+            assertThat(sink.written()).isEqualTo(2L);
+            assertThat(sink.droppedDown()).isEqualTo(2L);
+        }
     }
 
     /// A dropped packet's code from the detail its link gave: one number per known reason, 0 for a new one and for
@@ -155,6 +242,10 @@ class PacketSinkTest {
 
     private static Packet published(final int i) {
         return new Packet(i, 1_000L + i, Kind.PUBLISHED, "pub", "", "t/" + i, 1, false, 3, 0, -1L, "", "m", "");
+    }
+
+    private static Packet payload(final String text, final int bytes) {
+        return new Packet(1L, 1L, Kind.PUBLISHED, "pub", "", "t", 0, false, bytes, 0, -1L, "", "", "", text);
     }
 
     private static Packet dropped(final String detail) {

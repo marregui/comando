@@ -4,35 +4,42 @@ import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JComponent;
 import javax.swing.JTable;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
- * A read-only table of the frontear tab: named columns, rows replaced whole, every cell shown as plain text but a
- * {@link Bar}, drawn as a log's progress. EDT only.
+ * A read-only table of the frontear tab: named columns, each header with a tooltip saying what the column means, rows
+ * replaced whole, every cell shown as plain text but a {@link Bar}, drawn as a log's progress. EDT only.
  */
 public final class LabTable {
 
     private final Model model;
     private final JTable table;
 
-    public LabTable(final String name, final String... columns) {
+    public LabTable(final String name, final Column... columns) {
         this.model = new Model(List.of(columns));
         this.table = new JTable(model);
+        table.setTableHeader(new Header(table, model.columns));
         table.setName(name);
         table.setFillsViewportHeight(true);
         table.setAutoCreateRowSorter(false);
         table.getTableHeader().setReorderingAllowed(false);
         table.setDefaultRenderer(Object.class, new TextCell());
         table.setDefaultRenderer(Bar.class, new BarCell());
+    }
+
+    /** A column: the header's {@code title}, and the one line its tooltip gives as its meaning. */
+    public record Column(String title, String tip) {
     }
 
     /** How far a peer has read its link's log: {@code cursor} of {@code tail}. */
@@ -70,10 +77,10 @@ public final class LabTable {
 
     private static final class Model extends AbstractTableModel {
 
-        private final List<String> columns;
+        private final List<Column> columns;
         private List<Object[]> rows = new ArrayList<>();
 
-        Model(final List<String> columns) {
+        Model(final List<Column> columns) {
             this.columns = columns;
         }
 
@@ -89,7 +96,7 @@ public final class LabTable {
 
         @Override
         public String getColumnName(final int column) {
-            return columns.get(column);
+            return columns.get(column).title();
         }
 
         @Override
@@ -100,6 +107,23 @@ public final class LabTable {
         @Override
         public Object getValueAt(final int row, final int column) {
             return rows.get(row)[column];
+        }
+    }
+
+    /** The header, whose tooltip is the meaning of the column under the pointer. */
+    private static final class Header extends JTableHeader {
+
+        private final List<Column> columns;
+
+        Header(final JTable table, final List<Column> columns) {
+            super(table.getColumnModel());
+            this.columns = columns;
+        }
+
+        @Override
+        public String getToolTipText(final MouseEvent e) {
+            final int at = columnAtPoint(e.getPoint());
+            return at < 0 ? null : columns.get(getColumnModel().getColumn(at).getModelIndex()).tip();
         }
     }
 

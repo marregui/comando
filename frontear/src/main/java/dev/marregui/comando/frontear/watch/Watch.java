@@ -1,6 +1,5 @@
 package dev.marregui.comando.frontear.watch;
 
-import java.nio.charset.StandardCharsets;
 import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,10 +30,17 @@ public final class Watch {
      */
     public static final int CORRELATION_BYTES = 16;
     /**
-     * The payload bytes a {@link Published} decodes as its head: enough for a line of a JSON message in a watch view,
-     * small enough that a ring of 16384 events holds a few MiB (ADR 0187 §2.2).
+     * The payload bytes a {@link Published} decodes as its head: enough for a line of a JSON message in a watch view
+     * (ADR 0187 §2.2). The ring holds each payload as {@link #PAYLOAD_BYTES} says: by reference up to that bound, a
+     * copy of its first that many bytes past it, so while it is on it keeps at most its capacity times that alive.
      */
     public static final int HEAD_BYTES = 256;
+    /**
+     * The payload bytes a {@link Published} keeps: a payload this long or shorter by reference, a longer one as a copy
+     * of its first this many bytes, so the ring holds at most its capacity times this (16,384 slots, 128 MiB) however
+     * large the messages are; comando's presence, about 6 KB, fits whole.
+     */
+    public static final int PAYLOAD_BYTES = 8 * 1024;
 
     private final AtomicReferenceArray<Observation> slots;
     private final int mask;
@@ -121,13 +127,15 @@ public final class Watch {
         if (!on) {
             return;
         }
-        final byte[] payload = message.payload();
+        final byte[] whole = message.payload();
+        // the copy is of a payload past the bound only, at most PAYLOAD_BYTES, so the ring's memory has a bound
+        final byte[] payload = whole.length <= PAYLOAD_BYTES ? whole : Arrays.copyOf(whole, PAYLOAD_BYTES);
         final byte[] c = message.correlation();
         final byte[] correlation = c == null ? null : Arrays.copyOf(c, Math.min(c.length, CORRELATION_BYTES));
-        final String head = new String(payload, 0, Math.min(payload.length, HEAD_BYTES), StandardCharsets.UTF_8);
         final long seq = sequence.getAndIncrement();
+        // within the bound, by reference: a publish's payload is never written after it is built (Packet.Publish)
         store(new Published(seq, clock.millis(), origin, message.topic(), message.qos(), message.retain(),
-                payload.length, matches, correlation, head, Links.hops(message)));
+                whole.length, matches, correlation, payload, Links.hops(message)));
     }
 
     /**

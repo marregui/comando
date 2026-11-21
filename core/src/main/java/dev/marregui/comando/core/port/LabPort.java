@@ -48,7 +48,9 @@ public interface LabPort {
      * {@code origin} and no {@code link}; a step has a {@code link} (the peer's id) and no {@code origin}. {@code qos}
      * and {@code hops} are -1 on a step, {@code offset} is -1 where the step has none, {@code topic} is "" on a
      * connect or disconnect; {@code correlation} is hex, "" when none; {@code head} is the start of the payload as
-     * text, "" on a step; {@code detail} is "" or the reason a step gives.
+     * text, "" on a step; {@code detail} is "" or the reason a step gives; {@code payload} is the payload as text
+     * (UTF-8, a malformed or cut sequence replaced), whole when {@code bytes} is at most 8 KiB, else its first 8 KiB,
+     * "" on a step.
      */
     record Packet(
             long seq,
@@ -64,8 +66,17 @@ public interface LabPort {
             long offset,
             String correlation,
             String head,
-            String detail
+            String detail,
+            String payload
     ) {
+
+        /** A packet without its payload's text: a step, which carries none. */
+        public Packet(final long seq, final long atMillis, final Kind kind, final String origin, final String link,
+                final String topic, final int qos, final boolean retain, final int bytes, final int hops,
+                final long offset, final String correlation, final String head, final String detail) {
+            this(seq, atMillis, kind, origin, link, topic, qos, retain, bytes, hops, offset, correlation, head, detail,
+                    "");
+        }
     }
 
     /**

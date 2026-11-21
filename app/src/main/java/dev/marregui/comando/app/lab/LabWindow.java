@@ -33,7 +33,7 @@ final class LabWindow {
     synchronized Packet add(final Packet p) {
         final long seq = next++;
         final Packet kept = new Packet(seq, p.atMillis(), p.kind(), p.origin(), p.link(), p.topic(), p.qos(),
-                p.retain(), p.bytes(), p.hops(), p.offset(), p.correlation(), p.head(), p.detail());
+                p.retain(), p.bytes(), p.hops(), p.offset(), p.correlation(), p.head(), p.detail(), p.payload());
         ring[(int) (seq % ring.length)] = kept;
         if (size < ring.length) {
             size++;

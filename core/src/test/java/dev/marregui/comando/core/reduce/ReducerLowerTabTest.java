@@ -42,6 +42,17 @@ class ReducerLowerTabTest {
         assertThat(state.lowerTab()).as("a view that is not open").isEqualTo(LowerTab.SESSION);
     }
 
+    /// The frontear tab is a lower tab like the others: selected, it is the state's tab, and p1 focused again after p2
+    /// comes back on it.
+    @Test
+    void theFrontearTabIsKeptLikeAnyOther() {
+        apply(new Intent.SelectLowerTab(LowerTab.FRONTEAR));
+        assertThat(state.lowerTab()).isEqualTo(LowerTab.FRONTEAR);
+        apply(new Intent.FocusPanel(P2));
+        apply(new Intent.FocusPanel(P1));
+        assertThat(state.lowerTab()).isEqualTo(LowerTab.FRONTEAR);
+    }
+
     /// p2 in front, `work` (p1's session) asks: Approvals on p2 and on p1. Answered from p2, p1 comes forward on
     /// Session; p2, focused again with nothing waiting, selects Session rather than an empty Approvals.
     @Test

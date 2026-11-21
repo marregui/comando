@@ -141,7 +141,7 @@ comando reloads into its panel ([§7.4](#74-panel-files)).
 | `#heading` | that heading at the top of the view, in this document or the other one |
 
 **Each panel keeps its lower area.** The lower divider and the lower tab are each panel's own, and come back with it
-([why](adr/0160-each-panel-keeps-its-lower-tab.md)). A file opened to read takes the whole height; ⌃1–⌃4 bring the
+([why](adr/0160-each-panel-keeps-its-lower-tab.md)). A file opened to read takes the whole height; ⌃1–⌃5 bring the
 lower area back for it.
 
 ### 1.3 Themes
@@ -295,7 +295,7 @@ The lower panel follows the focused panel. Five tabs are always there; view tabs
 | Approvals | ⌃2 | every session's requests ([§1.6](#16-approvals)) |
 | Terminal | ⌃3 | the focused panel's shell ([§5.1](#51-terminal)) |
 | Results | ⌃4 | the focused panel's last SQL run ([§3.2](#32-results)) |
-| frontear | none | this instance's frontear node: its traffic, links and log ([§4.4](#44-the-frontear-tab)) |
+| frontear | ⌃5 | this instance's frontear node: its traffic, links and log ([§4.4](#44-the-frontear-tab)) |
 
 ⌃Tab and ⌃⇧Tab go to the next and the previous tab. ⌘⇧W closes the view in front. A request selects Approvals on
 the panel in front and on the asking session's panels, nowhere else.
@@ -509,7 +509,7 @@ Every other key, by the palette's area. A command of the Find or Help menu sits 
 | | ⌘⇧R, ⌘⇧I | Keep in a tab, Attach to the editor |
 | Window | ⌘⇧P, ⌘B, ⌘\ | Command palette, Sidebar, Side pane |
 | | ⌘K, ⌘⇧S | Uncommitted changes, Export view… |
-| | ⌃1–⌃4 (also ⌘⌥1–4) | Session, Approvals, Terminal, Results |
+| | ⌃1–⌃5 (also ⌘⌥1–5) | Session, Approvals, Terminal, Results, frontear |
 | | ⌃Tab, ⌃⇧Tab, ⌘⇧W | Next tab, Previous tab, Close the view in front |
 | | ⌘=, ⌘-, ⌘0 | Zoom in, Zoom out, Reset zoom |
 | Help | ⌘⇧/ | Keyboard shortcuts |
@@ -722,31 +722,37 @@ A header shows only while this instance is not connected, with **Start frontear*
 The frontear tab of the lower panel shows this instance's frontear node: what crosses it, its links to the other
 instances' nodes, and each link's log ([why](adr/0187-frontear-lab-node-per-instance.md)). Nothing is watched until
 the tab is first shown. From then on the node keeps a record of every packet, and comando reads it four times a
-second; the tab is redrawn once per read at most, however much arrived. A packet's payload does not leave the node
-except for its first bytes.
+second; the tab is redrawn once per read at most, however much arrived.
 
-| View | Shows |
-|---|---|
-| Overview | the node, its port and the time of its figures; the broker's sessions, connections, retained messages and drops; the watch's own losses; a row per peer: its link's state, messages and bytes per second over the last 5 s, and its queue |
-| Traffic | the last 10 000 packets: the time, the kind, the origin or link, the topic, QoS, retain, bytes, hops and the correlation data in hex; the start of the selected packet's payload beside them |
-| Octopus | each link: connected or in backoff, queued, cursor, tail, sent, dropped, reordered, deliveries waiting, and its last connect and disconnect with the reason given |
-| Store | each link's log: how far the peer has read, bytes, segments, and its force rounds: per second, the last one's records, bytes and time, and the median and 99th percentile time of the last 200 |
+Each view says above its table what a row is, and each column's header says in its tooltip what the column means.
 
-The kinds of a packet are Published (a client's publish reached the node), APPENDED (written to a link's log), SENT
-(the link sent it to the peer), ARRIVED (it came in over a link), DROPPED (with the reason), CONNECTED and
-DISCONNECTED (a link's connection, with the reason given).
+| View | A row | Columns |
+|---|---|---|
+| Overview | a peer | **link state**: connected, or backoff (waiting to try again); **msg/s** and **bytes/s**: what the peer acknowledged over the last 5 s; **queued**: in its log, not yet acknowledged. Above the table: the node, its port, the broker's sessions, connections, retained messages and drops, and the watch's own losses |
+| Traffic | a packet event on this node | **kind** (below); **origin / link**: the client that published, or the peer of the step's link; **hops**: 0 published here, 1 came over a link; **correlation**: hex, pairs a question with its reply |
+| Octopus | a link to a peer | **queued**: from **cursor** (the next to deliver) to **tail** (the next append); **sent**: acknowledged by the peer; **dropped**: refused for good, expired, past the hop limit, or QoS 0 over the bound; **reordered**: taken after a later one once the peer had refused it for a while; **waiting to append**: the broker's messages not yet in the log, of the limit; the last connect and disconnect with the reason given |
+| Store | one durable log per peer: the messages this node keeps until that peer acknowledges them | **delivered / written**: the records acknowledged, of those written; **bytes**: the size on disk, where a 64 MiB segment stays until all of it is delivered; **segments**: its files; **rounds/s**, **last records**, **last bytes**: the fsync rounds; **last force ms**, **force p50 ms**, **force p99 ms**: the force time of the last round, and the median and 99th percentile of the last 200 |
 
-**Traffic's bar** filters by a part of the topic and by kind. A run of presences from one origin is one row with
-its count; **every presence** shows each. **pause** stops the rows moving while you read; the node goes on
-recording. **missed** counts the packets that came while the view could not keep them: more than 10 000 since the
-last read, or more than the node's own record holds. Selecting a publish also selects its steps on the links, so its
-path through the node reads in one selection.
+The kinds of a packet are Published (a client published it on this node), Appended (written to a peer's log, at an
+offset), Sent (the peer acknowledged it), Arrived (it came in from a peer), Dropped (with the reason), Connected and
+Disconnected (a link's connection, with the reason given).
 
-While the machine's cdb runs ([§3.4](#34-the-machines-cdb)), each packet is also written to its table
-`frontear_packet`, without its payload, and kept seven days. A DROPPED packet's `code` names the reason as a number:
-1 the link's queue was full, 2 past the hop limit, 3 the link's log was full, 4 the peer refused it, 5 expired in the
-log, 6 larger than the peer accepts, 7 unreadable; 0 for any other. The writer never waits: rows that come while cdb
-is down or slow are dropped, and Overview counts them. A session reads the same views with `frontear_read`
+**Traffic's bar** filters by a part of the topic and by kind. **show control**, off by default, shows frontear's own
+traffic: the topics under `$frontear/` and `comando/v1/local/fabric/`, the links' checks and the nodes' state and
+presence. A run of presences from one origin is one row with its count; **every presence** shows each. **pause** stops
+the rows moving while you read; the node goes on recording. **missed** counts the packets that came while the view could
+not keep them: more than 10 000 since the last read, or more than the node's own record holds. Selecting a publish also
+selects its steps on the links, so its path through the node reads in one selection. Beside the log, the selected
+packet's payload, whole up to 8 KiB, else its first 8 KiB, in a fixed-width font with long lines wrapped: indented by
+two spaces when it is a JSON object or array, else as it came.
+
+While the machine's cdb runs ([§3.4](#34-the-machines-cdb)), each packet is also written to its table `frontear_packet`,
+and kept seven days. A publish's payload, whole up to 8 KiB, else its first 8 KiB, goes to column `payload`, of type
+JSON, when it is whole and one JSON document, else to `payload_text`. A table made by an earlier comando with a text
+`payload` keeps it, and its JSON payloads land there as text. A DROPPED packet's `code` names the reason as a number: 1
+the link's queue was full, 2 past the hop limit, 3 the link's log was full, 4 the peer refused it, 5 expired in the log,
+6 larger than the peer accepts, 7 unreadable; 0 for any other. The writer never waits: rows that come while cdb is down
+or slow are dropped, and Overview counts them. A session reads the same views with `frontear_read`
 ([Claude Code](claude-code.md)).
 
 ## 5. Development tools

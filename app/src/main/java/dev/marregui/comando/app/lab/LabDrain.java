@@ -183,10 +183,7 @@ public final class LabDrain implements LabPort, AutoCloseable {
     /** The packet of {@code o}, its link's figures kept; null for a force round, which only feeds its log's. */
     private Packet take(final Observation o) {
         return switch (o) {
-            case Published(long _, long at, String origin, String topic, int qos, boolean retain, int bytes, int _,
-                    byte[] correlation, String head, int hops) ->
-                    new Packet(0L, at, Kind.PUBLISHED, origin, "", topic, qos, retain, bytes, hops, -1L,
-                            correlation == null ? "" : HexFormat.of().formatHex(correlation), head, "");
+            case final Published p -> published(p);
             case LinkStep(long _, long at, String link, LinkStep.Kind kind, long offset, String topic, int bytes,
                     String detail) -> {
                 final String why = detail == null ? "" : detail;
@@ -206,6 +203,14 @@ public final class LabDrain implements LabPort, AutoCloseable {
                 yield null;
             }
         };
+    }
+
+    /** The packet of publish {@code p}, its payload decoded here, on the errand, never on the publisher's thread. */
+    private static Packet published(final Published p) {
+        final byte[] correlation = p.correlation();
+        return new Packet(0L, p.atMillis(), Kind.PUBLISHED, p.origin(), "", p.topic(), p.qos(), p.retain(), p.bytes(),
+                p.hops(), -1L, correlation == null ? "" : HexFormat.of().formatHex(correlation), p.head(), "",
+                p.text());
     }
 
     private static Kind kind(final LinkStep.Kind kind) {

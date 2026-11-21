@@ -115,7 +115,7 @@ class FrontearFabricTest {
 
         assertThat(look(x)).as("none ran at the look").isFalse();
         await().atMost(WAIT).until(x::isRunning);
-        x.openLinks(x.mqttPort());
+        x.openLinks(x.generation());
         host(y);
 
         final int xp = x.mqttPort();
@@ -158,8 +158,8 @@ class FrontearFabricTest {
         final int yp = y.mqttPort();
         final List<PeerBroker.Message> answers = new CopyOnWriteArrayList<>();
         final List<PeerBroker.Message> questions = new CopyOnWriteArrayList<>();
-        try (MqttPeerBroker onX = new MqttPeerBroker("comando-x", x::mqttPort, x::isRunning);
-                MqttPeerBroker onY = new MqttPeerBroker("comando-y", y::mqttPort, y::isRunning)) {
+        try (MqttPeerBroker onX = new MqttPeerBroker("comando-x", x::mqttPort, x::isRunning, x::generation);
+                MqttPeerBroker onY = new MqttPeerBroker("comando-y", y::mqttPort, y::isRunning, y::generation)) {
             onY.subscribe(INBOX_Y, m -> {
                 questions.add(m);
                 onY.publish(m.responseTopic(), bytes("X is 42"), false, null, m.correlation());
@@ -205,10 +205,11 @@ class FrontearFabricTest {
     }
 
     /// Once Y closes, X's link to it disconnects and stays; a question for Y, not retained, queues in its log. Y
-    /// started again takes the port it had and holds the links: a link client is refused 0x88, and a port other than
-    /// its node's lets none in. Y's peer broker, as the peer link wires it, lets them in once its inbox is subscribed;
-    /// X's link then drains the question into that subscription, once, with its response topic and correlation data,
-    /// and X's next reconcile tells the listener that a link connected, whose resend of X's presence reaches Y.
+    /// started again takes the port it had and holds the links: a link client is refused 0x88, and a subscribe against
+    /// a generation other than its node's lets none in. Y's peer broker, as the peer link wires it, lets them in once
+    /// its inbox is subscribed; X's link then drains the question into that subscription, once, with its response
+    /// topic and correlation data, and X's next reconcile tells the listener that a link connected, whose resend of
+    /// X's presence reaches Y.
     @Test
     void aQuestionQueuedForAPeerThatIsDownReachesItsInboxOnceAfterItsRestart() throws Exception {
         final FrontearFabric x = fabric("x", new RecordingSink());
@@ -239,7 +240,7 @@ class FrontearFabricTest {
             start(back);
 
             assertThat(back.mqttPort()).as("the port kept in the registry").isEqualTo(yp);
-            back.openLinks(yp + 1);
+            back.openLinks(back.generation() + 1);
             try (MqttClient probe = client(yp, "probe~y", new CopyOnWriteArrayList<>())) {
                 assertThatThrownBy(() -> probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
                         .isInstanceOf(ExecutionException.class)
@@ -248,7 +249,8 @@ class FrontearFabricTest {
             }
             final List<PeerBroker.Message> questions = new CopyOnWriteArrayList<>();
             final List<String> presences = new CopyOnWriteArrayList<>();
-            try (MqttPeerBroker onY = new MqttPeerBroker("comando-y", back::mqttPort, back::isRunning)) {
+            try (MqttPeerBroker onY = new MqttPeerBroker("comando-y", back::mqttPort, back::isRunning,
+                    back::generation)) {
                 onY.subscribe(INBOX_Y, questions::add);
                 onY.subscribe(PRESENCE_X, m -> presences.add(new String(m.payload(), StandardCharsets.UTF_8)));
                 onY.onSubscribed(back::openLinks);
@@ -294,13 +296,16 @@ class FrontearFabricTest {
     }
 
     /// The peer link's subscribe that completes before a start has published its node, as a reconnect between the bind
-    /// and the registry write does, finds no node to open; the start, once it publishes the node on that port, lets the
-    /// links in. A stop forgets that subscribe: the next start holds its links until the peer link subscribes again.
+    /// and the registry write does, finds no node to open; the start, once it publishes the node of that generation,
+    /// lets the links in. The next start, on the same port, holds its links: neither that subscribe nor one against
+    /// the stopped node, acknowledged late, lets them in, until the peer link subscribes against the new node.
     @Test
     void aSubscribeBeforeTheStartPublishesItsNodeLetsTheLinksInOnceItDoes() throws Exception {
         final FrontearFabric y = fabric("y", new RecordingSink());
-        y.openLinks(base);
+        // the generation the start takes before it binds, as the peer link reads it once connected
+        y.openLinks(y.generation() + 1);
         start(y);
+        final long first = y.generation();
         assertThat(y.mqttPort()).isEqualTo(base);
         try (MqttClient probe = client(base, "probe~y", new CopyOnWriteArrayList<>())) {
             probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
@@ -310,13 +315,11 @@ class FrontearFabricTest {
         await().atMost(WAIT).until(() -> !y.busy() && !y.isRunning());
         start(y);
         assertThat(y.mqttPort()).as("the port kept").isEqualTo(base);
-        try (MqttClient probe = client(base, "probe~y", new CopyOnWriteArrayList<>())) {
-            assertThatThrownBy(() -> probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
-                    .isInstanceOf(ExecutionException.class)
-                    .cause()
-                    .isInstanceOfSatisfying(MqttException.class, e -> assertThat(e.reasonCode()).isEqualTo(0x88));
-        }
-        y.openLinks(base);
+        assertThat(y.generation()).isGreaterThan(first);
+        assertHeld(base);
+        y.openLinks(first);
+        assertHeld(base);
+        y.openLinks(y.generation());
         try (MqttClient probe = client(base, "probe~y", new CopyOnWriteArrayList<>())) {
             probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
         }
@@ -665,7 +668,17 @@ class FrontearFabricTest {
     /// links in, as its peer broker does once subscribed.
     private static void host(final FrontearFabric fabric) {
         start(fabric);
-        fabric.openLinks(fabric.mqttPort());
+        fabric.openLinks(fabric.generation());
+    }
+
+    /// The node on `port` refuses a link client 0x88: it holds its links.
+    private static void assertHeld(final int port) throws Exception {
+        try (MqttClient probe = client(port, "probe~y", new CopyOnWriteArrayList<>())) {
+            assertThatThrownBy(() -> probe.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOfSatisfying(MqttException.class, e -> assertThat(e.reasonCode()).isEqualTo(0x88));
+        }
     }
 
     /// Starts `fabric`'s node as an agent's `server_start frontear` does, and waits until it runs, its links held.

@@ -767,7 +767,7 @@ To remove the session, right-click `tutor` in the **Sessions** tab and choose **
 | ⌘⇧E | explore the schema |
 | ⌘F, ⌘G, ⌘⇧G | find in the view, next, previous |
 | ⌘⇧C / ⌘⇧S | copy / export the view |
-| ⌃1 ⌃2 ⌃3 ⌃4 | Session, Approvals, Terminal, Results |
+| ⌃1 ⌃2 ⌃3 ⌃4 ⌃5 | Session, Approvals, Terminal, Results, frontear |
 | ⌘E | focus the editor |
 | ⌘T / ⌘W / ⌘⇧T | new panel / close / reopen the last closed panel |
 | ⌘⇧O / ⌘⇧K | the panel's connection / session settings |

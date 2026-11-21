@@ -74,8 +74,8 @@ class LabToolsTest {
         assertThat(out.has("packets")).isFalse();
     }
 
-    /// traffic: the packets after `since`, 200 without `max`, every field of a packet, `missed` and `last`, which is
-    /// the next call's `since`.
+    /// traffic: the packets after `since`, 200 without `max`, every field of a packet but its payload, `missed` and
+    /// `last`, which is the next call's `since`.
     @Test
     void trafficPagesBySinceWithEveryFieldOfAPacket() {
         final JsonNode first = read(tools, "{\"view\":\"traffic\"}");
@@ -96,12 +96,25 @@ class LabToolsTest {
         assertThat(p.path("correlation").asString()).isEqualTo("0a0b");
         assertThat(p.path("head").asString()).isEqualTo("{}");
         assertThat(p.path("detail").asString()).isEmpty();
+        assertThat(p.has("payload")).isFalse();
 
         final JsonNode next = read(tools, "{\"view\":\"traffic\",\"since\":200,\"max\":10}");
         assertThat(next.path("packets").path(0).path("seq").asLong()).isEqualTo(201L);
         assertThat(next.path("packets").size()).isEqualTo(10);
         assertThat(next.path("missed").asLong()).isZero();
         assertThat(next.path("last").asLong()).isEqualTo(210L);
+    }
+
+    /// traffic with `payload` true: each packet carries its whole payload as text beside its head; false is as absent.
+    @Test
+    void trafficCarriesThePayloadOnlyWhenAsked() {
+        final JsonNode with = read(tools, "{\"view\":\"traffic\",\"max\":2,\"payload\":true}").path("packets");
+        assertThat(with.size()).isEqualTo(2);
+        assertThat(with.path(0).path("payload").asString()).isEqualTo("{\"n\":1,\"text\":\"whole\"}");
+        assertThat(with.path(0).path("head").asString()).isEqualTo("{}");
+        assertThat(with.path(1).path("payload").asString()).isEqualTo("{\"n\":2,\"text\":\"whole\"}");
+        final JsonNode without = read(tools, "{\"view\":\"traffic\",\"max\":2,\"payload\":false}").path("packets");
+        assertThat(without.path(0).has("payload")).isFalse();
     }
 
     /// A `max` over 2000 reads 2000, one under 1 reads 1.
@@ -166,7 +179,7 @@ class LabToolsTest {
         FakeLab(final int count) {
             for (int i = 1; i <= count; i++) {
                 packets.add(new Packet(i, i, Kind.PUBLISHED, "alpha", "", "work/" + i, 1, true, 7, 0, -1L, "0a0b",
-                        "{}", ""));
+                        "{}", "", "{\"n\":" + i + ",\"text\":\"whole\"}"));
             }
         }
 

@@ -12,17 +12,22 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.jetbrains.annotations.TestOnly;
 
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.port.LabPort.Kind;
 import dev.marregui.comando.core.port.LabPort.Packet;
+import dev.marregui.comando.frontear.watch.Watch;
 
 /**
  * The lab's packets on their way to table {@code frontear_packet} of the machine's cdb (record 187), as lines of its
- * line protocol, payloads left out. {@link #offer} never blocks: a line joins a queue of {@link #CAPACITY}, or, the
- * queue full or the sink closed, is dropped and counted. One errand writes the queue in batches of at most
- * {@link #BATCH_LINES} lines. Delivery is at most once: a batch the writer fails is dropped and counted, and the lines
- * that come while the writer is backed off (from {@link #BACKOFF_FIRST}, doubling to {@link #BACKOFF_MOST}) are
- * dropped and counted too, so a cdb that is down costs the drain nothing.
+ * line protocol, each publish with its payload as the watch keeps it: whole up to {@link Watch#PAYLOAD_BYTES}, else
+ * its first that many bytes. {@link #offer} never blocks: a packet joins a queue of {@link #CAPACITY}, or, the queue
+ * full or the sink closed, is dropped and counted. One errand turns the queue into lines and writes them in batches of
+ * at most {@link #BATCH_LINES}, so the payload's JSON check costs the drain nothing. Delivery is at most once: the
+ * lines of a batch the writer fails that had not landed are dropped and counted, and the lines that come while the
+ * writer is backed off (from {@link #BACKOFF_FIRST}, doubling to {@link #BACKOFF_MOST}) are dropped and counted too,
+ * so a cdb that is down costs the drain nothing.
  */
 public final class PacketSink implements AutoCloseable {
 
@@ -41,8 +46,12 @@ public final class PacketSink implements AutoCloseable {
     /** Where a batch goes: one write, which may block for its bounded time. */
     public interface Writer extends AutoCloseable {
 
-        /** Writes {@code lines}; an {@link IOException} when they did not all land. */
-        void write(List<String> lines) throws IOException, InterruptedException;
+        /**
+         * Writes {@code lines} and returns how many landed; the others it dropped, each too long for one request. A
+         * {@link PartialWrite} when a request failed after {@link PartialWrite#landed} of them had landed, another
+         * {@link IOException} when none had.
+         */
+        int write(List<String> lines) throws IOException, InterruptedException;
 
         /** Ends what the writer holds; nothing by default. */
         @Override
@@ -50,9 +59,30 @@ public final class PacketSink implements AutoCloseable {
         }
     }
 
+    /** A write that failed after some of its lines had landed: they did, the others did not. */
+    public static final class PartialWrite extends IOException {
+
+        private final int landed;
+
+        /** {@code cause} is null when the failure was an answer, not an exception. */
+        public PartialWrite(final String message, final int landed, final Throwable cause) {
+            super(message, cause);
+            this.landed = landed;
+        }
+
+        /** The lines that landed before the failure. */
+        public int landed() {
+            return landed;
+        }
+    }
+
+    /** A packet of {@code node}, queued until the errand makes it a line. */
+    private record Entry(String node, Packet packet) {
+    }
+
     /** Null for a sink that is off: it keeps and counts nothing. */
     private final Writer writer;
-    private final ArrayBlockingQueue<String> queue;
+    private final ArrayBlockingQueue<Entry> queue;
     private final Errands errands = new Errands("frontear-lab-sink");
     /** Written by {@link #close} before it interrupts the errand; read by the errand and by {@link #offer}. */
     private final AtomicBoolean halt = new AtomicBoolean();
@@ -82,12 +112,12 @@ public final class PacketSink implements AutoCloseable {
         return new PacketSink(null, 1);
     }
 
-    /** Queues {@code p} of node {@code node} as a line, or drops and counts it. Never blocks, never throws. */
+    /** Queues {@code p} of node {@code node}, or drops and counts it. Never blocks, never throws. */
     void offer(final String node, final Packet p) {
         if (writer == null) {
             return;
         }
-        if (halt.get() || !queue.offer(line(node, p))) {
+        if (halt.get() || !queue.offer(new Entry(node, p))) {
             droppedFull.incrementAndGet();
         }
     }
@@ -102,7 +132,10 @@ public final class PacketSink implements AutoCloseable {
         return droppedFull.get();
     }
 
-    /** The lines dropped because a write failed, or came while the writer was backed off. */
+    /**
+     * The lines dropped because a write failed before they landed, because one was too long for a request, or because
+     * they came while the writer was backed off.
+     */
     long droppedDown() {
         return droppedDown.get();
     }
@@ -130,11 +163,13 @@ public final class PacketSink implements AutoCloseable {
 
     /**
      * The line of {@code p}: tags {@code node}, {@code kind}, {@code origin} and {@code link} (each left out when
-     * empty), then its fields; {@code offset} left out when the packet has none, {@code correlation} when it is
-     * empty. {@code code} says why a DROPPED packet was dropped, where the link says it in a known form: 0 otherwise.
+     * empty), then its fields; {@code offset} left out when the packet has none, {@code correlation} and the payload
+     * when they are empty. The payload goes to {@code payload} when {@link #json} says so, else to
+     * {@code payload_text}. {@code code} says why a DROPPED packet was dropped, where the link says it in a known
+     * form: 0 otherwise.
      */
     static String line(final String node, final Packet p) {
-        final StringBuilder out = new StringBuilder(160).append("frontear_packet");
+        final StringBuilder out = new StringBuilder(160 + p.payload().length()).append("frontear_packet");
         tag(out, "node", node);
         tag(out, "kind", p.kind().name().toLowerCase(Locale.ROOT));
         tag(out, "origin", p.origin());
@@ -150,8 +185,29 @@ public final class PacketSink implements AutoCloseable {
             out.append(",correlation=");
             string(out, p.correlation());
         }
+        if (!p.payload().isEmpty()) {
+            out.append(json(p) ? ",payload=" : ",payload_text=");
+            string(out, p.payload());
+        }
         out.append(",code=").append(code(p)).append("i ").append(Math.multiplyExact(p.atMillis(), 1_000_000L));
         return out.toString();
+    }
+
+    /**
+     * Whether the payload of {@code p} is for the JSON column: kept whole, so no larger than
+     * {@link Watch#PAYLOAD_BYTES}, and one JSON document to comando's parser. cdb's JSON type takes one RFC 8259
+     * text and refuses the line otherwise; the parser reads the same grammar and limits nesting and number length,
+     * which cdb does not, so where the two differ it is the parser that refuses, and the payload goes to text.
+     */
+    static boolean json(final Packet p) {
+        if (p.bytes() > Watch.PAYLOAD_BYTES) {
+            return false;
+        }
+        try {
+            return !Json.readTree(p.payload()).isMissingNode();
+        } catch (final JsonException _) {
+            return false;
+        }
     }
 
     /**
@@ -182,21 +238,26 @@ public final class PacketSink implements AutoCloseable {
         return 0;
     }
 
-    /** The errand: a batch of what is queued, written, until the close. */
+    /** The errand: a batch of what is queued, made lines and written, until the close. */
     private void drain() {
+        final List<Entry> taken = new ArrayList<>(BATCH_LINES);
         final List<String> batch = new ArrayList<>(BATCH_LINES);
         while (!halt.get() && !Thread.currentThread().isInterrupted()) {
+            taken.clear();
             batch.clear();
             try {
-                final String first = queue.poll(BATCH_WAIT.toNanos(), TimeUnit.NANOSECONDS);
+                final Entry first = queue.poll(BATCH_WAIT.toNanos(), TimeUnit.NANOSECONDS);
                 if (first == null) {
                     continue; // nothing yet: the halt flag is read again
                 }
-                batch.add(first);
+                taken.add(first);
             } catch (final InterruptedException _) {
                 return; // the close
             }
-            queue.drainTo(batch, BATCH_LINES - 1);
+            queue.drainTo(taken, BATCH_LINES - 1);
+            for (final Entry e : taken) {
+                batch.add(line(e.node(), e.packet()));
+            }
             deliver(batch);
         }
     }
@@ -208,15 +269,14 @@ public final class PacketSink implements AutoCloseable {
             return;
         }
         try {
-            writer.write(batch);
-            written.addAndGet(batch.size());
+            count(batch.size(), writer.write(batch));
             if (down) {
                 down = false;
                 LOG.log(System.Logger.Level.INFO, "frontear packets reach cdb again [droppedDown=" + droppedDown.get()
                         + ']');
             }
         } catch (final IOException | RuntimeException e) {
-            droppedDown.addAndGet(batch.size());
+            count(batch.size(), e instanceof final PartialWrite partial ? partial.landed() : 0);
             backoffNanos = down ? Math.min(backoffNanos * 2, BACKOFF_MOST.toNanos()) : BACKOFF_FIRST.toNanos();
             retryAtNanos = nowNanos + backoffNanos;
             if (!down) {
@@ -229,6 +289,13 @@ public final class PacketSink implements AutoCloseable {
             Thread.currentThread().interrupt(); // the close; the loop ends on it
             droppedDown.addAndGet(batch.size());
         }
+    }
+
+    /** Counts {@code landed} of a batch of {@code lines} written, the others dropped. */
+    private void count(final int lines, final int landed) {
+        assert landed >= 0 && landed <= lines : "landed out of range [landed=" + landed + ", lines=" + lines + ']';
+        written.addAndGet(landed);
+        droppedDown.addAndGet(lines - landed);
     }
 
     /** {@code ,name=value} with the line protocol's tag escapes; nothing when {@code value} is empty. */

@@ -18,7 +18,8 @@ import dev.marregui.comando.core.port.LabPort.Totals;
 /**
  * The {@code frontear_read} tool (record 187): one of the frontear tab's four views of this instance's node, as JSON,
  * read from the {@link LabPort} the application sets; nothing is asked of the user. The first call starts the watch,
- * so its {@code traffic} holds only what came after it.
+ * so its {@code traffic} holds only what came after it. A packet's payload, whole up to 8 KiB, else its first 8 KiB,
+ * is in the answer only when {@code args.payload} is true, so an answer stays small: its head is there always.
  */
 final class LabTools {
 
@@ -29,11 +30,15 @@ final class LabTools {
     private LabTools() {
     }
 
-    /** The view {@code args.view} names, after {@code args.since}, at most {@code args.max} packets. */
+    /**
+     * The view {@code args.view} names, after {@code args.since}, at most {@code args.max} packets, each with its
+     * payload when {@code args.payload}.
+     */
     static McpTools.Outcome read(final LabPort lab, final JsonNode args) {
         final String view = args.path("view").asString("overview").toLowerCase(Locale.ROOT);
         final long since = Math.max(0L, args.path("since").asLong(0L));
         final int max = Math.clamp(args.path("max").asInt(DEFAULT_MAX), 1, MAX);
+        final boolean payload = args.path("payload").asBoolean(false);
         lab.open();
         final ObjectNode out = Json.object().put("view", view);
         final Frame f = lab.read(since, "traffic".equals(view) ? max : 0);
@@ -53,7 +58,7 @@ final class LabTools {
                 out.put("since", since).put("missed", f.missed()).put("last", f.last());
                 final ArrayNode packets = out.putArray("packets");
                 for (final Packet p : f.packets()) {
-                    packets.add(packet(p));
+                    packets.add(packet(p, payload));
                 }
             }
             case "octopus" -> {
@@ -94,11 +99,13 @@ final class LabTools {
                 .put("sinkDroppedDown", c.sinkDroppedDown());
     }
 
-    private static ObjectNode packet(final Packet p) {
-        return Json.object().put("seq", p.seq()).put("atMillis", p.atMillis()).put("kind", p.kind().name())
-                .put("origin", p.origin()).put("link", p.link()).put("topic", p.topic()).put("qos", p.qos())
-                .put("retain", p.retain()).put("bytes", p.bytes()).put("hops", p.hops()).put("offset", p.offset())
-                .put("correlation", p.correlation()).put("head", p.head()).put("detail", p.detail());
+    private static ObjectNode packet(final Packet p, final boolean payload) {
+        final ObjectNode out = Json.object().put("seq", p.seq()).put("atMillis", p.atMillis())
+                .put("kind", p.kind().name()).put("origin", p.origin()).put("link", p.link()).put("topic", p.topic())
+                .put("qos", p.qos()).put("retain", p.retain()).put("bytes", p.bytes()).put("hops", p.hops())
+                .put("offset", p.offset()).put("correlation", p.correlation()).put("head", p.head())
+                .put("detail", p.detail());
+        return payload ? out.put("payload", p.payload()) : out;
     }
 
     private static ObjectNode link(final Link l) {

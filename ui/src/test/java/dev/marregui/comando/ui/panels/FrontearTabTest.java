@@ -2,6 +2,8 @@ package dev.marregui.comando.ui.panels;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JComboBox;
@@ -12,9 +14,11 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
+import javax.swing.table.JTableHeader;
 
 import org.junit.jupiter.api.Test;
 
+import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.LabPort;
 import dev.marregui.comando.core.port.LabPort.Counts;
@@ -31,6 +35,7 @@ import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
 
@@ -38,9 +43,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [FrontearTab], off screen, from a fake [LabPort], and its place in [LowerPanel].
 /// - nothing is watched until the tab is shown; then each of the four views is filled
-/// - the packet log collapses presences, filters by topic and kind, selects a publish's path and shows its payload
+/// - every column header of the four views says what its column means, and each view says what a row is
+/// - the packet log hides frontear's control traffic until asked, collapses presences, filters by topic and kind,
+///   names each kind in a word, selects a publish's path and shows its payload, indented when it is JSON
 /// - paused, the log stays as it is; the packets lost are counted beside it
-/// - the frontear tab stays in front until the state selects another tab
+/// - the frontear tab is a lower tab of the state: rendered, it comes to the front; chosen, it is selected
 class FrontearTabTest {
 
     /// Set on the port, the tab opens nothing until shown; shown, it opens the port once and fills Overview, Octopus
@@ -88,23 +95,135 @@ class FrontearTabTest {
             find(tab, "frontear.presence", JToggleButton.class).doClick();
             find(tab, "frontear.filter", JTextField.class).setText("work/a");
             assertThat(t.getRowCount()).isEqualTo(3);
-            find(tab, "frontear.kind", JComboBox.class).setSelectedItem("SENT");
+            find(tab, "frontear.kind", JComboBox.class).setSelectedItem("Sent");
             assertThat(t.getRowCount()).isEqualTo(1);
-            assertThat(t.getValueAt(0, 1)).isEqualTo("SENT");
+            assertThat(t.getValueAt(0, 1)).isEqualTo("Sent");
             assertThat(t.getValueAt(0, 2)).as("a step names its link").isEqualTo("beta");
         });
     }
 
-    /// Selecting a publish selects its steps on the links with it and shows the start of its payload beside the log.
+    /// Selecting a publish selects its steps on the links with it and shows its JSON payload beside the log, indented
+    /// by two spaces, one field per line.
     @Test
-    void selectingAPublishSelectsItsPathAndShowsItsPayload() throws Exception {
+    void selectingAPublishSelectsItsPathAndShowsItsPayloadIndented() throws Exception {
         final FrontearTab tab = shown(new FakeLab());
         SwingUtilities.invokeAndWait(() -> {
             final JTable t = table(tab, "frontear.traffic");
             t.setRowSelectionInterval(1, 1);
             assertThat(t.getSelectedRows()).containsExactly(1, 2, 3);
-            assertThat(find(tab, "frontear.head", JTextArea.class).getText()).isEqualTo("{\"n\":1}");
+            final JTextArea head = find(tab, "frontear.head", JTextArea.class);
+            assertThat(head.getText().lines().toList()).containsExactly("{", "  \"n\" : 1", "}");
+            assertThat(head.getLineWrap()).as("long lines wrap").isTrue();
+            assertThat(head.getFont().getFamily()).isEqualTo(Theme.mono().getFamily());
         });
+    }
+
+    /// A payload that is not JSON, or JSON cut short, is shown as it came.
+    @Test
+    void aPayloadThatIsNotJsonIsShownAsItCame() throws Exception {
+        final FakeLab lab = new FakeLab();
+        lab.packets.add(FakeLab.published(9, 9_000L, "alpha", "work/t", "temperature 21.5 {not json"));
+        lab.packets.add(FakeLab.published(10, 9_001L, "alpha", "work/u", "{\"cut\": [1, 2"));
+        final FrontearTab tab = shown(lab);
+        SwingUtilities.invokeAndWait(() -> {
+            final JTable t = table(tab, "frontear.traffic");
+            final JTextArea head = find(tab, "frontear.head", JTextArea.class);
+            t.setRowSelectionInterval(4, 4);
+            assertThat(head.getText()).isEqualTo("temperature 21.5 {not json");
+            t.setRowSelectionInterval(5, 5);
+            assertThat(head.getText()).isEqualTo("{\"cut\": [1, 2");
+        });
+    }
+
+    /// A publish whose whole payload the port kept shows all of it, not its head; one without shows its head.
+    @Test
+    void theWholePayloadIsShownWhereThePortKeptIt() throws Exception {
+        final FakeLab lab = new FakeLab();
+        lab.packets.add(new Packet(9, 9_000L, Kind.PUBLISHED, "alpha", "", "work/w", 1, false, 30, 0, -1L, "",
+                "{\"n\":1,\"tag", "", "{\"n\":1,\"tags\":[\"a\",\"b\"]}"));
+        final FrontearTab tab = shown(lab);
+        SwingUtilities.invokeAndWait(() -> {
+            final JTable t = table(tab, "frontear.traffic");
+            final JTextArea head = find(tab, "frontear.head", JTextArea.class);
+            t.setRowSelectionInterval(4, 4);
+            assertThat(head.getText().lines().toList())
+                    .containsExactly("{", "  \"n\" : 1,", "  \"tags\" : [ \"a\", \"b\" ]", "}");
+            t.setRowSelectionInterval(1, 1);
+            assertThat(head.getText().lines().toList()).as("head only").containsExactly("{", "  \"n\" : 1", "}");
+        });
+    }
+
+    /// The topics of frontear's own traffic, `$frontear/` and `comando/v1/local/fabric/`, are hidden until the control
+    /// toggle shows them; a topic that only holds one of them stays shown.
+    @Test
+    void controlTrafficIsHiddenUntilTheToggleShowsIt() throws Exception {
+        final FakeLab lab = new FakeLab();
+        lab.packets.add(FakeLab.published(9, 9_000L, "beta", "$frontear/check/alpha", ""));
+        lab.packets.add(FakeLab.published(10, 9_001L, "beta", "comando/v1/local/fabric/state", "{}"));
+        lab.packets.add(FakeLab.published(11, 9_002L, "beta", "work/$frontear/x", ""));
+        final FrontearTab tab = shown(lab);
+        SwingUtilities.invokeAndWait(() -> {
+            final JTable t = table(tab, "frontear.traffic");
+            final JToggleButton control = find(tab, "frontear.control", JToggleButton.class);
+            assertThat(control.isSelected()).as("off by default").isFalse();
+            assertThat(control.getText()).isEqualTo("show control");
+            assertThat(t.getRowCount()).isEqualTo(5);
+            assertThat(t.getValueAt(4, 3)).isEqualTo("work/$frontear/x");
+            control.doClick();
+            assertThat(t.getRowCount()).isEqualTo(7);
+            assertThat(t.getValueAt(4, 3)).isEqualTo("$frontear/check/alpha");
+            control.doClick();
+            assertThat(t.getRowCount()).isEqualTo(5);
+        });
+    }
+
+    /// Each column of Overview, Traffic, Octopus and Store has a header tooltip saying what it means, one short line
+    /// without a closing period, and the renamed headers read as the store and the octopus mean them.
+    @Test
+    void everyColumnHeaderSaysWhatItsColumnMeans() throws Exception {
+        final FrontearTab tab = shown(new FakeLab());
+        SwingUtilities.invokeAndWait(() -> {
+            for (final String name : List.of("frontear.overview", "frontear.traffic", "frontear.octopus",
+                    "frontear.store")) {
+                final JTable t = table(tab, name);
+                final JTableHeader header = t.getTableHeader();
+                assertThat(t.getColumnCount()).as(name).isPositive();
+                for (int i = 0; i < t.getColumnCount(); i++) {
+                    final Rectangle r = header.getHeaderRect(i);
+                    final String tip = header.getToolTipText(new MouseEvent(header, MouseEvent.MOUSE_MOVED, 0L, 0,
+                            r.x + r.width / 2, r.y + r.height / 2, 0, false));
+                    final String column = name + " " + t.getColumnName(i);
+                    assertThat(tip).as(column).isNotBlank().hasSizeLessThanOrEqualTo(80).doesNotContain("\n");
+                    assertThat(tip).as(column).doesNotEndWith(".");
+                }
+            }
+            assertThat(columns(table(tab, "frontear.store"))).startsWith("to peer", "delivered / written")
+                    .contains("last force ms", "force p50 ms", "force p99 ms")
+                    .doesNotContain("read", "link", "last ms", "p50 ms", "p99 ms");
+            assertThat(columns(table(tab, "frontear.octopus"))).startsWith("to peer").contains("waiting to append")
+                    .doesNotContain("link", "deliveries");
+        });
+    }
+
+    /// Each view says in one line above its table what a row is; the store's is that a row is a peer's durable log.
+    @Test
+    void eachViewSaysWhatARowIs() throws Exception {
+        final FrontearTab tab = shown(new FakeLab());
+        SwingUtilities.invokeAndWait(() -> {
+            for (final String view : List.of("overview", "traffic", "octopus", "store")) {
+                final String caption = find(tab, "frontear.caption." + view, JLabel.class).getText();
+                assertThat(caption).as(view).startsWith("One ").doesNotContain("\n");
+            }
+            assertThat(find(tab, "frontear.caption.store", JLabel.class).getText()).isEqualTo(
+                    "One durable log per peer: the messages this node keeps until that peer acknowledges them");
+        });
+    }
+
+    /// Every kind is named in a word, as the kind filter offers it.
+    @Test
+    void everyKindIsNamedInAWord() {
+        assertThat(List.of(Kind.values())).extracting(FrontearTab::kindName).containsExactly("Published", "Appended",
+                "Sent", "Arrived", "Dropped", "Connected", "Disconnected");
     }
 
     /// Paused, a refresh leaves the log as it is; resumed, the packets that came meanwhile join it.
@@ -123,11 +242,12 @@ class FrontearTabTest {
         });
     }
 
-    /// The frontear tab sits after Results; brought forward, it stays while the state's tab stays, and gives way when
-    /// the state selects another tab.
+    /// The frontear tab sits after Results. Chosen by the user, it asks the state to select it; the state's frontear
+    /// tab brings it to the front, and another tab of the state makes it give way.
     @Test
-    void theFrontearTabStaysInFrontUntilTheStateSelectsAnother() throws Exception {
-        final LowerPanel lower = onEdt(() -> new LowerPanel(new WidgetContext(_ -> { }, new ActionRegistry()),
+    void theFrontearTabIsALowerTabOfTheState() throws Exception {
+        final List<Intent> dispatched = new ArrayList<>();
+        final LowerPanel lower = onEdt(() -> new LowerPanel(new WidgetContext(dispatched::add, new ActionRegistry()),
                 new ResultRegistry(), new TranscriptRegistry(), new WidgetRegistry()));
         final AppState s = AppState.initial(
                 List.of(new PanelState(new PanelId("p"), "p", "", "")), List.of(), List.of());
@@ -136,11 +256,14 @@ class FrontearTabTest {
             lower.render(s.withLowerTab(LowerTab.SESSION));
             assertThat(tabs.getTitleAt(LowerPanel.FRONTEAR)).isEqualTo("frontear");
             tabs.setSelectedIndex(LowerPanel.FRONTEAR);
-            lower.render(s.withLowerTab(LowerTab.SESSION));
-            assertThat(tabs.getSelectedIndex()).isEqualTo(LowerPanel.FRONTEAR);
-            assertThat(lower.selectedView()).isEqualTo(-1L);
+            assertThat(dispatched).containsExactly(new Intent.SelectLowerTab(LowerTab.FRONTEAR));
             lower.render(s.withLowerTab(LowerTab.APPROVALS));
             assertThat(tabs.getSelectedIndex()).isEqualTo(LowerPanel.APPROVALS);
+            lower.render(s.withLowerTab(LowerTab.FRONTEAR));
+            assertThat(tabs.getSelectedIndex()).isEqualTo(LowerPanel.FRONTEAR);
+            assertThat(lower.selectedView()).isEqualTo(-1L);
+            assertThat(lower.frontear()).isSameAs(tabs.getComponentAt(LowerPanel.FRONTEAR));
+            assertThat(dispatched).as("rendering asks nothing of the state").hasSize(1);
         });
     }
 
@@ -151,6 +274,14 @@ class FrontearTabTest {
             tab.shown();
         });
         return tab;
+    }
+
+    private static List<String> columns(final JTable t) {
+        final List<String> names = new ArrayList<>();
+        for (int i = 0; i < t.getColumnCount(); i++) {
+            names.add(t.getColumnName(i));
+        }
+        return names;
     }
 
     private static JTable table(final FrontearTab tab, final String name) {

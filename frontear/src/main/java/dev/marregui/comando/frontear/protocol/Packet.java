@@ -37,6 +37,8 @@ public sealed interface Packet {
     int BAD_USER_NAME_OR_PASSWORD = 0x86;
     /** Not authorized. */
     int NOT_AUTHORIZED = 0x87;
+    /** Server unavailable (§3.2.2.2): a CONNECT the server cannot take now, though it runs. */
+    int SERVER_UNAVAILABLE = 0x88;
     /** Server shutting down. */
     int SERVER_SHUTTING_DOWN = 0x8B;
     /** Bad authentication method: a CONNECT with an Authentication Method, which a broker without AUTH refuses. */
@@ -176,7 +178,9 @@ public sealed interface Packet {
      * PUBLISH (§3.3), QoS 0, 1 or 2 as read, with its Response Topic and Correlation Data, null when absent. A
      * {@code null} payload is the empty one. {@code packetId} is 0 at QoS 0, and at QoS 1 until the client gives the
      * message one. {@code meta} holds the other application properties a broker passes on unchanged (§3.3.2.3).
-     * Two publishes are equal when every field is, the payload and correlation data compared by content.
+     * Two publishes are equal when every field is, the payload and correlation data compared by content. Nothing
+     * writes into the payload or the correlation data once the record is built (the codec decodes each into an array
+     * of its own), so every holder, a session's queue, a link, the watch, shares them by reference.
      */
     record Publish(String topic, byte[] payload, int qos, boolean retain, boolean dup, int packetId,
             String responseTopic, byte[] correlation, Meta meta) implements Packet {

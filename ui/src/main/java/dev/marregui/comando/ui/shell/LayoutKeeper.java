@@ -385,7 +385,7 @@ final class LayoutKeeper {
     /**
      * The lower area for the panel in front. A document no session works in, a file opened to read, takes the whole
      * height and the lower area hides, until it is {@code asked} for while that document stays in front (a lower tab
-     * chosen, ⌃1–⌃4); then it shows for that document for the rest of the window's life. A tab that changes as another
+     * chosen, ⌃1–⌃5); then it shows for that document for the rest of the window's life. A tab that changes as another
      * panel comes to the front is that panel's own, never asked. A request waiting in Approvals shows it while the
      * Approvals tab is the document's and a request waits, and no longer: back from answering it elsewhere, the
      * document has its whole height again. Any other panel shows it, at the height it had when that panel was last in front. The panel in front is

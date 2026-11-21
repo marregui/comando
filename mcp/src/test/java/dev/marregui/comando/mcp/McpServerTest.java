@@ -672,6 +672,9 @@ class McpServerTest {
         // the focused panel needs no focus: the reply says so rather than promise a pending one
         assertThat(text(tool("ui_set_layout", "{\"panel\":\"one\",\"lower_tab\":\"session\"}")))
                 .isEqualTo("panel one already has the focus; selected lower tab session");
+        tool("ui_set_layout", "{\"lower_tab\":\"frontear\"}");
+        assertThat(sink.await(Intent.SessionLayout.class, l -> LowerTab.FRONTEAR.equals(l.tab()), WAIT))
+                .as("the frontear tab by its name").isNotNull();
         assertThat(text(tool("ui_set_layout", "{\"lower_tab\":\"nope\"}"))).contains("no view 'nope'");
         assertThat(text(tool("ui_set_layout", "{\"lower_share\":2}"))).contains("between 0.05 and 0.95");
         assertThat(text(tool("ui_set_layout", "{}"))).contains("nothing to change");

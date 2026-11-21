@@ -58,6 +58,10 @@ import dev.marregui.comando.frontear.watch.Watch;
  * come back, and publishes what arrives on the local broker as {@code $link/<id>}, whose own OUT subscription, No
  * Local under that owner, leaves it; the peer's PUBACK waits for that local publish and carries its reason code.
  *
+ * <p>Reconnect. A lost or refused connection is tried again after a backoff that grows with each failure in a row
+ * ({@link Forwarding#backoff}); a 0x88 refusal, from a node that runs and holds its links, after the first backoff;
+ * and the peer's own link connecting to this node brings a waiting reconnect forward to now ({@link #wake}).
+ *
  * <p>Watch. While the node's {@link Watch} is on, the link keeps each message's steps there (appended, sent, arrived,
  * dropped and why) and each connection change; a connection the peer refused for the client id, a link aimed at a
  * node other than the one its id names, says so.
@@ -74,6 +78,11 @@ final class Link implements AutoCloseable {
      * Unmeasured: a local publish completes within a force of the slowest link log it reaches.
      */
     static final int IN_RECEIVE_MAXIMUM = 100;
+    /**
+     * The least time between two wakes of one link ({@link #wake}): at most one a second, as the reconnect on a
+     * peer's return asks, so a peer whose link flaps does not drive this one's connects.
+     */
+    static final long WAKE_EVERY_NANOS = TimeUnit.SECONDS.toNanos(1);
     /** The keep alive towards the peer: comando's peer client's. */
     private static final int KEEP_ALIVE_SECONDS = 60;
 
@@ -102,6 +111,8 @@ final class Link implements AutoCloseable {
     private final AtomicBoolean pumpPosted = new AtomicBoolean();
     /** The QoS 0 messages dropped over the queue's bound; written by the broker's threads, read by {@link #state}. */
     private final AtomicLong shed = new AtomicLong();
+    /** When {@link #wake} last went through, by {@link System#nanoTime}; any thread, by compare-and-set. */
+    private final AtomicLong wokenAtNanos = new AtomicLong(System.nanoTime() - WAKE_EVERY_NANOS);
     /** Guards {@link #shedIn} and the replacing of {@link #peer}, so {@link #state} counts a client's drops once. */
     private final Object peerSwap = new Object();
     private final InternalSubscriber subscriber = (m, _) -> deliver(m);
@@ -241,6 +252,26 @@ final class Link implements AutoCloseable {
         } catch (final RuntimeException e) {
             log.close();
             throw e;
+        }
+    }
+
+    /**
+     * The peer's own link to this node connected, so the peer runs: a reconnect that waits out its backoff goes now.
+     * At most once per {@link #WAKE_EVERY_NANOS}, the calls between dropped; from any thread, and never blocks.
+     */
+    void wake() {
+        final Peer p = peer;
+        if (closed || p == null) {
+            return;
+        }
+        final long nowNanos = System.nanoTime();
+        final long lastNanos = wokenAtNanos.get();
+        if (nowNanos - lastNanos < WAKE_EVERY_NANOS || !wokenAtNanos.compareAndSet(lastNanos, nowNanos)) {
+            return;
+        }
+        if (p.client.wake()) {
+            LOG.log(System.Logger.Level.INFO, "link reconnecting now, its peer is back [link=" + id + ", clientId="
+                    + clientId() + ']');
         }
     }
 
@@ -970,8 +1001,14 @@ final class Link implements AutoCloseable {
                     down(cause);
                 }
             });
-            return closed || peer != this ? null : Forwarding.backoff(attempts,
-                    ThreadLocalRandom.current().nextDouble());
+            if (closed || peer != this) {
+                return null;
+            }
+            // a node that runs and holds its links (0x88) lets them in once its host is ready, a moment later: try
+            // again by the first backoff, not one grown while the node was down
+            final boolean held = cause(cause) instanceof final MqttException e
+                    && e.reasonCode() == Packet.SERVER_UNAVAILABLE;
+            return Forwarding.backoff(held ? 1 : attempts, ThreadLocalRandom.current().nextDouble());
         }
     }
 }

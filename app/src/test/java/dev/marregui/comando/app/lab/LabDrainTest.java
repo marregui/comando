@@ -1,5 +1,6 @@
 package dev.marregui.comando.app.lab;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,7 @@ import dev.marregui.comando.frontear.watch.LogView;
 import dev.marregui.comando.frontear.watch.NodeSnapshot;
 import dev.marregui.comando.frontear.watch.Observation;
 import dev.marregui.comando.frontear.watch.Published;
+import dev.marregui.comando.frontear.watch.Watch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -43,6 +45,8 @@ class LabDrainTest {
     private static final Duration WAIT = Duration.ofSeconds(15);
     private static final int BURSTS = 10;
     private static final int BURST = 5_000;
+    /// The payload of every scripted publish, shared as the watch shares one: never written.
+    private static final byte[] M = {'m'};
 
     private ExecutorService strand;
     private final AtomicInteger depth = new AtomicInteger();
@@ -105,12 +109,15 @@ class LabDrainTest {
     /// Ten SENT of 100 bytes in the five seconds before the snapshot make 2 messages and 200 bytes a second on link b;
     /// its last connect and disconnect carry their times and the last detail; ten force rounds of 1 to 10 ms make 2
     /// rounds a second, a median of 5 ms and a 99th percentile of 10 ms; a force round is no packet, and every packet
-    /// goes to the sink as a line of node a.
+    /// goes to the sink as a line of node a. A publish longer than the head carries its head and its whole payload,
+    /// decoded as UTF-8; a step carries no payload.
     @Test
     void theNodeCarriesRatesMarksAndRoundsFromTheEvents() {
         final List<Observation> events = new ArrayList<>();
         long seq = 1;
-        events.add(new Published(seq++, 8_000L, "pub", "t/x", 1, true, 5, 1, new byte[] {0x0a, 0x0b}, "hello", 0));
+        final String payload = "hé" + "x".repeat(Watch.HEAD_BYTES);
+        events.add(new Published(seq++, 8_000L, "pub", "t/x", 1, true, 5, 1, new byte[] {0x0a, 0x0b},
+                payload.getBytes(StandardCharsets.UTF_8), 0));
         events.add(new LinkStep(seq++, 1_000L, "b", LinkStep.Kind.CONNECTED, -1L, null, 0, ""));
         for (int i = 0; i < 10; i++) {
             events.add(new LinkStep(seq++, 9_000L + i * 100L, "b", LinkStep.Kind.SENT, i, "t/x", 100, ""));
@@ -118,7 +125,10 @@ class LabDrainTest {
         }
         events.add(new LinkStep(seq, 9_950L, "b", LinkStep.Kind.DISCONNECTED, -1L, null, 0, "peer went away"));
         final List<String> lines = new CopyOnWriteArrayList<>();
-        try (PacketSink sink = new PacketSink(lines::addAll);
+        try (PacketSink sink = new PacketSink(batch -> {
+            lines.addAll(batch);
+            return batch.size();
+        });
                 LabDrain drain = new LabDrain(new ScriptSource(events), edt, sink)) {
             drain.open();
             // the rates are taken at the snapshot after the events, a second after the first
@@ -148,13 +158,17 @@ class LabDrainTest {
             final Packet published = f.packets().getFirst();
             assertThat(published.kind()).isEqualTo(Kind.PUBLISHED);
             assertThat(published.correlation()).isEqualTo("0a0b");
-            assertThat(published.head()).isEqualTo("hello");
+            assertThat(published.head())
+                    .isEqualTo(new String(payload.getBytes(StandardCharsets.UTF_8), 0, Watch.HEAD_BYTES,
+                            StandardCharsets.UTF_8));
+            assertThat(published.payload()).isEqualTo(payload);
             assertThat(published.link()).isEmpty();
             final Packet connected = f.packets().get(1);
             assertThat(connected.kind()).isEqualTo(Kind.CONNECTED);
             assertThat(connected.topic()).isEmpty();
             assertThat(connected.qos()).isEqualTo(-1);
             assertThat(connected.hops()).isEqualTo(-1);
+            assertThat(connected.payload()).isEmpty();
             assertThat(f.packets()).filteredOn(p -> p.kind() == Kind.SENT).hasSize(10);
             await().atMost(WAIT).until(() -> lines.size() == 13);
             assertThat(lines).allSatisfy(l -> assertThat(l).startsWith("frontear_packet,node=a,kind="));
@@ -198,7 +212,7 @@ class LabDrainTest {
             final long to = Math.min(released.get(), after + max);
             final List<Observation> events = new ArrayList<>((int) Math.max(0L, to - after));
             for (long s = after + 1; s <= to; s++) {
-                events.add(new Published(s, s, "pub", "t/" + s, 0, false, 4, 1, null, "m", 0));
+                events.add(new Published(s, s, "pub", "t/" + s, 0, false, 4, 1, null, M, 0));
             }
             asked.set(to);
             return new Chunk(events, 0L, Math.max(after, to), false);

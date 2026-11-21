@@ -13,8 +13,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
+import java.util.function.LongConsumer;
+import java.util.function.LongSupplier;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
@@ -49,10 +50,11 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     private final String clientId;
     private final IntSupplier port;
     private final BooleanSupplier fabricUp;
+    private final LongSupplier generation;
     private final ScheduledExecutorService follow = Threads.timedStrand("peer-broker");
     private final ExecutorService messages = Threads.strand("peer-messages");
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
-    private final List<IntConsumer> subscribed = new CopyOnWriteArrayList<>();
+    private final List<LongConsumer> subscribed = new CopyOnWriteArrayList<>();
     /** The filters subscribed, in order, with their handlers; guarded by itself. */
     private final Map<String, Consumer<Message>> handlers = new LinkedHashMap<>();
     /** Written by whoever sets the will, read by the follow strand when it connects. */
@@ -70,12 +72,19 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
     /**
      * Client {@code clientId} on frontear's MQTT port, as {@code port} says it at each look, connected while
-     * {@code fabricUp} says the node runs.
+     * {@code fabricUp} says the node runs; {@code generation} says which start of the node runs now, a later start a
+     * greater one, and the subscribed listeners hear it.
      */
-    MqttPeerBroker(final String clientId, final IntSupplier port, final BooleanSupplier fabricUp) {
+    MqttPeerBroker(
+            final String clientId,
+            final IntSupplier port,
+            final BooleanSupplier fabricUp,
+            final LongSupplier generation
+    ) {
         this.clientId = clientId;
         this.port = port;
         this.fabricUp = fabricUp;
+        this.generation = generation;
     }
 
     /** Starts following frontear: a first look at once, then every {@link #FOLLOW_EVERY}. */
@@ -192,9 +201,13 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
     /**
      * Subscribes {@code c}, on port {@code at}, to every filter: once all are acknowledged the subscribed listeners
-     * hear the port; when one is refused, the next look renews the round.
+     * hear the node generation read before the first went; when one is refused, the next look renews the round.
      */
     private void subscribeAll(final MqttClient c, final int at) {
+        // read once connected, before the subscribes go: a node takes its generation before it binds, so this is the
+        // connected node's or a later one's, never an earlier one's; an acknowledgement that comes late, from a node
+        // closed since, thus names that node and opens no later node's links
+        final long against = generation.getAsLong();
         final List<String> filters;
         synchronized (handlers) {
             filters = List.copyOf(handlers.keySet());
@@ -206,7 +219,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         CompletableFuture.allOf(acks.toArray(CompletableFuture[]::new)).whenComplete((v, e) -> {
             roundEnded(c, e == null);
             if (e == null) {
-                subscribedAt(at);
+                subscribed(at, against);
             }
         });
     }
@@ -226,24 +239,28 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         });
     }
 
-    /** Every filter of a connect to port {@code at} is acknowledged: the listeners hear the port. */
-    private void subscribedAt(final int at) {
-        for (final IntConsumer l : subscribed) {
+    /**
+     * Every filter of a connect to port {@code at}, made against node generation {@code against}, is acknowledged:
+     * the listeners hear the generation.
+     */
+    private void subscribed(final int at, final long against) {
+        for (final LongConsumer l : subscribed) {
             try {
-                l.accept(at);
+                l.accept(against);
             } catch (final RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "a subscribed listener failed", e);
+                LOG.log(System.Logger.Level.WARNING, "a subscribed listener failed [port=" + at + ", generation="
+                        + against + ']', e);
             }
         }
     }
 
     /**
-     * Runs {@code listener} with the node's port once every filter a connect renewed is acknowledged, at each connect,
-     * on the client's thread, or at the look that renewed them after one was refused; not for a filter subscribed
-     * later. The node's host lets the other nodes' links in then, so what they queued for this instance finds its
-     * subscribers in place.
+     * Runs {@code listener} with the node's generation once every filter a connect renewed is acknowledged, at each
+     * connect, on the client's thread, or at the look that renewed them after one was refused; not for a filter
+     * subscribed later. The node's host lets the other nodes' links in then, so what they queued for this instance
+     * finds its subscribers in place.
      */
-    void onSubscribed(final IntConsumer listener) {
+    void onSubscribed(final LongConsumer listener) {
         subscribed.add(listener);
     }
 

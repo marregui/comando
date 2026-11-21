@@ -16,12 +16,14 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Consumer;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
@@ -79,8 +81,6 @@ public final class Broker implements AutoCloseable {
     private static final String ASSIGNED_PREFIX = "frontear-";
     /** What separates a link client's node from its link id in its client id: {@code <node>~<link>}. */
     private static final char LINK_MARK = '~';
-    /** Server unavailable (§3.2.2.2): the CONNACK a held link client gets, which its link takes as "try again". */
-    private static final int SERVER_UNAVAILABLE = 0x88;
     private static final byte[] ONLINE = "{\"online\":true}".getBytes(StandardCharsets.UTF_8);
     private static final Packet.Meta ONLINE_META = new Packet.Meta(-1, -1, Names.JSON, List.of());
     // what CONNACK says the broker declines: Maximum QoS 1, no subscription identifiers, no shared subscriptions
@@ -138,6 +138,9 @@ public final class Broker implements AutoCloseable {
     // session's queue drops past its bound, an internal subscriber must not block). Its depth and peak are read
     // under the strand's name in the queue readings, frontear-broker-publish-<port>.
     private final ExecutorService publisher;
+    // told the client id of each CONNECT the broker accepted, on that connection's reader, outside the sessions lock;
+    // added and removed by any thread
+    private final List<Consumer<String>> connectListeners = new CopyOnWriteArrayList<>();
     // the bytes of the retained messages, against options.maxRetainedBytes(); guarded by retainedLock
     private long retainedBytes;
     // written by gate(); read by every connection's reader when a client publishes, subscribes or connects with a
@@ -145,7 +148,7 @@ public final class Broker implements AutoCloseable {
     private volatile Gate gate = new Reserved();
     // set at construction for a broker whose host lets the links in later, cleared by openLinks(); read by every
     // connection's reader at its CONNECT. A CONNECT read after the clear is let in; one read before it is refused and
-    // its link comes again after its backoff.
+    // its link comes again after its backoff, about a second for a frontear link refused 0x88.
     private volatile boolean linksHeld;
 
     private Broker(final BrokerOptions options, final ServerSocket server, final Watch watch, final String node,
@@ -223,13 +226,27 @@ public final class Broker implements AutoCloseable {
 
     /**
      * Lets link clients connect from here on, on a broker started holding them; nothing on one that is not, or when
-     * called again. A link refused before comes again after its own backoff, at most {@code BACKOFF_MAX} later.
+     * called again. A link refused before comes again after its own backoff: a frontear link retries a 0x88 refusal
+     * after about a second, another client by its own policy.
      */
     public void openLinks() {
         if (linksHeld) {
             linksHeld = false;
             LOG.log(System.Logger.Level.INFO, "links let in [port=" + port + ", node=" + node + ']');
         }
+    }
+
+    /**
+     * Tells {@code listener} the client id of every CONNECT accepted from here on, once the session is attached, on
+     * the connection's reader: it must return at once, and a failure it throws is logged and dropped.
+     */
+    public void addConnectListener(final Consumer<String> listener) {
+        connectListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    /** Stops telling {@code listener} of CONNECTs; nothing when it was not added. */
+    public void removeConnectListener(final Consumer<String> listener) {
+        connectListeners.remove(listener);
     }
 
     /**
@@ -407,7 +424,7 @@ public final class Broker implements AutoCloseable {
         if (linksHeld && id.indexOf(LINK_MARK) >= 0) {
             LOG.log(System.Logger.Level.DEBUG, "link client refused, the node's host has not let links in yet [client="
                     + id + ", node=" + node + ']');
-            return SERVER_UNAVAILABLE;
+            return Packet.SERVER_UNAVAILABLE;
         }
         if (c.will() != null) {
             if (c.will().qos() > MAXIMUM_QOS) {
@@ -463,6 +480,13 @@ public final class Broker implements AutoCloseable {
         }
         LOG.log(System.Logger.Level.DEBUG, "client connected [client=" + id + ", connection=" + conn.number
                 + ", sessionPresent=" + present + ", cleanStart=" + c.cleanStart() + ']');
+        for (final Consumer<String> listener : connectListeners) {
+            try {
+                listener.accept(id);
+            } catch (final RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "connect listener failed [client=" + id + ']', e);
+            }
+        }
         return Packet.SUCCESS;
     }
 

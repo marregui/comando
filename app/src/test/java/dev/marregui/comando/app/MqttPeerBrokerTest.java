@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterAll;
@@ -82,7 +83,7 @@ class MqttPeerBrokerTest {
     /// neither.
     @Test
     void aMessageReachesOnlyTheHandlersWhoseFiltersMatchItsTopic() {
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-test", () -> 1, () -> false)) {
+        try (MqttPeerBroker broker = new MqttPeerBroker("comando-test", () -> 1, () -> false, () -> 1L)) {
             final List<String> presence = new CopyOnWriteArrayList<>();
             final List<String> inbox = new CopyOnWriteArrayList<>();
             broker.subscribe("comando/v1/local/instance/+/presence", m -> presence.add(m.topic()));
@@ -104,7 +105,7 @@ class MqttPeerBrokerTest {
         final MqttPeerBroker broker = new MqttPeerBroker("comando-test", () -> 1, () -> {
             looked.incrementAndGet();
             return false;
-        });
+        }, () -> 1L);
         try {
             broker.follow();
             broker.follow();
@@ -135,7 +136,7 @@ class MqttPeerBrokerTest {
     @Test
     void itConnectsWithItsWillAndRenewsListenersAndSubscriptionsAfterADrop() {
         final AtomicInteger connects = new AtomicInteger();
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true)) {
+        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true, () -> 1L)) {
             broker.will(PRESENCE, bytes("{\"state\":\"gone\"}"), true);
             broker.onConnected(connects::incrementAndGet);
             broker.subscribe(INBOX, _ -> { });
@@ -160,28 +161,32 @@ class MqttPeerBrokerTest {
         }
     }
 
-    /// Once every filter a connect renewed has its acknowledgement, the subscribed listeners hear the node's port: at
-    /// the first connect, both filters sent before, and again after a drop; a connect whose filters are refused tells
-    /// them nothing, so the node's host keeps its links held, until the next look renews the round and it is taken.
-    /// A look after that renews nothing.
+    /// Once every filter a connect renewed has its acknowledgement, the subscribed listeners hear the node generation
+    /// read before the filters went: at the first connect, both filters sent before, and again after a drop, the
+    /// generation of then; a connect whose filters are refused tells them nothing, so the node's host keeps its links
+    /// held, until the next look renews the round and it is taken, with the generation of that look. A look after
+    /// that renews nothing.
     @Test
-    void theSubscribedListenersHearThePortOnceEveryFilterIsAcknowledged() {
-        final List<Integer> heard = new CopyOnWriteArrayList<>();
+    void theSubscribedListenersHearTheGenerationOnceEveryFilterIsAcknowledged() {
+        final List<Long> heard = new CopyOnWriteArrayList<>();
         final AtomicInteger sentBefore = new AtomicInteger(-1);
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true)) {
+        final AtomicLong generation = new AtomicLong(7L);
+        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true, generation::get)) {
             broker.subscribe(INBOX, _ -> { });
             broker.subscribe(PRESENCE, _ -> { });
-            broker.onSubscribed(port -> {
+            broker.onSubscribed(against -> {
                 sentBefore.compareAndSet(-1, fake.received(Packet.Subscribe.class).size());
-                heard.add(port);
+                heard.add(against);
             });
             broker.follow();
             await().atMost(WAIT).until(() -> heard.size() == 1);
-            assertThat(heard).containsExactly(fake.port());
+            assertThat(heard).containsExactly(7L);
             assertThat(sentBefore).as("both filters subscribed first").hasValue(2);
 
+            generation.set(8L);
             fake.drop();
             await().atMost(WAIT).until(() -> heard.size() == 2);
+            assertThat(heard).containsExactly(7L, 8L);
 
             // 0x80, Unspecified error: the next connect's two filters are refused
             fake.subscribeCode(0x80);
@@ -189,10 +194,13 @@ class MqttPeerBrokerTest {
             await().atMost(WAIT).until(() -> fake.received(Packet.Subscribe.class).size() == 6);
             await().during(Duration.ofMillis(500)).atMost(WAIT).until(() -> heard.size() == 2);
 
-            // the broker takes them again: the next look renews the round on the same connection, and the port is heard
+            // the broker takes them again: the next look renews the round on the same connection, and the generation
+            // of that look is heard
+            generation.set(9L);
             fake.subscribeCode(1);
             broker.follow();
             await().atMost(WAIT).until(() -> heard.size() == 3);
+            assertThat(heard).containsExactly(7L, 8L, 9L);
             assertThat(fake.received(Packet.Subscribe.class)).hasSize(8);
             assertThat(fake.accepted()).as("no new connection").isEqualTo(3);
             broker.follow();
@@ -207,7 +215,7 @@ class MqttPeerBrokerTest {
     void aPublishCompletesOnItsAcknowledgementAndMessagesArriveInOrder() throws Exception {
         fake.ackPublishes(false);
         final List<String> heard = new CopyOnWriteArrayList<>();
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true)) {
+        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true, () -> 1L)) {
             broker.subscribe(INBOX, m -> heard.add(new String(m.payload(), StandardCharsets.UTF_8)));
             broker.follow();
             await().atMost(WAIT).until(broker::connected);
@@ -234,7 +242,7 @@ class MqttPeerBrokerTest {
     @Test
     void whenFrontearStopsItDisconnects() {
         final AtomicBoolean up = new AtomicBoolean(true);
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, up::get)) {
+        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, up::get, () -> 1L)) {
             broker.follow();
             await().atMost(WAIT).until(broker::connected);
             up.set(false);
@@ -253,7 +261,7 @@ class MqttPeerBrokerTest {
     void aPortChangeMovesTheClientToTheNewPort() {
         final AtomicInteger at = new AtomicInteger(fake.port());
         try (FakeBroker moved = new FakeBroker();
-                MqttPeerBroker broker = new MqttPeerBroker("comando-a", at::get, () -> true)) {
+                MqttPeerBroker broker = new MqttPeerBroker("comando-a", at::get, () -> true, () -> 1L)) {
             broker.follow();
             await().atMost(WAIT).until(broker::connected);
             broker.follow();
@@ -306,7 +314,7 @@ class MqttPeerBrokerTest {
             }
         };
         try (Relay relay = new Relay(host, port);
-                MqttPeerBroker broker = new MqttPeerBroker(id, relay::port, () -> true);
+                MqttPeerBroker broker = new MqttPeerBroker(id, relay::port, () -> true, () -> 1L);
                 MqttClient watcher = new MqttClient(new MqttClient.Options(host, port, id + "-watcher", 30,
                         MqttPeerBroker.MAXIMUM_PACKET_SIZE, null), watching, Runnable::run)) {
             watcher.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);

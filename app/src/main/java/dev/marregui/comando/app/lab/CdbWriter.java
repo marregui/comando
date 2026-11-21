@@ -15,22 +15,38 @@ import dev.marregui.comando.claude.MetricsEndpoint;
 
 /**
  * Writes the lab's lines to the machine's cdb the way the metrics sink does (record 146): {@code /write} with the
- * owner secret as bearer. Before its first write to a server it makes the table with {@link #DDL} through
- * {@code /exec}, since cdb's {@code /write} would make a missing table itself from the line's fields, without the
- * declared types, partitions and TTL; after a failed write it makes it again before the next one, as the server may
- * be a new one. It only writes to a server that runs ({@link MetricsEndpoint#live}): the lab never starts cdb.
- * Called by one thread at a time: the sink's.
+ * owner secret as bearer. Before its first write to a server it makes the table with {@link #DDL}, then adds the
+ * payload columns with {@link #ALTERS}, through {@code /exec}: cdb's {@code /write} would make a missing table itself
+ * from the line's fields, without the declared types, partitions and TTL, and a column it adds is VARCHAR, never
+ * JSON. After a failed write it does both again before the next one, as the server may be a new one. A table made
+ * before the payload columns gets them from the {@code ALTER}s. One that already has a VARCHAR {@code payload},
+ * from an earlier write, keeps it: the {@code ALTER} changes nothing there and its JSON payloads land as text, until
+ * the table is dropped; nothing migrates it. A cdb without the JSON type refuses {@link #DDL}, and nothing is written
+ * to it. It only writes to a server that runs ({@link MetricsEndpoint#live}): the lab never starts cdb. A batch goes
+ * in requests of at most {@link #MAX_BODY_CHARS}; when one fails, those before it have landed. A line longer than
+ * that, which cdb could never take, is dropped with a warning and the rest written. Called by one thread at a time:
+ * the sink's.
  */
 public final class CdbWriter implements PacketSink.Writer {
 
     /**
-     * The table: one row per packet, its kind, node, origin and link as symbols; no payload (presence carries prompt
-     * lines). Kept a week (ADR 0187 §2.3).
+     * The table: one row per packet, its kind, node, origin and link as symbols, a publish's payload in
+     * {@code payload} when it is JSON and kept whole, else in {@code payload_text} (see {@link PacketSink#json}).
+     * Kept a week (ADR 0187 §2.3).
      */
     static final String DDL = "CREATE TABLE IF NOT EXISTS frontear_packet (ts TIMESTAMP, node SYMBOL CAPACITY 4096,"
             + " kind SYMBOL CAPACITY 4096, origin SYMBOL CAPACITY 4096, link SYMBOL CAPACITY 4096, topic VARCHAR,"
-            + " qos INT, retain BOOLEAN, bytes INT, hops INT, offset LONG, correlation VARCHAR, code INT)"
-            + " TIMESTAMP(ts) PARTITION BY DAY TTL 7 DAYS WAL";
+            + " qos INT, retain BOOLEAN, bytes INT, hops INT, offset LONG, correlation VARCHAR, code INT,"
+            + " payload JSON, payload_text VARCHAR) TIMESTAMP(ts) PARTITION BY DAY TTL 7 DAYS WAL";
+    /** The payload columns, for a table made before them; a no-op where the column is there, whatever its type. */
+    static final List<String> ALTERS = List.of(
+            "ALTER TABLE frontear_packet ADD COLUMN IF NOT EXISTS payload JSON",
+            "ALTER TABLE frontear_packet ADD COLUMN IF NOT EXISTS payload_text VARCHAR");
+    /**
+     * The characters one request carries at most: cdb refuses a body over 16 MiB, and a character is at most three
+     * bytes of UTF-8 (a surrogate pair, two characters, four), so 4 Mi characters stay under it with room.
+     */
+    static final int MAX_BODY_CHARS = 4 << 20;
     /** The metrics sink's connect bound (record 146, §5): a server on this machine answers a connect at once. */
     private static final Duration CONNECT_WITHIN = Duration.ofSeconds(1);
     /** The metrics sink's request bound (record 146, §5). */
@@ -51,25 +67,44 @@ public final class CdbWriter implements PacketSink.Writer {
     }
 
     @Override
-    public void write(final List<String> lines) throws IOException, InterruptedException {
+    public int write(final List<String> lines) throws IOException, InterruptedException {
         final URI base = cdb.live().orElseThrow(() -> new IOException("cdb is not running"));
         final Optional<String> secret = cdb.secret();
         if (!base.equals(madeOn)) {
             exec(base, DDL, secret);
+            for (final String alter : ALTERS) {
+                exec(base, alter, secret);
+            }
             madeOn = base;
         }
-        final HttpResponse<String> answer;
-        try {
-            answer = post(base, lines, secret);
-        } catch (final IOException e) {
-            madeOn = null;
-            throw e;
+        int landed = 0;
+        int from = 0;
+        while (from < lines.size()) {
+            if (lines.get(from).length() + 1L > MAX_BODY_CHARS) {
+                LOG.log(System.Logger.Level.WARNING, "frontear packet too long for cdb, dropped [chars="
+                        + lines.get(from).length() + ", max=" + MAX_BODY_CHARS + ']');
+                from++;
+                continue;
+            }
+            final int to = end(lines, from);
+            final HttpResponse<String> answer;
+            try {
+                answer = post(base, lines.subList(from, to), secret);
+            } catch (final IOException e) {
+                madeOn = null;
+                throw new PacketSink.PartialWrite("cannot write frontear packets [lines=" + (to - from)
+                        + ", landed=" + landed + ']', landed, e);
+            }
+            if (answer.statusCode() != 204) {
+                madeOn = null;
+                throw new PacketSink.PartialWrite("cdb refused frontear packets [status=" + answer.statusCode()
+                        + ", lines=" + (to - from) + ", landed=" + landed + ", answer=" + shortened(answer.body())
+                        + ']', landed, null);
+            }
+            landed += to - from;
+            from = to;
         }
-        if (answer.statusCode() != 204) {
-            madeOn = null;
-            throw new IOException("cdb refused frontear packets [status=" + answer.statusCode() + ", lines="
-                    + lines.size() + ", answer=" + shortened(answer.body()) + ']');
-        }
+        return landed;
     }
 
     /** Ends the HTTP client, waiting for it a bounded time. Idempotent. */
@@ -110,8 +145,22 @@ public final class CdbWriter implements PacketSink.Writer {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (answer.statusCode() != 200) {
             throw new IOException("cdb refused the frontear_packet table [status=" + answer.statusCode()
-                    + ", answer=" + shortened(answer.body()) + ']');
+                    + ", sql=" + sql + ", answer=" + shortened(answer.body()) + ']');
         }
+    }
+
+    /**
+     * The end of the request that starts at line {@code from}, which fits: the lines after it while the body stays
+     * within {@link #MAX_BODY_CHARS}, up to the first that does not fit.
+     */
+    static int end(final List<String> lines, final int from) {
+        int to = from + 1;
+        long chars = lines.get(from).length() + 1L;
+        while (to < lines.size() && chars + lines.get(to).length() + 1L <= MAX_BODY_CHARS) {
+            chars += lines.get(to).length() + 1L;
+            to++;
+        }
+        return to;
     }
 
     private static HttpRequest.Builder authorized(final HttpRequest.Builder request, final Optional<String> secret) {

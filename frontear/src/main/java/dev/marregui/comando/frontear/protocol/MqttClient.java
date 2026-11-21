@@ -32,6 +32,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.IntFunction;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.loop.Threads;
@@ -127,6 +129,16 @@ public final class MqttClient implements AutoCloseable {
     private Connection opening;
     /** The next connect, scheduled; guarded by lock. */
     private ScheduledFuture<?> retry;
+    /**
+     * The number of the connect scheduled last; a connect that finds a later number returns without connecting, so
+     * a wake that replaces a connect already begun leaves one chain of connects. Guarded by lock.
+     */
+    private long ticket;
+    /**
+     * Run by the reader at the start of each scheduled connect, before it takes the lock; written by a test's thread
+     * through {@link #beforeSession}, read by the reader.
+     */
+    private volatile Runnable beforeSession = () -> { };
     /** Guarded by lock. */
     private boolean started;
     /** Set by {@link #disconnect}; guarded by lock. */
@@ -162,10 +174,28 @@ public final class MqttClient implements AutoCloseable {
         synchronized (lock) {
             if (!started && !stopping) {
                 started = true;
-                reader.execute(this::session);
+                final long t = ++ticket;
+                reader.execute(() -> session(t));
             }
         }
         return firstConnect;
+    }
+
+    /**
+     * Brings the scheduled reconnect forward to now, when one waits: the handler learnt the broker is back before its
+     * backoff ran out. Returns false, changing nothing, while a connection runs, before {@link #connect} or after
+     * {@link #disconnect}. A scheduled connect that has begun but not yet opened its connection gives way to the woken
+     * one, so one chain of connects runs.
+     */
+    public boolean wake() {
+        synchronized (lock) {
+            if (stopping || running || retry == null || !retry.cancel(false)) {
+                return false;
+            }
+            final long t = ++ticket;
+            retry = reader.schedule(() -> session(t), 0L, TimeUnit.NANOSECONDS);
+            return true;
+        }
     }
 
     /** Whether the broker has accepted the current connection and it has not ended. */
@@ -372,10 +402,23 @@ public final class MqttClient implements AutoCloseable {
         Queues.drop(qos0Name(), waitingQos0);
     }
 
-    /** One connection, on the reader: open, read until it ends, then tell the handler and maybe schedule the next. */
-    private void session() {
+    /** Holds each scheduled connect at its start, before it takes the lock, while {@code hook} runs. */
+    @TestOnly
+    void beforeSession(final Runnable hook) {
+        beforeSession = hook;
+    }
+
+    /**
+     * One connection, on the reader: open, read until it ends, then tell the handler and maybe schedule the next.
+     * Returns at once when {@code t} is no longer the last ticket: a wake scheduled another connect in its place.
+     */
+    private void session(final long t) {
+        beforeSession.run();
         final Connection c;
         synchronized (lock) {
+            if (t != ticket) {
+                return;
+            }
             retry = null;
             if (stopping) {
                 return;
@@ -838,7 +881,8 @@ public final class MqttClient implements AutoCloseable {
         }
         synchronized (lock) {
             if (delay != null && !stopping) {
-                retry = reader.schedule(this::session, delay.toNanos(), TimeUnit.NANOSECONDS);
+                final long t = ++ticket;
+                retry = reader.schedule(() -> session(t), delay.toNanos(), TimeUnit.NANOSECONDS);
                 return;
             }
         }

@@ -628,11 +628,13 @@ public final class McpTools {
                 case "session" -> LowerTab.SESSION;
                 case "approvals" -> LowerTab.APPROVALS;
                 case "terminal" -> LowerTab.TERMINAL;
+                case "frontear" -> LowerTab.FRONTEAR;
                 default -> s.views().stream().filter(v -> v.placement() == Placement.LOWER
                                 && (String.valueOf(v.id()).equals(tab) || v.title().equals(tab))).findFirst()
                         .map(v -> LowerTab.view(v.id()))
-                        .orElseThrow(() -> new IllegalArgumentException("lower_tab is results, session, approvals, terminal, or the id or "
-                                + "title of a view in the lower panel; no view '" + tab + "'"));
+                        .orElseThrow(() -> new IllegalArgumentException("lower_tab is results, session, approvals, "
+                                + "terminal, frontear, or the id or title of a view in the lower panel; no view '"
+                                + tab + "'"));
             };
         }
         final Layout layout = new Layout(toggle(args.path("sidebar")), toggle(args.path("side_pane")),

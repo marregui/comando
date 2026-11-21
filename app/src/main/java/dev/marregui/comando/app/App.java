@@ -270,7 +270,8 @@ public final class App implements AutoCloseable {
             // launch; this instance's presence is cleared, and its link closed, before its node stops
             if (onPeers) {
                 final Peers.Me me = Peers.Me.of(InstanceName.current(), version, Main.roleFile(config.home()));
-                peerBroker = own(new MqttPeerBroker(me.clientId(), fabric::mqttPort, fabric::runningOrHost));
+                peerBroker = own(new MqttPeerBroker(me.clientId(), fabric::mqttPort, fabric::runningOrHost,
+                        fabric::generation));
                 // a consult session is made where a new session is: the home folder
                 peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
                 // the instances seen are remembered in the data root, and the presence says whether this one's node

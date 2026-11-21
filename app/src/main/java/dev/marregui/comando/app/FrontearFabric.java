@@ -166,6 +166,12 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     private final AtomicBoolean busy = new AtomicBoolean();
     /** A reconcile of the links is under way; a look meanwhile starts none. */
     private final AtomicBoolean linking = new AtomicBoolean();
+    /**
+     * The generation of the last node start, 0 before any: each start takes the next before it binds, so a
+     * connection to a node, and the peer link's subscriptions over it, can only see that node's generation or a later
+     * one. Written by the starts, read by the peer link's strand through {@link #generation}.
+     */
+    private final AtomicLong generation = new AtomicLong();
     /** What a start or stop under way does; written by its errand, read by the window and by agents' calls. */
     private volatile String doing = "";
     /**
@@ -179,12 +185,13 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
      */
     private volatile Hosted hosted;
     /**
-     * The port this instance's peer link last finished subscribing on, or -1 since the node last stopped, so a
-     * subscribe that completes before a start publishes {@link #hosted} still opens the node's links. Written by the
-     * peer link's strand ({@link #openLinks}) and the stops, read by the starts. Each side writes its own field before
-     * it reads the other's, both volatile, so of a subscribe and a start that race at least one sees the other.
+     * The node generation this instance's peer link last finished subscribing against, 0 for none, so a subscribe
+     * that completes before a start publishes {@link #hosted} still opens the node's links, and one to a node closed
+     * since then opens no later node's, on the same port or not. Written by the peer link's strand
+     * ({@link #openLinks}), read by the starts. Each side writes its own field before it reads the other's, both
+     * volatile, so of a subscribe and a start that race at least one sees the other.
      */
-    private volatile int subscribedOn = -1;
+    private volatile long subscribedGeneration;
     /** Told of a peer whose registry entry names a process that is gone; set at wiring, read by the reconciles. */
     private volatile BiConsumer<String, String> gone = (_, _) -> { };
     /** Run when a link to a peer connects or a peer restarted; set at wiring, read by the reconciles. */
@@ -372,17 +379,25 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
 
     /**
      * Lets the other nodes' links into this instance's node, once its peer link has subscribed there: the listener of
-     * {@link MqttPeerBroker#onSubscribed}, with the port it subscribed on. Nothing when the node now runs on another
-     * port, as a node started since then waits for the peer link's subscriptions to it; a node not yet published
-     * opens once its start publishes it on this port. Safe from any thread.
+     * {@link MqttPeerBroker#onSubscribed}, with the node {@link #generation} it subscribed against. Nothing when the
+     * node now running is of another generation, as a node started since then waits for the peer link's
+     * subscriptions to it; a node not yet published opens once its start publishes it. Safe from any thread.
      */
-    void openLinks(final int port) {
+    void openLinks(final long subscribedAgainst) {
         // written before hosted is read: the start writes hosted before it reads this
-        subscribedOn = port;
+        subscribedGeneration = subscribedAgainst;
         final Hosted h = hosted;
-        if (h != null && h.node().port() == port) {
+        if (h != null && h.generation() == subscribedAgainst) {
             h.node().openLinks();
         }
+    }
+
+    /**
+     * The generation of this instance's last node start, 0 before any; a node started later has a greater one. The
+     * peer link reads it once connected, before it subscribes, so the subscribe carries the node it went to.
+     */
+    long generation() {
+        return generation.get();
     }
 
     /** This instance's node's MQTT port on {@code 127.0.0.1}; before it runs, the lowest port a start may take. */
@@ -720,6 +735,8 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
                     + ']', e);
             return;
         }
+        // taken before the bind, so no connection to this node reads an earlier one
+        final long started = generation.incrementAndGet();
         final Frontear node;
         try {
             // link ids are slugs, as node names are, so the node refuses a link aimed at another's port; the others'
@@ -733,7 +750,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         }
         final Hosted h;
         try {
-            h = Hosted.of(node, new Signer(pair.getPrivate(), Signer.keyId(pair.getPublic())), slug);
+            h = Hosted.of(node, new Signer(pair.getPrivate(), Signer.keyId(pair.getPublic())), slug, started);
             final Map<String, Entry> next = new TreeMap<>(nodes);
             next.put(slug, new Entry(node.port(), PID, STARTED, name, owner));
             write(next);
@@ -745,7 +762,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         }
         hosted = h;
         // the peer link may have subscribed here between the bind and now, its openLinks finding no node
-        if (subscribedOn == node.port()) {
+        if (subscribedGeneration == started) {
             node.openLinks();
         }
         saidOnItsOwn = "";
@@ -811,8 +828,6 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "frontear did not close cleanly [cause="
                     + ex.getMessage() + ']', ex));
         } finally {
-            // once the node is closed, so a subscribe to it does not open the next node's links
-            subscribedOn = -1;
             markDown();
         }
         LOG.log(System.Logger.Level.INFO, "fabric stopped [node=" + slug + ", port=" + h.node().port() + ']');
@@ -1101,9 +1116,9 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     /**
-     * The node this instance hosts, the signer of its control requests and the answers they wait for. {@link #ports},
-     * {@link #up} and {@link #started} are guarded by the instance: the links put, whether each was connected and the
-     * start its peer's entry named, at the last read.
+     * The node this instance hosts, the start it came from, the signer of its control requests and the answers they
+     * wait for. {@link #ports}, {@link #up} and {@link #started} are guarded by the instance: the links put, whether
+     * each was connected and the start its peer's entry named, at the last read.
      */
     private static final class Hosted implements InternalSubscriber {
 
@@ -1115,17 +1130,19 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         private final Map<String, Integer> ports = new HashMap<>();
         private final Map<String, Boolean> up = new HashMap<>();
         private final Map<String, String> started = new HashMap<>();
+        private final long generation;
 
-        private Hosted(final Frontear node, final Signer signer, final String slug) {
+        private Hosted(final Frontear node, final Signer signer, final String slug, final long generation) {
             this.node = node;
             this.signer = signer;
+            this.generation = generation;
             // under comando's own topics, so the control plane answers it; no link's filter covers it
             this.replyTopic = "comando/v1/local/fabric/" + slug + "/control";
         }
 
-        /** The node with its answers' subscriber in place. */
-        static Hosted of(final Frontear node, final Signer signer, final String slug) {
-            final Hosted h = new Hosted(node, signer, slug);
+        /** The node, of start {@code generation}, with its answers' subscriber in place. */
+        static Hosted of(final Frontear node, final Signer signer, final String slug, final long generation) {
+            final Hosted h = new Hosted(node, signer, slug, generation);
             node.broker().subscribe(CONTROLLER, h.replyTopic, 1, false, h);
             return h;
         }
@@ -1136,6 +1153,10 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
 
         Signer signer() {
             return signer;
+        }
+
+        long generation() {
+            return generation;
         }
 
         String replyTopic() {

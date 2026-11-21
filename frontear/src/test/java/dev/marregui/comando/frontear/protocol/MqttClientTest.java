@@ -297,6 +297,43 @@ class MqttClientTest {
         }
     }
 
+    /// A wake that lands after the scheduled reconnect has begun, but before it opened its connection, cancels
+    /// nothing; the begun connect gives way to the woken one, so one connect chain runs. The seam holds the second
+    /// connect at its start: each connect records how many attempts had ended when it began, and the woken third
+    /// begins after one attempt, not two.
+    @Test
+    void aWakeWhileTheScheduledConnectHasBegunLeavesOneConnectChain() throws Exception {
+        broker.connectCode(0x87);
+        final List<Integer> startedAfter = new CopyOnWriteArrayList<>();
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        try (MqttClient client = client(60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null)) {
+            client.beforeSession(() -> {
+                startedAfter.add(recorder.attempts.size());
+                if (startedAfter.size() == 2) {
+                    held.countDown();
+                    try {
+                        release.await(2 * WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                    } catch (final InterruptedException _) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            });
+            final CompletableFuture<Void> first = client.connect();
+            try {
+                assertThat(held.await(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+                recorder.retry = null;
+                assertThat(client.wake()).isTrue();
+            } finally {
+                release.countDown();
+            }
+            await().atMost(WAIT).until(() -> startedAfter.size() == 3);
+            assertFailsWith(first, 0x87);
+            assertThat(startedAfter).containsExactly(0, 1, 1);
+            assertThat(recorder.attempts).containsExactly(1, 2);
+        }
+    }
+
     /// A CONNACK whose reason code is in no table, 0x01 here, is neither a success nor a refusal: the client answers
     /// it with DISCONNECT Protocol Error and the connection never counts as up.
     @Test

@@ -325,7 +325,7 @@ final class Commands {
                 () -> !layout.transcriptAbove());
         cmd("view.transcriptBelow", "Transcript below the prompt", null, () -> layout.transcriptAbove(false),
                 layout::transcriptAbove);
-        // ⌃1–⌃4 follow the lower tabs' order: Session, Approvals, Terminal, Results
+        // ⌃1–⌃5 follow the lower tabs' order: Session, Approvals, Terminal, Results, frontear
         cmd("view.session", "Session", key(KeyEvent.VK_1, lowerTabKey), () -> focus.showLowerAndFocus(LowerTab.SESSION, lower.transcript().canvas()));
         cmd("view.approvals", "Approvals", key(KeyEvent.VK_2, lowerTabKey),
                 () -> focus.showLowerAndFocus(LowerTab.APPROVALS, lower.inbox().component(), lower.inbox()::focusFirst));
@@ -336,8 +336,10 @@ final class Commands {
         });
         cmd("view.results", "Results", key(KeyEvent.VK_4, lowerTabKey),
                 () -> focus.showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
-        // ⌘⌥1–4 as well: macOS Mission Control takes ⌃1–⌃4 when its desktop shortcuts are on
-        final String[] lowerTabs = {"view.session", "view.approvals", "view.terminal", "view.results"};
+        cmd("view.frontear", "frontear", key(KeyEvent.VK_5, lowerTabKey),
+                () -> focus.showLowerAndFocus(LowerTab.FRONTEAR, lower.frontear()));
+        // ⌘⌥1–5 as well: macOS Mission Control takes ⌃1–⌃5 when its desktop shortcuts are on
+        final String[] lowerTabs = {"view.session", "view.approvals", "view.terminal", "view.results", "view.frontear"};
         for (int i = 0; i < lowerTabs.length; i++) {
             final String target = lowerTabs[i];
             cmd(target + ".alt", actions.get(target).label() + " tab", key(KeyEvent.VK_1 + i, shortcut | ALT), () -> actions.run(target));

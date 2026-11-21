@@ -132,7 +132,7 @@ class UiKeysTest {
 
     /**
      * The keys that are not macOS's with Ctrl for ⌘ on the other desktops, and why: there Ctrl with a digit is a panel
-     * (⌘1…⌘9), so the lower tabs (⌃1–⌃4) take Alt; Ctrl+⏎ is Run and Alt+⏎ Run as SQL, so the line to the terminal
+     * (⌘1…⌘9), so the lower tabs (⌃1–⌃5) take Alt; Ctrl+⏎ is Run and Alt+⏎ Run as SQL, so the line to the terminal
      * (⌃⏎) takes Ctrl+Alt+⏎.
      */
     private static final Map<String, KeyStroke> MOVED = Map.of(
@@ -140,7 +140,8 @@ class UiKeysTest {
             "view.session", KeyStroke.getKeyStroke(KeyEvent.VK_1, ALT),
             "view.approvals", KeyStroke.getKeyStroke(KeyEvent.VK_2, ALT),
             "view.terminal", KeyStroke.getKeyStroke(KeyEvent.VK_3, ALT),
-            "view.results", KeyStroke.getKeyStroke(KeyEvent.VK_4, ALT));
+            "view.results", KeyStroke.getKeyStroke(KeyEvent.VK_4, ALT),
+            "view.frontear", KeyStroke.getKeyStroke(KeyEvent.VK_5, ALT));
 
     private static final class Texts implements PanelTexts {
         private final Map<String, String> map = new ConcurrentHashMap<>();
@@ -525,6 +526,22 @@ class UiKeysTest {
         assertThat(inTerminal(focusOwner(w))).as("^E and ^F left the keyboard in the terminal").isTrue();
 
         // the commands' own keys still work from the terminal: the Session tab, then back to the terminal
+        press(w, KeyEvent.VK_1, mac ? CTRL : ALT);
+        await("the Session tab", () -> w.loop().state().lowerTab().kind() == LowerTab.Kind.SESSION, WAIT_MILLIS);
+    }
+
+    /// ⌃5 (Alt+5 elsewhere) selects the frontear tab, as ⌃1 to ⌃4 select the others, and the lower panel shows it.
+    @ParameterizedTest
+    @ValueSource(strings = {"mac", "linux"})
+    void theFrontearKeySelectsTheFrontearTab(final String keys) throws Exception {
+        final Window w = open(keys);
+        final boolean mac = keys.equals("mac");
+        focusEditor(w);
+        press(w, KeyEvent.VK_5, mac ? CTRL : ALT);
+        await("the frontear tab", () -> w.loop().state().lowerTab().kind() == LowerTab.Kind.FRONTEAR, WAIT_MILLIS);
+        final JTabbedPane lower = await("the lower tabs",
+                () -> find(w.frame(), JTabbedPane.class, t -> "lower".equals(t.getName())).orElse(null), WAIT_MILLIS);
+        await("frontear in front", () -> "frontear".equals(lower.getTitleAt(lower.getSelectedIndex())), WAIT_MILLIS);
         press(w, KeyEvent.VK_1, mac ? CTRL : ALT);
         await("the Session tab", () -> w.loop().state().lowerTab().kind() == LowerTab.Kind.SESSION, WAIT_MILLIS);
     }

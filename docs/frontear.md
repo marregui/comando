@@ -323,7 +323,7 @@ PUBACK waits for the file. A message the node has acknowledged therefore survive
 | Order | Messages reach the peer in the order of the log. One exception: a message the peer refuses for now (`0x97` or `0x89`) is sent again alone, and counted in `reordered`. |
 | Loops | The link subscribes with No Local and never sends back what came in through it. Each link also adds 1 to the user property `frontear-hops` and stops a message that has reached its `hopLimit`. |
 | Expiry | A message's expiry keeps running while it waits in the log, across a restart too. An expired message is dropped and counted. |
-| Reconnect | A lost connection is retried after 1 s, doubling to 30 s. Up to a fifth of each wait is taken off at random. |
+| Reconnect | A lost connection is retried after 1 s, doubling to 30 s. Up to a fifth of each wait is taken off at random. A peer that is back does not wait out that backoff: when the peer's own link to this node connects (client `<peer>~<node>`), this node's link to it is tried at once, at most once a second. A peer that refuses with `0x88` (Server unavailable) is running, so the link tries it again after the first wait, 1 s, and the wait does not grow. |
 
 > **Learn: at least once.** A sender that hears no acknowledgement cannot know whether its message arrived. It has two
 > choices: give up, and maybe lose the message, or send again, and maybe deliver it twice. frontear links send again.
@@ -487,7 +487,7 @@ Every comando instance hosts a frontear node of its own, and the nodes are linke
 | Fact | Value |
 |---|---|
 | When | At launch, and at each later look (every 5 s) while it is down, unless stopped by hand. `-Dcomando.peers=false` keeps an instance off the others: its node runs on a port the OS picks, with a registry in its data folder. |
-| Node name | The instance's id, `main` for the main instance. Control topics are `$frontear/control/<id>/<Method>`. A link client named `<other>~<name>` is refused unless `<name>` is this node's. Until comando's own client of the node has its subscriptions acknowledged, every link client is refused with `0x88` (Server unavailable); the link tries again after its backoff, at most 30 s later. |
+| Node name | The instance's id, `main` for the main instance. Control topics are `$frontear/control/<id>/<Method>`. A link client named `<other>~<name>` is refused unless `<name>` is this node's. Until comando's own client of the node has its subscriptions acknowledged, every link client is refused with `0x88` (Server unavailable); the link tries again after the first wait, at most 1 s later. Each start of the node counts as a new one: an acknowledgement for the subscriptions made against an earlier start, the same port included, lets no link in. |
 | Address | `127.0.0.1`, the lowest port from 18883 up that is free and no other instance holds; the instance keeps it from then on. |
 | Data folder | `fabric/` in the instance's data folder. |
 | Control keys | `pod.key` and `pod.pub` in `fabric/`, made at the first start. `pod.key` is readable by its owner only. |

@@ -14,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [TrafficRows], the packet log's rows without Swing.
 /// - a run of one origin's presences is one row with its count, unless every presence is asked for
 /// - the topic filter and the kind filter keep only what they name
+/// - frontear's control traffic is left out unless asked for
 /// - a publish's path is the steps with its topic within five seconds after it
 class TrafficRowsTest {
 
@@ -25,12 +26,12 @@ class TrafficRowsTest {
         for (int i = 1; i <= 5; i++) {
             packets.add(published(i, 1_000L * i, "alpha", "comando/instances/alpha/presence"));
         }
-        final List<Row> collapsed = TrafficRows.of(packets, "", null, false);
+        final List<Row> collapsed = TrafficRows.of(packets, "", null, false, false);
         assertThat(collapsed).hasSize(1);
         assertThat(collapsed.getFirst().count()).isEqualTo(5);
         assertThat(collapsed.getFirst().firstSeq()).isEqualTo(1L);
         assertThat(collapsed.getFirst().packet().seq()).as("the latest of the run").isEqualTo(5L);
-        assertThat(TrafficRows.of(packets, "", null, true)).hasSize(5).allMatch(r -> r.count() == 1);
+        assertThat(TrafficRows.of(packets, "", null, false, true)).hasSize(5).allMatch(r -> r.count() == 1);
     }
 
     /// A presence of another origin, or any other packet between two presences, starts a new row.
@@ -42,7 +43,7 @@ class TrafficRowsTest {
                 published(3, 3L, "beta", "$frontear/presence/beta"),
                 published(4, 4L, "beta", "work/x"),
                 published(5, 5L, "beta", "$frontear/presence/beta"));
-        assertThat(TrafficRows.of(packets, "", null, false)).extracting(Row::count).containsExactly(1, 2, 1, 1);
+        assertThat(TrafficRows.of(packets, "", null, true, false)).extracting(Row::count).containsExactly(1, 2, 1, 1);
     }
 
     /// The topic filter keeps the packets whose topic holds its text; the kind filter those of its kind; both apply
@@ -55,14 +56,31 @@ class TrafficRowsTest {
                 step(3, 3L, Kind.SENT, "beta", "work/a"),
                 published(4, 4L, "alpha", "other/b"),
                 step(5, 5L, Kind.CONNECTED, "beta", ""));
-        assertThat(TrafficRows.of(packets, "work", null, false)).extracting(r -> r.packet().seq())
+        assertThat(TrafficRows.of(packets, "work", null, false, false)).extracting(r -> r.packet().seq())
                 .containsExactly(1L, 2L, 3L);
-        assertThat(TrafficRows.of(packets, "", Kind.SENT, false)).extracting(r -> r.packet().seq())
+        assertThat(TrafficRows.of(packets, "", Kind.SENT, false, false)).extracting(r -> r.packet().seq())
                 .containsExactly(3L);
-        assertThat(TrafficRows.of(packets, "other", Kind.PUBLISHED, false)).extracting(r -> r.packet().seq())
+        assertThat(TrafficRows.of(packets, "other", Kind.PUBLISHED, false, false)).extracting(r -> r.packet().seq())
                 .containsExactly(4L);
-        assertThat(TrafficRows.of(packets, "", Kind.CONNECTED, false)).hasSize(1);
-        assertThat(TrafficRows.of(packets, "x", Kind.CONNECTED, false)).isEmpty();
+        assertThat(TrafficRows.of(packets, "", Kind.CONNECTED, false, false)).hasSize(1);
+        assertThat(TrafficRows.of(packets, "x", Kind.CONNECTED, false, false)).isEmpty();
+    }
+
+    /// The topics starting `$frontear/` or `comando/v1/local/fabric/` are control traffic, left out unless asked for,
+    /// presences of the fabric included; a topic that holds such a start further in is not.
+    @Test
+    void controlTrafficIsLeftOutUnlessAskedFor() {
+        final List<Packet> packets = List.of(
+                published(1, 1L, "alpha", "$frontear/check/beta"),
+                published(2, 2L, "alpha", "comando/v1/local/fabric/state/alpha"),
+                published(3, 3L, "alpha", "work/a"),
+                published(4, 4L, "alpha", "work/$frontear/"),
+                step(5, 5L, Kind.APPENDED, "beta", "$frontear/check/beta"));
+        assertThat(TrafficRows.of(packets, "", null, false, true)).extracting(r -> r.packet().seq())
+                .containsExactly(3L, 4L);
+        assertThat(TrafficRows.of(packets, "", null, true, true)).extracting(r -> r.packet().seq())
+                .containsExactly(1L, 2L, 3L, 4L, 5L);
+        assertThat(packets).filteredOn(TrafficRows::control).extracting(Packet::seq).containsExactly(1L, 2L, 5L);
     }
 
     /// The path of a publish is the later steps with its topic up to five seconds after it; another topic, a step
@@ -74,7 +92,7 @@ class TrafficRowsTest {
                 step(2, 10_010L, Kind.APPENDED, "beta", "work/a"),
                 step(3, 10_020L, Kind.APPENDED, "beta", "work/b"),
                 step(4, 11_000L, Kind.SENT, "beta", "work/a"),
-                step(5, 15_001L, Kind.SENT, "beta", "work/a")), "", null, false);
+                step(5, 15_001L, Kind.SENT, "beta", "work/a")), "", null, false, false);
         assertThat(TrafficRows.path(rows, 0)).containsExactly(1, 3);
         assertThat(TrafficRows.path(rows, 1)).as("a step has no path").isEmpty();
         assertThat(TrafficRows.path(rows, 9)).isEmpty();
