@@ -2,6 +2,7 @@ package dev.marregui.comando.mcp;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -134,6 +135,8 @@ public final class McpTools {
         }
     }
 
+    /** The largest page a panel opens: the panel's own limit for a file it edits (ui {@code OpenFiles}). */
+    private static final long MAX_PAGE_PANEL_BYTES = 2L * 1024 * 1024;
     private final IntentSink sink;
     private final Supplier<AppState> state;
     private final TranscriptRegistry transcripts;
@@ -625,6 +628,12 @@ public final class McpTools {
         final String base = state.get().session(session).map(x -> x.spec().workDir()).orElse(HomeDir.home());
         final Path path = FileView.resolve(p, base);
         final int line = args.path("line").asInt(0);
+        // an HTML page at no line opens rendered in a panel, as a page a session names does (record 190); one too
+        // large for a panel shows in the side pane, as the sidebar shows it
+        if (line <= 0 && FileView.isPage(path) && Files.isRegularFile(path) && sizeOf(path) <= MAX_PAGE_PANEL_BYTES) {
+            sink.dispatch(new Intent.OpenFile(session, path.toString(), 0));
+            return Outcome.ok("opened " + path + " (page, rendered in a panel; page_snapshot and page_read reach it)");
+        }
         FileView file;
         try {
             file = FileView.read(path, line);
@@ -634,6 +643,15 @@ public final class McpTools {
         sink.dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
         return Outcome.ok(file.binary() ? "opened " + path + ": a binary file, so the view says so instead of showing it"
                 : "opened " + path + " (" + file.spec().type() + ")" + (line > 0 ? " at line " + line : ""));
+    }
+
+    /** The file's size in bytes; past the panel limit when it cannot be read, so the side pane reports why. */
+    private static long sizeOf(final Path path) {
+        try {
+            return Files.size(path);
+        } catch (final IOException _) {
+            return Long.MAX_VALUE;
+        }
     }
 
     /**

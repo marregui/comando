@@ -1,13 +1,13 @@
 package dev.marregui.comando.ui.kit.desktop;
 
 import java.nio.file.Path;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.jetbrains.annotations.TestOnly;
 
+import dev.marregui.comando.core.view.FileView;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.text.LocalLinks;
@@ -68,9 +68,7 @@ public final class Links {
 
     /** Whether {@code file} is a page a browser shows: its name ends in {@code .html} or {@code .htm}, in any case. */
     public static boolean isPage(final Path file) {
-        final Path name = file.getFileName();
-        final String n = name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
-        return n.endsWith(".html") || n.endsWith(".htm");
+        return FileView.isPage(file);
     }
 
     /** Opens the local page {@code file} in the browser; returns at once. */

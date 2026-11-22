@@ -709,6 +709,46 @@ class McpServerTest {
         assertThat(sink.await(Intent.ShowView.class, WAIT).title()).isEqualTo("docs/README.md");
     }
 
+    /// An HTML page at no line opens in a panel, rendered, as a page a session names does: no side view; at a line it
+    /// is text in the side pane.
+    @Test
+    void anHtmlPageOpensInAPanelNotTheSidePane(@TempDir final Path dir) throws Exception {
+        final Path page = Files.writeString(dir.resolve("map.HTML"), "<!doctype html><title>map</title>\n");
+        state.set(state.get().withSessions(List.of(SessionState.closed(SessionSpec.fresh("work", dir.toString())))));
+
+        assertThat(text(tool("ui_open_file", "{\"path\":\"map.HTML\"}"))).contains("rendered in a panel");
+        final Intent.OpenFile opened = sink.await(Intent.OpenFile.class, WAIT);
+        assertThat(opened.path()).isEqualTo(page.toString());
+        assertThat(opened.session()).isEqualTo("work");
+        assertThat(opened.line()).isZero();
+        assertThat(sink.of(Intent.ShowView.class)).isEmpty();
+
+        sink.clear();
+        tool("ui_open_file", "{\"path\":\"map.HTML\",\"line\":1}");
+        assertThat(sink.await(Intent.ShowView.class, WAIT).spec()).isInstanceOf(ViewSpec.Text.class);
+
+        // an .htm page at line 0 opens in a panel too
+        sink.clear();
+        Files.writeString(dir.resolve("old.htm"), "<title>old</title>\n");
+        assertThat(text(tool("ui_open_file", "{\"path\":\"old.htm\",\"line\":0}"))).contains("rendered in a panel");
+        assertThat(sink.await(Intent.OpenFile.class, WAIT).path()).isEqualTo(dir.resolve("old.htm").toString());
+
+        // a page over the 2 MB a panel takes shows in the side pane, as the sidebar shows it
+        sink.clear();
+        Files.writeString(dir.resolve("big.html"), "<p>" + "x".repeat(2 * 1024 * 1024) + "</p>\n");
+        tool("ui_open_file", "{\"path\":\"big.html\"}");
+        assertThat(sink.await(Intent.ShowView.class, WAIT).placement()).isEqualTo(Placement.SIDE);
+        assertThat(sink.of(Intent.OpenFile.class)).isEmpty();
+
+        // a folder named like a page, and a missing page, are tool errors, and nothing opens
+        sink.clear();
+        Files.createDirectories(dir.resolve("site.html"));
+        assertThat(tool("ui_open_file", "{\"path\":\"site.html\"}").path("isError").asBoolean()).isTrue();
+        assertThat(tool("ui_open_file", "{\"path\":\"gone.html\"}").path("isError").asBoolean()).isTrue();
+        assertThat(sink.of(Intent.OpenFile.class)).isEmpty();
+        assertThat(sink.of(Intent.ShowView.class)).isEmpty();
+    }
+
     /// A relative path resolves against the session's folder and Markdown renders in the side pane; at a line it is
     /// text; a `~` path resolves under home; a binary file is said to be one; a folder or missing file is a tool error
     /// showing nothing.

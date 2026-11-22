@@ -28,6 +28,13 @@ public record FileView(Path path, String title, ViewSpec spec, boolean binary) {
     /** Files larger than this are not shown. */
     public static final long MAX_BYTES = 4L * 1024 * 1024;
 
+    /** Whether {@code file} is an HTML page: its name ends in {@code .html} or {@code .htm}, in any case. */
+    public static boolean isPage(final Path file) {
+        final Path name = file.getFileName();
+        final String n = name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
+        return n.endsWith(".html") || n.endsWith(".htm");
+    }
+
     /**
      * {@code path} as typed ({@code ~/x} under the home folder; relative to {@code baseDir}) as an absolute path.
      */
