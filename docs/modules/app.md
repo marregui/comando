@@ -37,7 +37,7 @@ handler before those six exist, so `App.DeferredEffects` stands in until they do
 | `ui` | `RootSetup`: the kit root, its version and its jobs | `ui`'s `Setup` |
 | `mcp` `McpTools` | The fabric and `MachineCdb`, to start and stop | `core`'s `ServerSwitch` |
 | `mcp` `McpTools` | The terminals of the window | `ComandoUi.terminals` |
-| `mcp` `Peers` | The broker | `mcp`'s `PeerBroker`, implemented by `MqttPeerBroker` |
+| `mcp` `Peers` | The broker | `mcp`'s `PeerGateway`, implemented by `MqttPeerGateway` |
 
 > **Learn: dependency injection and the composition root.** A lamp does not contain a power station. It has a plug,
 > and someone else decides what the plug goes into. Code built this way asks for what it needs through an interface
@@ -82,7 +82,7 @@ the last part built closes first. The picture shows the ten main parts. The tabl
 |---|---|---|
 | 1 | The kit check's strand | The periodic read of the kit's version and of the queues |
 | 2 | `Peers` | This instance among the others |
-| 3 | `MqttPeerBroker` | This instance's link to the broker |
+| 3 | `MqttPeerGateway` | This instance's link to the broker |
 | 4 | `Searcher` | The Search view's searches |
 | 5 | `ClaudeTopics` | The short asks behind the tabs' cards |
 | 6 | `ToolsAdapter` | Repositories, folders and runs |
@@ -121,7 +121,7 @@ The rules of closing:
 | Every 20 min | The plans' usage |
 | Every 6 h | The kit's version, on a kit root |
 | Every minute | The queues' readings |
-| Last | `Peers`, then `MqttPeerBroker` |
+| Last | `Peers`, then `MqttPeerGateway` |
 
 ## 3. The files comando keeps
 
@@ -228,16 +228,16 @@ The server itself: [the `cdb` module](cdb.md) and [the cdb guide](../cdb.md). Wh
 
 ## 7. The fabric
 
-![The fabric: three instances, each with a frontear node inside its own JVM on its own port and its MqttPeerBroker as that node's client; each node has a link to every other node, one each way, and each link keeps a log at its sender until the peer acknowledges](../images/mod-app-fabric.svg)
+![The fabric: three instances, each with a frontear node inside its own JVM on its own port and its MqttPeerGateway as that node's client; each node has a link to every other node, one each way, and each link keeps a log at its sender until the peer acknowledges](../images/mod-app-fabric.svg)
 
 Several comando instances can run on one machine and consult each other. They meet on the fabric: one frontear node
-inside each instance's JVM, hosted by its `FrontearFabric`, and a link from each node to every other one
+inside each instance's JVM, hosted by its `FrontearOctopus`, and a link from each node to every other one
 ([record 187](../adr/0187-frontear-lab-node-per-instance.md)).
 
 | Fact | frontear |
 |---|---|
-| Class | `FrontearFabric`, named `frontear` to the window and the agents |
-| Runs as | A frontear node named as the instance's id, inside its JVM; the node refuses a link client named for another node, and every link client (`0x88`, Server unavailable, which the link retries after its backoff) until `MqttPeerBroker` has its subscriptions acknowledged on it, so what the other nodes queued for this instance is delivered after its inbox is subscribed. An acknowledgement that comes before the start has published the node opens it once published; a refused one is renewed at the next look (every 5 s) |
+| Class | `FrontearOctopus`, named `frontear` to the window and the agents |
+| Runs as | A frontear node named as the instance's id, inside its JVM; the node refuses a link client named for another node, and every link client (`0x88`, Server unavailable, which the link retries after its backoff) until `MqttPeerGateway` has its subscriptions acknowledged on it, so what the other nodes queued for this instance is delivered after its inbox is subscribed. An acknowledgement that comes before the start has published the node opens it once published; a refused one is renewed at the next look (every 5 s) |
 | Port on `127.0.0.1` | MQTT: the lowest port from 18883 up that is free and that no other instance's entry holds, kept in the registry for that instance from then on |
 | Registry | `~/.comando-fabric.json`, version 2: per instance id, the node's port, the pid while it runs (0 once down), its start, the instance's name and data root. Every read-modify-write of it runs under an OS lock on `~/.comando-fabric.json.lock` (bounded wait), so instances starting at once take distinct ports. A file of version 1 is replaced |
 | Links | One per other instance in the registry, put through the node's own control plane at each look (every 5 s): to `127.0.0.1` at that instance's port, out its inbox and reply topics and this instance's presence, nothing in, hop limit 1; also at once when `Peers` first sees an instance's presence and before each question to it, as the link is the only subscriber of its inbox on this node. A link to an instance that is merely down stays and queues; forgetting an instance removes its link and its entry |
@@ -247,10 +247,10 @@ inside each instance's JVM, hosted by its `FrontearFabric`, and a link from each
 | A port held by another process | The node takes the next free port; the process is probed, never signalled |
 | Peers gone or back | A look that finds an instance's process gone tells the peer link, which drops that instance's presence if its start matches; a link that connects again, or an instance whose registry entry names a new start, makes this instance send its presence again |
 
-`FrontearFabric` implements `ServerToggle` and `ServerSwitch`, so the window and the agents treat it as they treat the
+`FrontearOctopus` implements `ServerToggle` and `ServerSwitch`, so the window and the agents treat it as they treat the
 machine's cdb.
 
-`MqttPeerBroker` is each instance's client of its own node. It connects as the MQTT 5 client `comando-<instance>`.
+`MqttPeerGateway` is each instance's client of its own node. It connects as the MQTT 5 client `comando-<instance>`.
 Every 5 s it checks whether the node runs, and moves to the node's port if that changed. It reconnects after a drop
 and renews its subscriptions. The MQTT client it uses lives in [`frontear`](frontear.md), in the package
 `frontear.protocol`.
@@ -290,7 +290,7 @@ No module depends on `app`. The module is one package, `dev.marregui.comando.app
 | `IntentLog` | The intent log |
 | `Logging` | `System.Logger` to the log files, warnings to stderr |
 | `MachineCdb` | The machine's cdb |
-| `FrontearFabric`, `MqttPeerBroker` | The fabric and the link to it |
+| `FrontearOctopus`, `MqttPeerGateway` | The fabric and the link to it |
 | `RootSetup` | `ui`'s `Setup`: the kit root, its version and its jobs |
 | `Searcher` | `SearchPort`: one search at a time, at most 1 000 hits |
 | `Welcome` | The text of the first panel on a fresh data root |
@@ -335,7 +335,7 @@ tabs, the lower tabs and the side pane against the final state. It also saves a 
 | `StoreTest`, `JsonFileTest`, `PanelFilesTest`, `JsonGoldenTest` | The store files, byte for byte |
 | `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest` | The intent log, logging, the lock, the data root |
 | `AppCloseTest`, `DataRootFoldersTest` | The closing order, whatever a part throws; the folders of the data root |
-| `MachineCdbTest`, `FrontearFabricTest`, `MqttPeerBrokerTest` | The servers, each instance's node, its port and registry entry, the links between the nodes, and the client to its own node |
+| `MachineCdbTest`, `FrontearOctopusTest`, `MqttPeerGatewayTest` | The servers, each instance's node, its port and registry entry, the links between the nodes, and the client to its own node |
 
 Four rule tests read the classes of every module, because only `app` sees every module:
 

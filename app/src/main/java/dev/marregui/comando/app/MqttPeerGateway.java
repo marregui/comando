@@ -23,7 +23,7 @@ import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Topics;
-import dev.marregui.comando.mcp.PeerBroker;
+import dev.marregui.comando.mcp.PeerGateway;
 
 /**
  * frontear as the instances' broker (records 123, 185, 187), on comando's own MQTT client: MQTT 5 to {@code 127.0.0.1},
@@ -34,9 +34,9 @@ import dev.marregui.comando.mcp.PeerBroker;
  * subscriptions after every connect, and at the next look when one was refused; once the node stops it stops trying.
  * Messages reach their handlers on one strand, in order.
  */
-final class MqttPeerBroker implements PeerBroker, AutoCloseable {
+final class MqttPeerGateway implements PeerGateway, AutoCloseable {
 
-    private static final System.Logger LOG = System.getLogger(MqttPeerBroker.class.getName());
+    private static final System.Logger LOG = System.getLogger(MqttPeerGateway.class.getName());
     static final Duration FOLLOW_EVERY = Duration.ofSeconds(5);
     private static final String HOST = "127.0.0.1";
     /** The keep alive the HiveMQ client sent, which this client replaced. */
@@ -50,7 +50,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
     private final String clientId;
     private final IntSupplier port;
-    private final BooleanSupplier fabricUp;
+    private final BooleanSupplier octopusUp;
     private final LongSupplier generation;
     private final ScheduledExecutorService follow = Threads.timedStrand("peer-broker");
     private final ExecutorService messages = Threads.strand("peer-messages");
@@ -73,18 +73,18 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
     /**
      * Client {@code clientId} on frontear's MQTT port, as {@code port} says it at each look, connected while
-     * {@code fabricUp} says the node runs; {@code generation} says which start of the node runs now, a later start a
+     * {@code octopusUp} says the node runs; {@code generation} says which start of the node runs now, a later start a
      * greater one, and the subscribed listeners hear it.
      */
-    MqttPeerBroker(
+    MqttPeerGateway(
             final String clientId,
             final IntSupplier port,
-            final BooleanSupplier fabricUp,
+            final BooleanSupplier octopusUp,
             final LongSupplier generation
     ) {
         this.clientId = clientId;
         this.port = port;
-        this.fabricUp = fabricUp;
+        this.octopusUp = octopusUp;
         this.generation = generation;
     }
 
@@ -100,7 +100,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     void follow() {
         // an exception escaping a periodic task cancels every later run
         try {
-            final boolean up = fabricUp.getAsBoolean();
+            final boolean up = octopusUp.getAsBoolean();
             final int at = port.getAsInt();
             final MqttClient again;
             final int againAt;
@@ -286,7 +286,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     }
 
     /**
-     * A received publish as {@link PeerBroker} hands it on, with the machine its {@link Names#ORIGIN} user property
+     * A received publish as {@link PeerGateway} hands it on, with the machine its {@link Names#ORIGIN} user property
      * names, the last one when several came: the broker removes every one a remote client sent and adds its own after
      * them.
      */

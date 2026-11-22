@@ -9,7 +9,7 @@ import org.jetbrains.annotations.TestOnly;
  * The broker the comando instances on one machine reach each other through (record 123): frontear, over MQTT 5.
  * {@code app} implements it on an MQTT client; {@link Peers} sees only this, so its tests run without a broker.
  */
-public interface PeerBroker {
+public interface PeerGateway {
 
     /**
      * A message as it arrived: topic, payload, the MQTT 5 response topic and correlation data, or null, and the machine

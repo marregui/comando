@@ -66,7 +66,7 @@ class FrontearTest {
             await().atMost(WAIT).until(() -> replies.size() == 2);
             assertThat(replies).allSatisfy(r -> assertThat(new String(r.payload(), StandardCharsets.UTF_8))
                     .contains("\"ok\":true"));
-            await().atMost(WAIT).until(() -> b.broker().stats().connections() == 3);
+            await().atMost(WAIT).until(() -> b.gateway().stats().connections() == 3);
 
             onA.publishAcknowledged(new Packet.Publish("t/x", "hello".getBytes(StandardCharsets.UTF_8), 1, false,
                     false, 0, null, null)).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);

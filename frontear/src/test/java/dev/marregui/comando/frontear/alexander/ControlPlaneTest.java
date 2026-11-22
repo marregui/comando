@@ -23,8 +23,8 @@ import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
-import dev.marregui.comando.frontear.gateway.Broker;
-import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.Gateway;
+import dev.marregui.comando.frontear.gateway.GatewayOptions;
 import dev.marregui.comando.frontear.gateway.InternalSubscriber;
 import dev.marregui.comando.frontear.octopus.Direction;
 import dev.marregui.comando.frontear.octopus.LinkSpec;
@@ -63,10 +63,10 @@ class ControlPlaneTest {
     private static KeyPair trustedKeys;
     private static KeyPair otherKeys;
     private static String trustedId;
-    private static Broker broker;
+    private static Gateway gateway;
 
     private TestClock clock;
-    private FakeMesh mesh;
+    private FakeOctopus octopus;
     private int nonces;
 
     @BeforeAll
@@ -75,15 +75,15 @@ class ControlPlaneTest {
         trustedKeys = generator.generateKeyPair();
         otherKeys = generator.generateKeyPair();
         trustedId = Signer.keyId(trustedKeys.getPublic());
-        broker = Broker.start(new BrokerOptions(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 65_535,
+        gateway = Gateway.start(new GatewayOptions(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 65_535,
                 Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, 100, InstantSource.system()));
-        broker.subscribe("test-replies", "replies/#", 1, false, collect(REPLIES));
-        broker.subscribe("test-states", "$frontear/state/#", 1, false, collect(STATES));
+        gateway.subscribe("test-replies", "replies/#", 1, false, collect(REPLIES));
+        gateway.subscribe("test-states", "$frontear/state/#", 1, false, collect(STATES));
     }
 
     @AfterAll
     static void stop() {
-        broker.close();
+        gateway.close();
     }
 
     @BeforeEach
@@ -91,7 +91,7 @@ class ControlPlaneTest {
         REPLIES.clear();
         STATES.clear();
         clock = new TestClock(START_MILLIS);
-        mesh = new FakeMesh();
+        octopus = new FakeOctopus();
     }
 
     /// A signed `PutLink` reaches the mesh with its spec, its PUBACK is success, and its reply `{"ok":true}` comes on
@@ -101,7 +101,7 @@ class ControlPlaneTest {
         try (ControlPlane plane = plane()) {
             final Packet.Publish request = request("PutLink", putLink("a"), clock.millis());
             assertThat(send(request)).isEqualTo(Packet.SUCCESS);
-            assertThat(mesh.puts).containsExactly(new LinkSpec("a", "peer", 1883, Set.of("x/#"), Set.of(), 2));
+            assertThat(octopus.puts).containsExactly(new LinkSpec("a", "peer", 1883, Set.of("x/#"), Set.of(), 2));
             final Packet.Publish reply = reply(request);
             assertThat(reply.topic()).isEqualTo("replies/PutLink");
             assertThat(reply.retain()).isFalse();
@@ -162,7 +162,7 @@ class ControlPlaneTest {
             final Packet.Publish ahead = request("PutLink", putLink("a"), clock.millis() + window + 1);
             assertThat(send(ahead)).isEqualTo(Packet.NOT_AUTHORIZED);
             assertThat(plane.refused(Refusal.STALE)).isEqualTo(2);
-            assertThat(mesh.puts).isEmpty();
+            assertThat(octopus.puts).isEmpty();
         }
     }
 
@@ -177,14 +177,14 @@ class ControlPlaneTest {
             assertThat(send(request)).isEqualTo(Packet.NOT_AUTHORIZED);
             assertThat(reason(reply(request))).isEqualTo(Refusal.REPLAYED.code());
             assertThat(plane.refused(Refusal.REPLAYED)).isEqualTo(1);
-            assertThat(mesh.puts).hasSize(1);
+            assertThat(octopus.puts).hasSize(1);
         }
     }
 
     /// `GetState` answers with every link of the mesh and its fields.
     @Test
-    void getStateAnswersWithTheMeshState() throws Exception {
-        mesh.state = List.of(new LinkState("a", true, 1, 2, 3, 4, 5, 6));
+    void getStateAnswersWithTheOctopusState() throws Exception {
+        octopus.state = List.of(new LinkState("a", true, 1, 2, 3, 4, 5, 6));
         try (ControlPlane plane = plane()) {
             final Packet.Publish request = request("GetState", "{}".getBytes(StandardCharsets.UTF_8),
                     clock.millis());
@@ -205,14 +205,14 @@ class ControlPlaneTest {
 
     /// `RemoveLink` and `SetFilters` reach the mesh with their fields.
     @Test
-    void removeLinkAndSetFiltersReachTheMesh() throws Exception {
+    void removeLinkAndSetFiltersReachTheOctopus() throws Exception {
         try (ControlPlane plane = plane()) {
             assertThat(send(request("SetFilters", bytes("{\"id\":\"a\",\"direction\":\"OUT\",\"filters\":[\"s/+\"]}"),
                     clock.millis()))).isEqualTo(Packet.SUCCESS);
             assertThat(send(request("RemoveLink", bytes("{\"id\":\"a\"}"), clock.millis())))
                     .isEqualTo(Packet.SUCCESS);
-            assertThat(mesh.filters).containsExactly(new FakeMesh.Filters("a", Direction.OUT, Set.of("s/+")));
-            assertThat(mesh.removes).containsExactly("a");
+            assertThat(octopus.filters).containsExactly(new FakeOctopus.Filters("a", Direction.OUT, Set.of("s/+")));
+            assertThat(octopus.removes).containsExactly("a");
             assertThat(plane.accepted()).isEqualTo(2);
         }
     }
@@ -220,7 +220,7 @@ class ControlPlaneTest {
     /// A signed request for a method the node does not know, with a body that is not JSON, or that the mesh throws
     /// on, is refused with its own reason and code, and answered.
     @Test
-    void anUnknownMethodABadBodyAndAMeshFailureAreRefused() throws Exception {
+    void anUnknownMethodABadBodyAndAnOctopusFailureAreRefused() throws Exception {
         try (ControlPlane plane = plane()) {
             final Packet.Publish unknown = request("Reboot", bytes("{}"), clock.millis());
             assertThat(send(unknown)).isEqualTo(Refusal.UNKNOWN_METHOD.reasonCode());
@@ -228,7 +228,7 @@ class ControlPlaneTest {
             final Packet.Publish bad = request("PutLink", bytes("{\"id\":"), clock.millis());
             assertThat(send(bad)).isEqualTo(Refusal.BAD_REQUEST.reasonCode());
             assertThat(reason(reply(bad))).isEqualTo(Refusal.BAD_REQUEST.code());
-            mesh.failure = new IllegalArgumentException("no such link [id=a]");
+            octopus.failure = new IllegalArgumentException("no such link [id=a]");
             final Packet.Publish failing = request("RemoveLink", bytes("{\"id\":\"a\"}"), clock.millis());
             assertThat(send(failing)).isEqualTo(Refusal.FAILED.reasonCode());
             assertThat(reason(reply(failing))).isEqualTo(Refusal.FAILED.code());
@@ -297,7 +297,7 @@ class ControlPlaneTest {
             assertThat(plane.refused(Refusal.STALE)).isEqualTo(1);
             assertThat(send(request("PutLink", putLink("b"), clock.millis()))).isEqualTo(Packet.SUCCESS);
         }
-        assertThat(mesh.puts).extracting(LinkSpec::id).containsExactly("a", "b");
+        assertThat(octopus.puts).extracting(LinkSpec::id).containsExactly("a", "b");
     }
 
     /// With the mesh holding the first request, one origin has ORIGIN_PENDING_MAX forged requests waiting and its
@@ -306,18 +306,18 @@ class ControlPlaneTest {
     @Test
     void pastItsShareOneOriginIsRefusedAsBusyAndAnotherIsStillAdmitted() throws Exception {
         final CountDownLatch release = new CountDownLatch(1);
-        mesh.hold = release;
+        octopus.hold = release;
         try (ControlPlane plane = plane()) {
-            final CompletableFuture<Integer> held = broker.publish(request("PutLink", putLink("a"), clock.millis()),
+            final CompletableFuture<Integer> held = gateway.publish(request("PutLink", putLink("a"), clock.millis()),
                     "pod");
             final Packet.Publish forged = forged(0);
             final List<CompletableFuture<Integer>> flood = new ArrayList<>();
             for (int i = 0; i < ControlPlane.ORIGIN_PENDING_MAX; i++) {
-                flood.add(broker.publish(forged, "flood"));
+                flood.add(gateway.publish(forged, "flood"));
             }
-            assertThat(get(broker.publish(forged, "flood"))).isEqualTo(Refusal.BUSY.reasonCode());
+            assertThat(get(gateway.publish(forged, "flood"))).isEqualTo(Refusal.BUSY.reasonCode());
             assertThat(plane.refused(Refusal.BUSY)).isEqualTo(1);
-            final CompletableFuture<Integer> genuine = broker.publish(request("PutLink", putLink("b"),
+            final CompletableFuture<Integer> genuine = gateway.publish(request("PutLink", putLink("b"),
                     clock.millis()), "pod");
             assertThat(plane.stats().pending()).isEqualTo(ControlPlane.ORIGIN_PENDING_MAX + 2);
             assertThat(plane.stats().origins()).isEqualTo(2);
@@ -328,7 +328,7 @@ class ControlPlaneTest {
             assertThat(get(held)).isEqualTo(Packet.SUCCESS);
             assertThat(get(genuine)).isEqualTo(Packet.SUCCESS);
             assertThat(plane.refused(Refusal.BAD_SIGNATURE)).isEqualTo(ControlPlane.ORIGIN_PENDING_MAX);
-            assertThat(mesh.puts).extracting(LinkSpec::id).containsExactly("a", "b");
+            assertThat(octopus.puts).extracting(LinkSpec::id).containsExactly("a", "b");
             assertNothingWaits(plane);
         }
     }
@@ -338,26 +338,26 @@ class ControlPlaneTest {
     @Test
     void pastItsBoundARequestIsRefusedAsBusy() throws Exception {
         final CountDownLatch release = new CountDownLatch(1);
-        mesh.hold = release;
+        octopus.hold = release;
         try (ControlPlane plane = plane()) {
             final List<CompletableFuture<Integer>> waiting = new ArrayList<>();
-            waiting.add(broker.publish(request("PutLink", putLink("a"), clock.millis()), "pod"));
+            waiting.add(gateway.publish(request("PutLink", putLink("a"), clock.millis()), "pod"));
             final Packet.Publish forged = forged(0);
             for (int origin = 0; waiting.size() < ControlPlane.PENDING_MAX; origin++) {
                 for (int i = 0; i < ControlPlane.ORIGIN_PENDING_MAX && waiting.size() < ControlPlane.PENDING_MAX;
                         i++) {
-                    waiting.add(broker.publish(forged, "o" + origin));
+                    waiting.add(gateway.publish(forged, "o" + origin));
                 }
             }
             assertThat(plane.stats().pending()).isEqualTo(ControlPlane.PENDING_MAX);
-            assertThat(get(broker.publish(forged, "fresh"))).isEqualTo(Refusal.BUSY.reasonCode());
+            assertThat(get(gateway.publish(forged, "fresh"))).isEqualTo(Refusal.BUSY.reasonCode());
             assertThat(plane.refused(Refusal.BUSY)).isEqualTo(1);
             release.countDown();
             assertThat(get(waiting.getFirst())).isEqualTo(Packet.SUCCESS);
             for (final CompletableFuture<Integer> future : waiting.subList(1, waiting.size())) {
                 assertThat(get(future)).isEqualTo(Packet.NOT_AUTHORIZED);
             }
-            assertThat(mesh.puts).hasSize(1);
+            assertThat(octopus.puts).hasSize(1);
             assertNothingWaits(plane);
         }
     }
@@ -367,20 +367,20 @@ class ControlPlaneTest {
     @Test
     void pastItsByteShareOneOriginIsRefusedAsBusyAndAnotherIsStillAdmitted() throws Exception {
         final CountDownLatch release = new CountDownLatch(1);
-        mesh.hold = release;
+        octopus.hold = release;
         try (ControlPlane plane = plane()) {
-            final CompletableFuture<Integer> held = broker.publish(request("PutLink", putLink("a"), clock.millis()),
+            final CompletableFuture<Integer> held = gateway.publish(request("PutLink", putLink("a"), clock.millis()),
                     "pod");
             final Packet.Publish forged = forged(MIB);
             final long fit = ControlPlane.ORIGIN_PENDING_BYTES_MAX / forged.weight();
             final List<CompletableFuture<Integer>> flood = new ArrayList<>();
             for (int i = 0; i < fit; i++) {
-                flood.add(broker.publish(forged, "flood"));
+                flood.add(gateway.publish(forged, "flood"));
             }
-            assertThat(get(broker.publish(forged, "flood"))).isEqualTo(Refusal.BUSY.reasonCode());
+            assertThat(get(gateway.publish(forged, "flood"))).isEqualTo(Refusal.BUSY.reasonCode());
             assertThat(plane.stats().pendingBytes()).isLessThanOrEqualTo(ControlPlane.ORIGIN_PENDING_BYTES_MAX
                     + request("PutLink", putLink("a"), clock.millis()).weight());
-            final CompletableFuture<Integer> genuine = broker.publish(request("PutLink", putLink("b"),
+            final CompletableFuture<Integer> genuine = gateway.publish(request("PutLink", putLink("b"),
                     clock.millis()), "pod");
             release.countDown();
             for (final CompletableFuture<Integer> future : flood) {
@@ -398,20 +398,20 @@ class ControlPlaneTest {
     @Test
     void pastItsByteBoundARequestIsRefusedAsBusy() throws Exception {
         final CountDownLatch release = new CountDownLatch(1);
-        mesh.hold = release;
+        octopus.hold = release;
         try (ControlPlane plane = plane()) {
             final List<CompletableFuture<Integer>> waiting = new ArrayList<>();
-            waiting.add(broker.publish(request("PutLink", putLink("a"), clock.millis()), "pod"));
+            waiting.add(gateway.publish(request("PutLink", putLink("a"), clock.millis()), "pod"));
             final Packet.Publish small = forged(0);
             final Packet.Publish half = forged(Math.toIntExact(ControlPlane.ORIGIN_PENDING_BYTES_MAX / 2
                     - small.weight()));
             assertThat(half.weight()).isEqualTo(ControlPlane.ORIGIN_PENDING_BYTES_MAX / 2);
             // 7 halves: 3.5 shares, so with the first request less than half a share is left
             for (int i = 0; i < 7; i++) {
-                waiting.add(broker.publish(half, "o" + i / 2));
+                waiting.add(gateway.publish(half, "o" + i / 2));
             }
-            assertThat(get(broker.publish(half, "o4"))).isEqualTo(Refusal.BUSY.reasonCode());
-            waiting.add(broker.publish(small, "o5"));
+            assertThat(get(gateway.publish(half, "o4"))).isEqualTo(Refusal.BUSY.reasonCode());
+            waiting.add(gateway.publish(small, "o5"));
             assertThat(plane.stats().pendingBytes()).isLessThanOrEqualTo(ControlPlane.PENDING_BYTES_MAX);
             release.countDown();
             assertThat(get(waiting.getFirst())).isEqualTo(Packet.SUCCESS);
@@ -430,9 +430,9 @@ class ControlPlaneTest {
     @Test
     void requestsOfManyEmptyUserPropertiesWaitWithinTheOriginsByteShare() throws Exception {
         final CountDownLatch release = new CountDownLatch(1);
-        mesh.hold = release;
+        octopus.hold = release;
         try (ControlPlane plane = plane()) {
-            final CompletableFuture<Integer> held = broker.publish(request("PutLink", putLink("a"), clock.millis()),
+            final CompletableFuture<Integer> held = gateway.publish(request("PutLink", putLink("a"), clock.millis()),
                     "pod");
             final Packet.Publish signed = forged(0);
             final List<Packet.UserProperty> properties = new ArrayList<>(signed.meta().userProperties());
@@ -444,10 +444,10 @@ class ControlPlaneTest {
             final long wire = Codec.encode(new Packet.Publish(forged.topic(), forged.payload(), 1, false, false, 1,
                     forged.responseTopic(), forged.correlation(), forged.meta())).length;
             final List<CompletableFuture<Integer>> flood = new ArrayList<>();
-            CompletableFuture<Integer> last = broker.publish(forged, "flood");
+            CompletableFuture<Integer> last = gateway.publish(forged, "flood");
             while (!last.isDone() && flood.size() < ControlPlane.ORIGIN_PENDING_MAX) {
                 flood.add(last);
-                last = broker.publish(forged, "flood");
+                last = gateway.publish(forged, "flood");
             }
             assertThat(get(last)).isEqualTo(Refusal.BUSY.reasonCode());
             assertThat(flood).hasSize(Math.toIntExact(ControlPlane.ORIGIN_PENDING_BYTES_MAX / forged.weight()));
@@ -464,8 +464,8 @@ class ControlPlaneTest {
     /// A mesh that throws an `Error` still lets the request's PUBACK go, with 0x80, so the client's later PUBACKs do
     /// not wait behind it.
     @Test
-    void aRequestTheMeshFailsWithAnErrorIsStillAcknowledged() throws Exception {
-        mesh.putError = new AssertionError("mesh broke");
+    void aRequestTheOctopusFailsWithAnErrorIsStillAcknowledged() throws Exception {
+        octopus.putError = new AssertionError("mesh broke");
         try (ControlPlane plane = plane()) {
             assertThat(send(request("PutLink", putLink("a"), clock.millis()))).isEqualTo(Packet.UNSPECIFIED);
             assertNothingWaits(plane);
@@ -479,20 +479,20 @@ class ControlPlaneTest {
         plane.close();
         plane.close();
         assertThat(send(request("PutLink", putLink("a"), clock.millis()))).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
-        assertThat(mesh.puts).isEmpty();
+        assertThat(octopus.puts).isEmpty();
     }
 
     /// A node name that is not one topic level is refused before anything starts.
     @Test
     void aNodeThatIsNotOneTopicLevelIsRefused() {
         for (final String node : List.of("", "a/b", "+", "#")) {
-            assertThatThrownBy(() -> new ControlPlane(broker, mesh, node, Set.of(trustedKeys.getPublic()), clock))
+            assertThatThrownBy(() -> new ControlPlane(gateway, octopus, node, Set.of(trustedKeys.getPublic()), clock))
                     .as(node).isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     private static int send(final Packet.Publish request) throws Exception {
-        return get(broker.publish(request, "pod"));
+        return get(gateway.publish(request, "pod"));
     }
 
     private static int get(final CompletableFuture<Integer> code) throws Exception {
@@ -541,7 +541,7 @@ class ControlPlaneTest {
     }
 
     private ControlPlane plane() {
-        return new ControlPlane(broker, mesh, NODE, Set.of(trustedKeys.getPublic()), clock);
+        return new ControlPlane(gateway, octopus, NODE, Set.of(trustedKeys.getPublic()), clock);
     }
 
     private void assertRefused(final ControlPlane plane, final Packet.Publish request, final Refusal refusal)
@@ -550,7 +550,7 @@ class ControlPlaneTest {
         assertThat(reason(reply(request))).isEqualTo(refusal.code());
         assertThat(plane.refused(refusal)).isEqualTo(1);
         assertThat(plane.accepted()).isZero();
-        assertThat(mesh.puts).isEmpty();
+        assertThat(octopus.puts).isEmpty();
     }
 
     private Packet.Publish request(final String method, final byte[] body, final long tsMillis) {

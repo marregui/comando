@@ -25,7 +25,7 @@ import javax.net.ssl.SSLContext;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.frontear.gateway.Broker;
+import dev.marregui.comando.frontear.gateway.Gateway;
 import dev.marregui.comando.frontear.gateway.InternalSubscriber;
 import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.MqttException;
@@ -99,7 +99,7 @@ final class Link implements AutoCloseable {
     private final String id;
     private final String owner;
     private final String localId;
-    private final Broker broker;
+    private final Gateway gateway;
     private final LinkLog log;
     private final InstantSource clock;
     private final LinkOptions options;
@@ -182,13 +182,13 @@ final class Link implements AutoCloseable {
      */
     private volatile String reason = "";
 
-    private Link(final String id, final String localId, final Broker broker, final LinkLog log,
+    private Link(final String id, final String localId, final Gateway gateway, final LinkLog log,
             final LinkOptions options, final InstantSource clock, final Watch watch) {
         this.id = id;
         this.watch = watch;
         this.owner = OWNER + id;
         this.localId = localId;
-        this.broker = broker;
+        this.gateway = gateway;
         this.log = log;
         this.options = options;
         this.clock = clock;
@@ -216,7 +216,7 @@ final class Link implements AutoCloseable {
         closed = true;
         RuntimeException failure = null;
         try {
-            broker.unsubscribeAll(owner);
+            gateway.unsubscribeAll(owner);
         } catch (final RuntimeException e) {
             failure = e;
         }
@@ -259,13 +259,13 @@ final class Link implements AutoCloseable {
     }
 
     /** A link {@code id} on its log in {@code dir}, created when missing; nothing runs before {@link #start}. */
-    static Link open(final String id, final String localId, final Broker broker, final Path dir,
+    static Link open(final String id, final String localId, final Gateway gateway, final Path dir,
             final LogOptions logOptions, final LinkOptions options, final InstantSource clock, final Watch watch)
             throws IOException {
         Files.createDirectories(dir);
         final LinkLog log = LinkLog.open(dir, logOptions, watch);
         try {
-            return new Link(id, localId, broker, log, options, clock, watch);
+            return new Link(id, localId, gateway, log, options, clock, watch);
         } catch (final RuntimeException e) {
             log.close();
             throw e;
@@ -317,12 +317,12 @@ final class Link implements AutoCloseable {
         spec = new LinkSpec(s.id(), s.host(), s.port(), filters, s.in(), s.hopLimit(), s.tls());
         for (final String f : filters) {
             if (!out.contains(f)) {
-                broker.subscribe(owner, f, 1, true, subscriber);
+                gateway.subscribe(owner, f, 1, true, subscriber);
             }
         }
         for (final String f : out) {
             if (!filters.contains(f)) {
-                broker.unsubscribe(owner, f);
+                gateway.unsubscribe(owner, f);
             }
         }
         out = filters;
@@ -337,7 +337,7 @@ final class Link implements AutoCloseable {
 
     /**
      * Takes {@code context} as the TLS context of the link's TLS connections; a started TLS link connects again over
-     * it when it changed. Mesh's caller, under its lock.
+     * it when it changed. Octopus's caller, under its lock.
      */
     void tls(final SSLContext context) {
         final SSLContext old = tls;
@@ -393,7 +393,7 @@ final class Link implements AutoCloseable {
 
     /**
      * Puts {@code next} in place of {@code old}, whose client is closed, and adds that client's drops to
-     * {@link #shedIn} in the same step: its reader stopped, so the count no longer moves. Mesh's caller.
+     * {@link #shedIn} in the same step: its reader stopped, so the count no longer moves. Octopus's caller.
      */
     private void replace(final Peer old, final Peer next) {
         synchronized (peerSwap) {
@@ -406,7 +406,7 @@ final class Link implements AutoCloseable {
 
     /**
      * A new client for {@code s}'s peer in place of the current one, which is closed first; for a TLS link while the
-     * mesh gives it no TLS context, no client, and the link waits down with {@link #NO_TLS}. Mesh's caller.
+     * mesh gives it no TLS context, no client, and the link waits down with {@link #NO_TLS}. Octopus's caller.
      */
     private void connect(final LinkSpec s) {
         final Peer old = peer;
@@ -974,7 +974,7 @@ final class Link implements AutoCloseable {
         watch.step(id, LinkStep.Kind.ARRIVED, -1, m.topic(), m.payload().length, "");
         final CompletableFuture<Integer> published;
         try {
-            published = broker.publish(Forwarding.arrived(m, hops + 1), owner);
+            published = gateway.publish(Forwarding.arrived(m, hops + 1), owner);
         } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "message in not published [link=" + id + ", topic=" + m.topic()
                     + ']', e);

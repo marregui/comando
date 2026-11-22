@@ -37,9 +37,9 @@ final class MenuBuilder {
      */
     List<CommandButton> cornerButtons() {
         final List<CommandButton> buttons = new ArrayList<>();
-        for (final List<String> ids : Menus.corner(deps.server() != null, deps.fabric() != null)) {
+        for (final List<String> ids : Menus.corner(deps.server() != null, deps.octopus() != null)) {
             final List<Command> commands = ids.stream().map(actions::get).toList();
-            final ServerToggle toggle = ids.contains("frontear.start") ? deps.fabric()
+            final ServerToggle toggle = ids.contains("frontear.start") ? deps.octopus()
                     : ids.contains("server.start") ? deps.server() : null;
             buttons.add(new CommandButton(commands, Menus::tip, toggle == null ? () -> "" : toggle::status));
         }
@@ -50,8 +50,8 @@ final class MenuBuilder {
     void tabMenu(final int tab, final JPopupMenu menu) {
         final List<String> ids = switch (tab) {
             case SessionsSidebar.SESSIONS -> List.of("panel.new", "panel.reopen");
-            case SessionsSidebar.CONNECTIONS -> Menus.toggles(deps.server() != null, deps.fabric() != null);
-            case SessionsSidebar.INSTANCES -> Menus.instancesTab(deps.fabric() != null);
+            case SessionsSidebar.CONNECTIONS -> Menus.toggles(deps.server() != null, deps.octopus() != null);
+            case SessionsSidebar.INSTANCES -> Menus.instancesTab(deps.octopus() != null);
             default -> Menus.folderTab(tab);
         };
         for (final String id : ids) {

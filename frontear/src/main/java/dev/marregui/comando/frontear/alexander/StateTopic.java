@@ -11,7 +11,7 @@ import dev.marregui.comando.core.json.ArrayNode;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.frontear.octopus.LinkState;
-import dev.marregui.comando.frontear.octopus.Mesh;
+import dev.marregui.comando.frontear.octopus.Octopus;
 import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 
@@ -27,7 +27,7 @@ final class StateTopic {
     static final Duration EVERY = Duration.ofSeconds(1);
     private static final Comparator<LinkState> BY_ID = Comparator.comparing(LinkState::id);
 
-    private final Mesh mesh;
+    private final Octopus octopus;
     private final String topic;
     private final InstantSource clock;
     private final Consumer<Packet.Publish> out;
@@ -36,8 +36,13 @@ final class StateTopic {
     private long lastMillis;
 
     /** The state topic of {@code node}, its messages handed to {@code out}. */
-    StateTopic(final Mesh mesh, final String node, final InstantSource clock, final Consumer<Packet.Publish> out) {
-        this.mesh = mesh;
+    StateTopic(
+            final Octopus octopus,
+            final String node,
+            final InstantSource clock,
+            final Consumer<Packet.Publish> out
+    ) {
+        this.octopus = octopus;
         this.topic = Names.STATE + node + "/links";
         this.clock = clock;
         this.out = out;
@@ -48,7 +53,7 @@ final class StateTopic {
      * clock that stepped back counts as passed. Returns whether it published.
      */
     boolean publishIfChanged() {
-        final List<LinkState> links = new ArrayList<>(mesh.state());
+        final List<LinkState> links = new ArrayList<>(octopus.state());
         links.sort(BY_ID);
         if (links.equals(last)) {
             return false;

@@ -13,7 +13,7 @@ A frontear node has three parts. You reach each one over MQTT.
 
 | Part | What it does | You use it through |
 |---|---|---|
-| Broker | Publish and subscribe for clients on `127.0.0.1`: QoS 0 and 1, retained messages, wills, sessions. | Any MQTT 5 client. |
+| Gateway | Publish and subscribe for clients on `127.0.0.1`: QoS 0 and 1, retained messages, wills, sessions. | Any MQTT 5 client. |
 | Links | Forward chosen topics to and from a peer node. Each link has its own log on disk. | The four control methods (§4). |
 | Control plane | Applies signed requests. Publishes the state of the links and who is connected. | `$frontear/control/…`, `$frontear/state/…`, `$frontear/presence/…` |
 

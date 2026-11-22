@@ -21,7 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import dev.marregui.comando.app.FrontearFabric.Entry;
+import dev.marregui.comando.app.FrontearOctopus.Entry;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.port.MachinesPort.Grant;
@@ -38,8 +38,8 @@ import dev.marregui.comando.testkit.RecordingSink;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// [FrontearFabric] across machines (record 189): the node of `main` is the machine's gateway. The links a node keeps
-/// are worked out from the registry and the pairings ([FrontearFabric#wanted]) for three instances, `main`, `alice`
+/// [FrontearOctopus] across machines (record 189): the node of `main` is the machine's gateway. The links a node keeps
+/// are worked out from the registry and the pairings ([FrontearOctopus#wanted]) for three instances, `main`, `alice`
 /// and `bob`, on machine `a` paired with `b` and `c`; the live tests run the nodes in this process on ports from a
 /// free one up, each machine's folder, remotes file and registry in a temporary folder, never the user's.
 /// - nothing paired, every node keeps the links it keeps on one machine
@@ -51,14 +51,14 @@ import static org.awaitility.Awaitility.await;
 /// - a question published on one machine reaches an instance on the other, its origin the asking machine (disabled
 ///   until the remote listener, the TLS context and the remote gate are in)
 /// - a link to one paired machine takes no other paired machine's certificate
-class FrontearFabricMachinesTest {
+class FrontearOctopusMachinesTest {
 
     /// Each wait's bound: a start, a connect or a control reply takes well under a second here.
     private static final Duration WAIT = Duration.ofSeconds(30);
     /// Each poll that asks a node for its links opens a client; five a second keeps that cheap.
     private static final Duration POLL = Duration.ofMillis(200);
     private static final long PID = ProcessHandle.current().pid();
-    private static final String MAIN = FrontearFabric.GATEWAY;
+    private static final String MAIN = FrontearOctopus.BORDER;
     private static final String LOOPBACK = "127.0.0.1";
     private static final String FP_B = "b".repeat(64);
     private static final String FP_C = "c".repeat(64);
@@ -71,13 +71,13 @@ class FrontearFabricMachinesTest {
 
     @TempDir
     Path dir;
-    private final List<FrontearFabric> fabrics = new ArrayList<>();
+    private final List<FrontearOctopus> octopuses = new ArrayList<>();
     private final AtomicInteger probes = new AtomicInteger();
 
     @AfterEach
     void tearDown() {
         // each stops the node it hosts, should a test have failed with one running
-        fabrics.forEach(FrontearFabric::close);
+        octopuses.forEach(FrontearOctopus::close);
     }
 
     /// With nothing paired, each node links the others with the peer's inbox and reply topics and its own presence
@@ -85,13 +85,13 @@ class FrontearFabricMachinesTest {
     @Test
     void nothingPairedKeepsTheLinksOfOneMachine() {
         for (final String slug : NODES.keySet()) {
-            final Map<String, LinkSpec> wanted = FrontearFabric.wanted(slug, NODES, "a", Map.of());
+            final Map<String, LinkSpec> wanted = FrontearOctopus.wanted(slug, NODES, "a", Map.of());
 
             final Map<String, LinkSpec> local = new TreeMap<>();
             NODES.forEach((peer, e) -> {
                 if (!peer.equals(slug)) {
                     local.put(peer, new LinkSpec(peer, LOOPBACK, e.port(), Set.of(Peers.inboxTopic(peer),
-                            Peers.replyTopic(peer), Peers.presenceTopic(slug)), Set.of(), FrontearFabric.HOP_LIMIT));
+                            Peers.replyTopic(peer), Peers.presenceTopic(slug)), Set.of(), FrontearOctopus.HOP_LIMIT));
                 }
             });
             assertThat(wanted).as(slug).isEqualTo(local);
@@ -102,8 +102,8 @@ class FrontearFabricMachinesTest {
     /// inbox and reply topics and this machine's presences out, nothing in, hop limit 2; its link to each instance
     /// `X` adds `X`'s inbox and reply topics on this machine and each paired machine's presences, hop limit 3.
     @Test
-    void theGatewayLinksEachPairedMachineAndCarriesItsTopicsToEachInstance() {
-        final Map<String, LinkSpec> wanted = FrontearFabric.wanted(MAIN, NODES, "a", PAIRED);
+    void theBorderGatewayLinksEachPairedMachineAndCarriesItsTopicsToEachInstance() {
+        final Map<String, LinkSpec> wanted = FrontearOctopus.wanted(MAIN, NODES, "a", PAIRED);
 
         assertThat(wanted).containsOnlyKeys("alice", "bob", "main@b", "main@c");
         for (final String peer : List.of("alice", "bob")) {
@@ -125,8 +125,8 @@ class FrontearFabricMachinesTest {
     /// its own presence on this machine, hop limit still 1; its links to the other instances stay as they are, and it
     /// links no machine itself.
     @Test
-    void anInstanceCarriesThePairedMachinesTopicsToTheGateway() {
-        final Map<String, LinkSpec> wanted = FrontearFabric.wanted("alice", NODES, "a", PAIRED);
+    void anInstanceCarriesThePairedMachinesTopicsToTheBorderGateway() {
+        final Map<String, LinkSpec> wanted = FrontearOctopus.wanted("alice", NODES, "a", PAIRED);
 
         assertThat(wanted).containsOnlyKeys(MAIN, "bob");
         assertThat(wanted.get(MAIN)).isEqualTo(new LinkSpec(MAIN, LOOPBACK, NODES.get(MAIN).port(),
@@ -152,14 +152,14 @@ class FrontearFabricMachinesTest {
         c.listen(LOOPBACK);
         a.pair(b.self().token(), Grant.PEER);
         a.pair(c.self().token(), Grant.PEER);
-        assertThat(FrontearFabric.wanted(MAIN, NODES, "a", a.remotes())).containsKeys("main@b", "main@c");
+        assertThat(FrontearOctopus.wanted(MAIN, NODES, "a", a.remotes())).containsKeys("main@b", "main@c");
 
         assertThat(a.unpair("c")).isTrue();
 
-        final Map<String, LinkSpec> gateway = FrontearFabric.wanted(MAIN, NODES, "a", a.remotes());
-        final Map<String, LinkSpec> alice = FrontearFabric.wanted("alice", NODES, "a", a.remotes());
-        assertThat(gateway).containsOnlyKeys("alice", "bob", "main@b");
-        for (final LinkSpec spec : List.of(gateway.get("alice"), gateway.get("bob"), alice.get(MAIN))) {
+        final Map<String, LinkSpec> border = FrontearOctopus.wanted(MAIN, NODES, "a", a.remotes());
+        final Map<String, LinkSpec> alice = FrontearOctopus.wanted("alice", NODES, "a", a.remotes());
+        assertThat(border).containsOnlyKeys("alice", "bob", "main@b");
+        for (final LinkSpec spec : List.of(border.get("alice"), border.get("bob"), alice.get(MAIN))) {
             assertThat(spec.out()).as(spec.id()).noneMatch(f -> f.startsWith("comando/v1/c/"))
                     .anyMatch(f -> f.startsWith("comando/v1/b/"));
         }
@@ -177,8 +177,8 @@ class FrontearFabricMachinesTest {
         a.pair(b.self().token(), Grant.PEER);
         final Path registry = dir.resolve("a-fabric.json");
         final int base = freePort();
-        final FrontearFabric main = fabric("a-main", MAIN, registry, base, a);
-        final FrontearFabric alice = fabric("a-alice", "alice", registry, base, a);
+        final FrontearOctopus main = octopus("a-main", MAIN, registry, base, a);
+        final FrontearOctopus alice = octopus("a-alice", "alice", registry, base, a);
         host(main);
         host(alice);
 
@@ -191,9 +191,9 @@ class FrontearFabricMachinesTest {
         assertThat(out(toMain)).containsExactlyInAnyOrder(Peers.inboxTopic(MAIN), Peers.replyTopic(MAIN),
                 Peers.presenceTopic("alice"), "comando/v1/b/instance/+/inbox", "comando/v1/b/instance/+/reply",
                 "comando/v1/a/instance/alice/presence");
-        assertThat(link(toMain).path("hopLimit").asInt(0)).isEqualTo(FrontearFabric.HOP_LIMIT);
+        assertThat(link(toMain).path("hopLimit").asInt(0)).isEqualTo(FrontearOctopus.HOP_LIMIT);
         await().atMost(WAIT).pollInterval(POLL).until(() -> link(toAlice).path("hopLimit").asInt(0)
-                == FrontearFabric.GATEWAY_HOP_LIMIT);
+                == FrontearOctopus.BORDER_HOP_LIMIT);
         assertThat(out(toAlice)).contains("comando/v1/a/instance/alice/inbox", "comando/v1/a/instance/alice/reply",
                 "comando/v1/b/instance/+/presence");
 
@@ -205,7 +205,7 @@ class FrontearFabricMachinesTest {
         assertThat(out(toMain)).containsExactlyInAnyOrder(Peers.inboxTopic(MAIN), Peers.replyTopic(MAIN),
                 Peers.presenceTopic("alice"));
         await().atMost(WAIT).pollInterval(POLL).until(() -> link(toAlice).path("hopLimit").asInt(0)
-                == FrontearFabric.HOP_LIMIT);
+                == FrontearOctopus.HOP_LIMIT);
         assertThat(out(toAlice)).containsExactlyInAnyOrder(Peers.inboxTopic("alice"), Peers.replyTopic("alice"),
                 Peers.presenceTopic(MAIN));
     }
@@ -226,15 +226,15 @@ class FrontearFabricMachinesTest {
         final Path registryB = dir.resolve("b-fabric.json");
         final int baseA = freePort();
         final int baseB = freePort();
-        final FrontearFabric mainA = fabric("a-main", MAIN, registryA, baseA, a);
-        final FrontearFabric alice = fabric("a-alice", "alice", registryA, baseA, a);
-        final FrontearFabric mainB = fabric("b-main", MAIN, registryB, baseB, b);
-        final FrontearFabric carol = fabric("b-carol", "carol", registryB, baseB, b);
-        for (final FrontearFabric f : List.of(mainA, alice, mainB, carol)) {
+        final FrontearOctopus mainA = octopus("a-main", MAIN, registryA, baseA, a);
+        final FrontearOctopus alice = octopus("a-alice", "alice", registryA, baseA, a);
+        final FrontearOctopus mainB = octopus("b-main", MAIN, registryB, baseB, b);
+        final FrontearOctopus carol = octopus("b-carol", "carol", registryB, baseB, b);
+        for (final FrontearOctopus f : List.of(mainA, alice, mainB, carol)) {
             host(f);
         }
         await().atMost(WAIT).pollInterval(POLL).until(() -> {
-            for (final FrontearFabric f : List.of(mainA, alice, mainB, carol)) {
+            for (final FrontearOctopus f : List.of(mainA, alice, mainB, carol)) {
                 f.reconcile();
             }
             return connected("a-main", MAIN, mainA.mqttPort(), "main@b")
@@ -278,8 +278,8 @@ class FrontearFabricMachinesTest {
         a.pair(new Token(real.machine(), real.host(), atC.port(), real.fingerprint()).text(), Grant.PEER);
         a.pair(c.self().token(), Grant.PEER);
         c.pair(a.self().token(), Grant.PEER);
-        final FrontearFabric mainA = fabric("a-main", MAIN, dir.resolve("a-fabric.json"), freePort(), a);
-        final FrontearFabric mainC = fabric("c-main", MAIN, dir.resolve("c-fabric.json"), freePort(), c);
+        final FrontearOctopus mainA = octopus("a-main", MAIN, dir.resolve("a-fabric.json"), freePort(), a);
+        final FrontearOctopus mainC = octopus("c-main", MAIN, dir.resolve("c-fabric.json"), freePort(), c);
         host(mainA);
         host(mainC);
 
@@ -287,15 +287,15 @@ class FrontearFabricMachinesTest {
             mainA.reconcile();
             mainC.reconcile();
             return link(mainA, "main@c").connected()
-                    && mainC.node().broker().remoteStats().handshakeFailures() > 0;
+                    && mainC.node().gateway().remoteStats().handshakeFailures() > 0;
         });
         assertThat(link(mainA, "main@b").connected()).isFalse();
         assertThat(link(mainA, "main@b").sent()).isZero();
     }
 
-    /// Link `id` of `fabric`'s node as the node holds it now; a link not there yet reads as down with no reason.
-    private static LinkState link(final FrontearFabric fabric, final String id) {
-        return fabric.node().snapshot().links().stream().filter(l -> l.id().equals(id)).findFirst()
+    /// Link `id` of `octopus`'s node as the node holds it now; a link not there yet reads as down with no reason.
+    private static LinkState link(final FrontearOctopus octopus, final String id) {
+        return octopus.node().snapshot().links().stream().filter(l -> l.id().equals(id)).findFirst()
                 .orElse(new LinkState(id, false, 0, 0, 0, 0, 0));
     }
 
@@ -307,21 +307,21 @@ class FrontearFabricMachinesTest {
 
     /// The fabric of instance `name` on data root `root` in the temporary folder, of the machine whose registry is
     /// `registry`, its ports from `base` up, reading `machines`.
-    private FrontearFabric fabric(final String root, final String name, final Path registry, final int base,
+    private FrontearOctopus octopus(final String root, final String name, final Path registry, final int base,
             final Machines machines) {
-        final FrontearFabric f = new FrontearFabric(dir.resolve(root + "/fabric"), dir.resolve(root), name,
+        final FrontearOctopus f = new FrontearOctopus(dir.resolve(root + "/fabric"), dir.resolve(root), name,
                 new RecordingSink(), registry, base);
         f.machines(machines);
-        fabrics.add(f);
+        octopuses.add(f);
         return f;
     }
 
-    /// Starts `fabric`'s node, waits until it runs, and lets the peers' links in.
-    private static void host(final FrontearFabric fabric) {
-        await().atMost(WAIT).until(() -> !fabric.busy());
-        fabric.want(true);
-        await().atMost(WAIT).until(() -> !fabric.busy() && fabric.isRunning());
-        fabric.openLinks(fabric.generation());
+    /// Starts `octopus`'s node, waits until it runs, and lets the peers' links in.
+    private static void host(final FrontearOctopus octopus) {
+        await().atMost(WAIT).until(() -> !octopus.busy());
+        octopus.want(true);
+        await().atMost(WAIT).until(() -> !octopus.busy() && octopus.isRunning());
+        octopus.openLinks(octopus.generation());
     }
 
     /// The link spec in `file`, as the node keeps it on disk; an empty object while there is none.
@@ -340,7 +340,7 @@ class FrontearFabricMachinesTest {
     /// answers a `GetState` signed with the instance's pod key.
     private boolean connected(final String root, final String slug, final int port, final String peer)
             throws Exception {
-        final KeyPair pair = FrontearFabric.keys(dir.resolve(root + "/fabric"));
+        final KeyPair pair = FrontearOctopus.keys(dir.resolve(root + "/fabric"));
         final String id = "probe-" + probes.incrementAndGet();
         final List<Packet.Publish> replies = new CopyOnWriteArrayList<>();
         try (MqttClient pod = client(port, id, replies)) {

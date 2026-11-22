@@ -40,7 +40,7 @@ The module is one package, `dev.marregui.comando.mcp`:
 | `TerminalTools` | Read and type in a panel's terminal. |
 | `ViewSpecs` | Checks a view's data before it becomes a `ViewSpec`. |
 | `SqlPolicy` | Decides whether a statement only reads. |
-| `Peers`, `PeerBroker` | Presence, questions and answers among instances. |
+| `Peers`, `PeerGateway` | Presence, questions and answers among instances. |
 | `TranscriptText`, `Turns`, `Summaries` | A transcript as text; waiting for a turn's end; a card's one line. |
 | `AuditLog` | One JSON line per tool call and per approval. |
 
@@ -130,7 +130,7 @@ card. The exception is a `Bash` command that contains the word `rm` or `rmdir`, 
 
 ## 6. Instances
 
-`Peers` connects this comando to the others through a `PeerBroker`, an interface `app` implements over MQTT.
+`Peers` connects this comando to the others through a `PeerGateway`, an interface `app` implements over MQTT.
 It publishes this instance's presence every 2 s and keeps a list of the instances it sees.
 
 - `instance_ask` sends a question to another instance, optionally to a named session there (`session`, sent as

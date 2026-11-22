@@ -26,7 +26,7 @@ import dev.marregui.comando.core.loop.Threads;
 /// the connects and packets after they are set; [#send], [#sendRaw] and [#drop] act on the latest connection. One
 /// broker serves a test class: [#reset] gives each test a fresh one, whose connections, records and retained messages
 /// are its own.
-public final class FakeBroker implements AutoCloseable {
+public final class FakeGateway implements AutoCloseable {
 
     private final ServerSocket server;
     private final ExecutorService accepting = Threads.strand("fake-broker-accept");
@@ -47,7 +47,7 @@ public final class FakeBroker implements AutoCloseable {
     private volatile boolean ackPublishes = true;
 
     /// A broker listening, accepting connections at once.
-    public FakeBroker() {
+    public FakeGateway() {
         try {
             server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
         } catch (final IOException e) {

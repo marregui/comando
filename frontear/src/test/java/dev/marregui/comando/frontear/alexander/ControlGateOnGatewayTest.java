@@ -18,8 +18,8 @@ import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.frontear.gateway.Broker;
-import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.Gateway;
+import dev.marregui.comando.frontear.gateway.GatewayOptions;
 import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.Packet;
 
@@ -29,7 +29,7 @@ import static org.awaitility.Awaitility.await;
 /// The gate a control plane installs, seen by an MQTT client over TCP:
 /// - a client's publish to `$frontear/presence/` or `$frontear/state/` is refused with 0x87 and reaches no one
 /// - a client's publish to `$frontear/control/` reaches the plane, which judges its signature
-class ControlGateOnBrokerTest {
+class ControlGateOnGatewayTest {
 
     private static final Duration WAIT = Duration.ofSeconds(10);
 
@@ -39,18 +39,18 @@ class ControlGateOnBrokerTest {
     void aClientMayNotPublishPresenceOrStateButReachesControl() throws Exception {
         final List<Packet.Publish> reserved = new CopyOnWriteArrayList<>();
         final ExecutorService callbacks = Threads.strand("control-gate-test-callbacks");
-        try (Broker broker = Broker.start(new BrokerOptions(new InetSocketAddress(InetAddress.getLoopbackAddress(),
+        try (Gateway gateway = Gateway.start(new GatewayOptions(new InetSocketAddress(InetAddress.getLoopbackAddress(),
                 0), 65_535, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, 100, InstantSource.system()));
-                ControlPlane plane = new ControlPlane(broker, new FakeMesh(), "n1",
+                ControlPlane plane = new ControlPlane(gateway, new FakeOctopus(), "n1",
                         Set.of(KeyPairGenerator.getInstance("Ed25519").generateKeyPair().getPublic()),
                         new TestClock(System.currentTimeMillis()));
-                MqttClient client = new MqttClient(new MqttClient.Options("127.0.0.1", broker.port(), "pod", 0,
+                MqttClient client = new MqttClient(new MqttClient.Options("127.0.0.1", gateway.port(), "pod", 0,
                         Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null), new Quiet(), callbacks)) {
-            broker.subscribe("test-presence", "$frontear/presence/#", 1, false, (message, _) -> {
+            gateway.subscribe("test-presence", "$frontear/presence/#", 1, false, (message, _) -> {
                 reserved.add(message);
                 return CompletableFuture.completedFuture(Packet.SUCCESS);
             });
-            broker.subscribe("test-state", "$frontear/state/+/forged", 1, false, (message, _) -> {
+            gateway.subscribe("test-state", "$frontear/state/+/forged", 1, false, (message, _) -> {
                 reserved.add(message);
                 return CompletableFuture.completedFuture(Packet.SUCCESS);
             });

@@ -23,7 +23,7 @@ import dev.marregui.comando.core.port.LabPort.Kind;
 import dev.marregui.comando.core.port.LabPort.Link;
 import dev.marregui.comando.core.port.LabPort.Log;
 import dev.marregui.comando.core.port.LabPort.Packet;
-import dev.marregui.comando.frontear.gateway.Broker;
+import dev.marregui.comando.frontear.gateway.Gateway;
 import dev.marregui.comando.frontear.octopus.LinkState;
 import dev.marregui.comando.frontear.watch.ForceRound;
 import dev.marregui.comando.frontear.watch.LinkStep;
@@ -193,7 +193,7 @@ class LabDrainTest {
 
     /// Node a with link b and its log, as a snapshot at 10 000 ms.
     private static NodeSnapshot snapshot() {
-        final Broker.Stats stats = new Broker.Stats(3, 2, 1, 0L, 0L, 0L, 0L, 10L, 1L, 2L, 3L, 0, 0L, 0L, 0L);
+        final Gateway.Stats stats = new Gateway.Stats(3, 2, 1, 0L, 0L, 0L, 0L, 10L, 1L, 2L, 3L, 0, 0L, 0L, 0L);
         return new NodeSnapshot("a", 1883, 10_000L, stats, List.of(),
                 List.of(new LinkState("b", false, 0L, 10L, 10L, 10L, 0L, 0L, 0, 64)),
                 List.of(new LogView("b", 10L, 10L, 4_096L, 1)));

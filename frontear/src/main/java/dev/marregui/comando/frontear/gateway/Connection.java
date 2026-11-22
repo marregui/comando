@@ -61,7 +61,7 @@ final class Connection {
     private static final byte[] PING_RESPONSE = encode(new Packet.PingResp());
 
     final int number;
-    private final Broker broker;
+    private final Gateway gateway;
     private final Socket socket;
     // the remote listener that accepted the connection; null for one of the loopback listener
     private final RemoteListen listen;
@@ -110,20 +110,20 @@ final class Connection {
     // again (stillPinned)
     private volatile String principal;
 
-    Connection(final Broker broker, final Socket socket, final int number) throws IOException {
-        this(broker, socket, number, null);
+    Connection(final Gateway gateway, final Socket socket, final int number) throws IOException {
+        this(gateway, socket, number, null);
     }
 
     /** A connection of the remote listener {@code listen}, whose {@code socket} is a TLS one; null for loopback. */
-    Connection(final Broker broker, final Socket socket, final int number, final RemoteListen listen)
+    Connection(final Gateway gateway, final Socket socket, final int number, final RemoteListen listen)
             throws IOException {
-        this.broker = broker;
+        this.gateway = gateway;
         this.socket = socket;
         this.number = number;
         this.listen = listen;
         this.in = new BufferedInputStream(socket.getInputStream(), BUFFER_BYTES);
         this.out = new BufferedOutputStream(socket.getOutputStream(), BUFFER_BYTES);
-        final String owner = broker.port() + "-" + number;
+        final String owner = gateway.port() + "-" + number;
         this.reader = Threads.strand("frontear-broker-reader-" + owner);
         this.writer = Threads.strand("frontear-broker-writer-" + owner);
     }
@@ -144,7 +144,7 @@ final class Connection {
 
     /**
      * The broker's deadline for a remote connection's handshake has passed: when the reader has not settled it yet,
-     * the socket closes under the handshake, whose read then fails and ends the connection, counted. Broker's timed
+     * the socket closes under the handshake, whose read then fails and ends the connection, counted. Gateway's timed
      * strand.
      */
     void handshakeOverdue() {
@@ -236,14 +236,14 @@ final class Connection {
             return;
         }
         final long held = held(bytes);
-        if (pendingBytes.addAndGet(held) > broker.options().maxBacklogBytes()) {
+        if (pendingBytes.addAndGet(held) > gateway.options().maxBacklogBytes()) {
             pendingBytes.addAndGet(-held);
             if (overBacklog.compareAndSet(false, true)) {
-                broker.backlogDisconnects.increment();
+                gateway.backlogDisconnects.increment();
                 LOG.log(System.Logger.Level.DEBUG, "connection backlog full [client=" + clientId + ", connection="
-                        + number + ", bytes=" + pendingBytes.get() + ", max=" + broker.options().maxBacklogBytes()
+                        + number + ", bytes=" + pendingBytes.get() + ", max=" + gateway.options().maxBacklogBytes()
                         + ']');
-                broker.offLocks(() -> end(End.WILL, Packet.QUOTA_EXCEEDED));
+                gateway.offLocks(() -> end(End.WILL, Packet.QUOTA_EXCEEDED));
             }
             return;
         }
@@ -273,7 +273,7 @@ final class Connection {
         LOG.log(System.Logger.Level.DEBUG, "connection ended [client=" + clientId + ", connection=" + number
                 + ", cause=" + cause + ", disconnectCode=" + disconnectCode + ']');
         if (s != null && cause != End.SHUTDOWN) {
-            broker.ended(this, s, cause != End.NORMAL);
+            gateway.ended(this, s, cause != End.NORMAL);
         }
     }
 
@@ -386,7 +386,7 @@ final class Connection {
                     end(End.WILL, NO_DISCONNECT);
                     return;
                 }
-                if (!handle(Codec.readFromClient(in, header, broker.options().maximumPacketSize()))) {
+                if (!handle(Codec.readFromClient(in, header, gateway.options().maximumPacketSize()))) {
                     return;
                 }
             }
@@ -431,7 +431,7 @@ final class Connection {
             }
         } catch (final IOException e) {
             if (!ended()) {
-                broker.handshakeFailed(this, e);
+                gateway.handshakeFailed(this, e);
             }
             end(End.WILL, NO_DISCONNECT);
             return false;
@@ -445,7 +445,7 @@ final class Connection {
         }
         final String machine = chain.length == 0 ? null : listen.machineOf().apply(chain[0]);
         if (machine == null) {
-            broker.unpinned(this);
+            gateway.unpinned(this);
             end(End.WILL, NO_DISCONNECT);
             return false;
         }
@@ -466,7 +466,7 @@ final class Connection {
         }
         final Packet first;
         try {
-            first = Codec.readFromClient(in, header, broker.options().maximumPacketSize());
+            first = Codec.readFromClient(in, header, gateway.options().maximumPacketSize());
         } catch (final MqttException e) {
             if (header >>> 4 == 1) {
                 refuse(connectCode(e.reasonCode()));
@@ -483,7 +483,7 @@ final class Connection {
                 asked.clientId(), asked.cleanStart(), asked.keepAliveSeconds(), asked.sessionExpirySeconds(),
                 asked.receiveMaximum(), asked.maximumPacketSize(), stamped(asked.will(), principal),
                 asked.willDelaySeconds());
-        final int code = broker.connect(this, c);
+        final int code = gateway.connect(this, c);
         if (code != Packet.SUCCESS) {
             refuse(code);
             return false;
@@ -543,15 +543,15 @@ final class Connection {
         }
         if (p.qos() == 1) {
             synchronized (acks) {
-                if (acks.size() >= broker.options().receiveMaximum()) {
+                if (acks.size() >= gateway.options().receiveMaximum()) {
                     end(End.WILL, Packet.RECEIVE_MAXIMUM_EXCEEDED);
                     return false;
                 }
             }
         }
-        final CompletableFuture<Integer> code = broker.mayPublish(principal, clientId, p.topic())
-                && (!p.retain() || broker.mayRetain(principal, clientId, p))
-                ? broker.accept(principal == null ? p : stamped(p, principal), clientId)
+        final CompletableFuture<Integer> code = gateway.mayPublish(principal, clientId, p.topic())
+                && (!p.retain() || gateway.mayRetain(principal, clientId, p))
+                ? gateway.accept(principal == null ? p : stamped(p, principal), clientId)
                 : CompletableFuture.completedFuture(Packet.NOT_AUTHORIZED);
         if (p.qos() == 1) {
             synchronized (acks) {
@@ -585,24 +585,24 @@ final class Connection {
     private void subscribe(final Packet.Subscribe s) {
         final List<Integer> codes = new ArrayList<>(s.subscriptions().size());
         final List<Packet.Subscription> replay = new ArrayList<>();
-        final int maxFilters = broker.options().maxFiltersPerSubscribe();
+        final int maxFilters = gateway.options().maxFiltersPerSubscribe();
         for (final Packet.Subscription sub : s.subscriptions()) {
             if (codes.size() >= maxFilters) {
-                broker.refusedSubscriptions.increment();
+                gateway.refusedSubscriptions.increment();
                 codes.add(Packet.QUOTA_EXCEEDED);
-            } else if (sub.filter().startsWith(Broker.SHARED)) {
+            } else if (sub.filter().startsWith(Gateway.SHARED)) {
                 codes.add(Packet.SHARED_SUBSCRIPTIONS_NOT_SUPPORTED);
-            } else if (Topics.levels(sub.filter()) > broker.options().maxTopicLevels()) {
-                broker.refusedTopics.increment();
+            } else if (Topics.levels(sub.filter()) > gateway.options().maxTopicLevels()) {
+                gateway.refusedTopics.increment();
                 codes.add(Packet.TOPIC_FILTER_INVALID);
-            } else if (!broker.maySubscribe(principal, clientId, sub.filter())) {
+            } else if (!gateway.maySubscribe(principal, clientId, sub.filter())) {
                 codes.add(Packet.NOT_AUTHORIZED);
-            } else if (broker.subscriptionsFull(clientId, sub.filter())) {
-                broker.refusedSubscriptions.increment();
+            } else if (gateway.subscriptionsFull(clientId, sub.filter())) {
+                gateway.refusedSubscriptions.increment();
                 codes.add(Packet.QUOTA_EXCEEDED);
             } else {
-                final int granted = Math.min(sub.qos(), Broker.MAXIMUM_QOS);
-                final boolean existed = broker.subscribeClient(clientId, sub, granted);
+                final int granted = Math.min(sub.qos(), Gateway.MAXIMUM_QOS);
+                final boolean existed = gateway.subscribeClient(clientId, sub, granted);
                 codes.add(granted);
                 if (sub.retainHandling() == 0 || sub.retainHandling() == 1 && !existed) {
                     replay.add(new Packet.Subscription(sub.filter(), granted));
@@ -611,7 +611,7 @@ final class Connection {
         }
         send(encode(new Packet.SubAck(s.packetId(), codes, null)));
         for (final Packet.Subscription sub : replay) {
-            for (final Session.Queued q : broker.retained(sub.filter(), sub.qos())) {
+            for (final Session.Queued q : gateway.retained(sub.filter(), sub.qos())) {
                 session.offer(q);
             }
         }
@@ -621,7 +621,7 @@ final class Connection {
     private void unsubscribe(final Packet.Unsubscribe u) {
         final List<Integer> codes = new ArrayList<>(u.filters().size());
         for (final String filter : u.filters()) {
-            codes.add(broker.unsubscribeClient(clientId, filter) ? Packet.SUCCESS : Packet.NO_SUBSCRIPTION_EXISTED);
+            codes.add(gateway.unsubscribeClient(clientId, filter) ? Packet.SUCCESS : Packet.NO_SUBSCRIPTION_EXISTED);
         }
         send(encode(new Packet.UnsubAck(u.packetId(), codes, null)));
     }
@@ -656,12 +656,12 @@ final class Connection {
                             + number + ", cause=" + e + ']');
                 } finally {
                     closeSocket();
-                    broker.closed(this);
+                    gateway.closed(this);
                 }
             });
         } catch (final RejectedExecutionException _) {
             closeSocket();
-            broker.closed(this);
+            gateway.closed(this);
         }
         writer.shutdown();
     }

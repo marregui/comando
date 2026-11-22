@@ -3,8 +3,8 @@ package dev.marregui.comando.frontear.gateway;
 import dev.marregui.comando.frontear.protocol.Packet;
 
 /**
- * Decides what a client may publish and subscribe to. A {@link Broker} asks it for every PUBLISH, will and SUBSCRIBE
- * filter a client sends, never for {@link Broker#publish}; until one is installed, a client may publish and subscribe
+ * Decides what a client may publish and subscribe to. A {@link Gateway} asks it for every PUBLISH, will and SUBSCRIBE
+ * filter a client sends, never for {@link Gateway#publish}; until one is installed, a client may publish and subscribe
  * anywhere outside {@code $frontear/}. It is called on the client's reader thread and must not block.
  * <p>
  * The broker asks the three methods that take a {@code principal}: null for a client of the loopback listener, the

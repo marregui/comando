@@ -16,13 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// The MQTT 5 clauses on a session that outlives its connection: the Session Expiry Interval a DISCONNECT carries, the
 /// resend of unacknowledged messages within the new Receive Maximum and with their expiry lowered by the wait, expired
 /// messages that hold no room in an offline queue; and a client's PUBLISH that carries a Subscription Identifier.
-class BrokerProtocolTest {
+class GatewayProtocolTest {
 
-    private TestBroker test;
+    private TestGateway test;
 
     @BeforeEach
     void start() throws IOException {
-        test = TestBroker.start();
+        test = TestGateway.start();
     }
 
     @AfterEach
@@ -131,7 +131,7 @@ class BrokerProtocolTest {
             a.untilClosed();
         }
         try (RawClient p = RawClient.connected(test.port(), "p")) {
-            for (int i = 0; i < TestBroker.MAX_QUEUED; i++) {
+            for (int i = 0; i < TestGateway.MAX_QUEUED; i++) {
                 assertThat(p.publish(new Packet.Publish("t", new byte[] {1}, 1, false, false, 1, null, null,
                         new Packet.Meta(-1, 1, null, List.of())))).isEqualTo(Packet.SUCCESS);
             }
@@ -145,7 +145,7 @@ class BrokerProtocolTest {
             assertThat(new String(((Packet.Publish) queued.getFirst()).payload(), StandardCharsets.UTF_8))
                     .isEqualTo("live");
         }
-        assertThat(test.broker.stats().droppedFull()).isZero();
+        assertThat(test.gateway.stats().droppedFull()).isZero();
     }
 
     /// [MQTT-3.3.4-6]: a Subscription Identifier in a client's PUBLISH is a Protocol Error.

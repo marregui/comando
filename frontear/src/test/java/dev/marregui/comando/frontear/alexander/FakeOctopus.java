@@ -11,12 +11,12 @@ import java.util.concurrent.TimeUnit;
 import dev.marregui.comando.frontear.octopus.Direction;
 import dev.marregui.comando.frontear.octopus.LinkSpec;
 import dev.marregui.comando.frontear.octopus.LinkState;
-import dev.marregui.comando.frontear.octopus.Mesh;
+import dev.marregui.comando.frontear.octopus.Octopus;
 
 /// A mesh that records what it was asked, for a test to read from any thread. A put adds or replaces the link's state
 /// (disconnected, all counters 0) and a remove drops it; a test may also set the state outright, make every call
 /// fail, make each put throw an `Error`, or hold each put until it releases `hold`.
-final class FakeMesh implements Mesh {
+final class FakeOctopus implements Octopus {
 
     /// How long a held put waits for its release at most, so a failed test cannot hang the strand.
     private static final Duration HOLD_MAX = Duration.ofSeconds(10);

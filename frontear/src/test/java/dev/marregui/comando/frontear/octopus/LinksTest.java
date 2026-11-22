@@ -33,10 +33,10 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.frontear.gateway.Broker;
-import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.Gateway;
+import dev.marregui.comando.frontear.gateway.GatewayOptions;
 import dev.marregui.comando.frontear.gateway.InternalSubscriber;
-import dev.marregui.comando.frontear.protocol.FakeBroker;
+import dev.marregui.comando.frontear.protocol.FakeGateway;
 import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.store.LogOptions;
@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-/// Links between real brokers in one JVM, and against [FakeBroker] where the test must answer for the peer: one copy
+/// Links between real brokers in one JVM, and against [FakeGateway] where the test must answer for the peer: one copy
 /// per message whatever the filters overlap, no echo over a two-way link, order and no loss across a peer's and the
 /// link's restart with a backlog, filter changes that miss nothing covered and lose nothing queued, the hop limit on a
 /// loop of three, the PUBACK classes, a refused message sent again alone and counted when a later one overtook
@@ -86,7 +86,7 @@ class LinksTest {
     /// and arrives on B once, with one hop counted; the log's cursor then reaches its tail.
     @Test
     void aMessageForAnOutFilterArrivesOnThePeerOnce() throws Exception {
-        try (Broker a = broker(0); Broker b = broker(0); Links links = new Links(a, "A", dir, LOG);
+        try (Gateway a = gateway(0); Gateway b = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient publisher = client(a, "publisher")) {
             final Probe onB = Probe.on(b, "t/#");
             links.put(new LinkSpec("ab", HOST, b.port(), Set.of("t/#"), Set.of(), 4));
@@ -104,7 +104,7 @@ class LinksTest {
     /// once.
     @Test
     void overlappingFiltersGiveOneCopy() throws Exception {
-        try (Broker a = broker(0); Broker b = broker(0); Links links = new Links(a, "A", dir, LOG);
+        try (Gateway a = gateway(0); Gateway b = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient publisher = client(a, "publisher")) {
             final Probe onB = Probe.on(b, "#");
             links.put(new LinkSpec("ab", HOST, b.port(), Set.of("#", "t/#", "t/+", "t/x"), Set.of(), 4));
@@ -123,7 +123,7 @@ class LinksTest {
     /// subscriber, which No Local leaves out. Each side sees each message once.
     @Test
     void noEchoOverATwoWayLink() throws Exception {
-        try (Broker a = broker(0); Broker b = broker(0); Links links = new Links(a, "A", dir, LOG);
+        try (Gateway a = gateway(0); Gateway b = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient onA = client(a, "publisher-a"); MqttClient onB = client(b, "publisher-b")) {
             final Probe seenOnA = Probe.on(a, "t/#");
             final Probe seenOnB = Probe.on(b, "t/#");
@@ -150,9 +150,9 @@ class LinksTest {
     void orderIsKeptAcrossAPeerAndALinkRestartWithABacklog() throws Exception {
         final LinkSpec spec;
         final Probe before;
-        try (Broker a = broker(0); MqttClient publisher = client(a, "publisher")) {
+        try (Gateway a = gateway(0); MqttClient publisher = client(a, "publisher")) {
             try (Links links = new Links(a, "A", dir, LOG)) {
-                try (Broker b = broker(0)) {
+                try (Gateway b = gateway(0)) {
                     before = Probe.on(b, "t/#");
                     spec = new LinkSpec("ab", HOST, b.port(), Set.of("t/#"), Set.of(), 4);
                     links.put(spec);
@@ -163,7 +163,7 @@ class LinksTest {
                 assertThat(publishAll(publisher, "t/x", 100, 200)).containsOnly(Packet.SUCCESS);
                 assertThat(state(links, "ab").queued()).isEqualTo(200);
             }
-            try (Broker b = broker(spec.port()); Links links = new Links(a, "A", dir, LOG)) {
+            try (Gateway b = gateway(spec.port()); Links links = new Links(a, "A", dir, LOG)) {
                 final Probe after = Probe.on(b, "t/#");
                 links.put(spec);
                 await().atMost(WAIT).until(() -> after.messages.size() == 200);
@@ -180,7 +180,7 @@ class LinksTest {
     /// covered before and after the change finds no subscriber (0x10) or goes missing, and the order holds.
     @Test
     void aFilterChangeUnderLoadMissesNothingItCovers() throws Exception {
-        try (Broker a = broker(0); Broker b = broker(0); Links links = new Links(a, "A", dir, LOG);
+        try (Gateway a = gateway(0); Gateway b = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient publisher = client(a, "publisher")) {
             final Probe onB = Probe.on(b, "t/#");
             links.put(new LinkSpec("ab", HOST, b.port(), Set.of("t/#"), Set.of(), 4));
@@ -204,10 +204,10 @@ class LinksTest {
     /// peer when it is back; a message the new filters do not cover finds no subscriber.
     @Test
     void aFilterChangeLosesNothingAlreadyQueued() throws Exception {
-        try (Broker a = broker(0); Links links = new Links(a, "A", dir, LOG);
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient publisher = client(a, "publisher")) {
             final int port;
-            try (Broker b = broker(0)) {
+            try (Gateway b = gateway(0)) {
                 port = b.port();
                 links.put(new LinkSpec("ab", HOST, port, Set.of("t/#"), Set.of(), 4));
                 awaitConnected(links, "ab");
@@ -216,7 +216,7 @@ class LinksTest {
             assertThat(publishAll(publisher, "t/x", 0, 50)).containsOnly(Packet.SUCCESS);
             links.filters("ab", Direction.OUT, Set.of("u/#"));
             assertThat(publish(publisher, "t/x", 50)).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
-            try (Broker b = broker(port)) {
+            try (Gateway b = gateway(port)) {
                 final Probe onB = Probe.on(b, "t/#");
                 await().atMost(WAIT).until(() -> onB.messages.size() == 50);
                 await().during(QUIET).atMost(WAIT).until(() -> onB.messages.size() == 50);
@@ -228,8 +228,8 @@ class LinksTest {
     /// Three brokers linked in a ring, A to B to C to A, with a hop limit of 3: a message published on A goes round
     /// once, comes back to A with three hops and stops there, counted as dropped by the link that refused it.
     @Test
-    void theHopLimitStopsAThreeBrokerLoop() throws Exception {
-        try (Broker a = broker(0); Broker b = broker(0); Broker c = broker(0);
+    void theHopLimitStopsAThreeGatewayLoop() throws Exception {
+        try (Gateway a = gateway(0); Gateway b = gateway(0); Gateway c = gateway(0);
                 Links fromA = new Links(a, "A", dir.resolve("a"), LOG);
                 Links fromB = new Links(b, "B", dir.resolve("b"), LOG);
                 Links fromC = new Links(c, "C", dir.resolve("c"), LOG);
@@ -259,7 +259,7 @@ class LinksTest {
     /// it; the cursor passes what is decided.
     @Test
     void pubackCodesAreClassified() throws Exception {
-        try (FakeBroker peer = new FakeBroker(); Broker a = broker(0); Links links = new Links(a, "A", dir, LOG);
+        try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient publisher = client(a, "publisher")) {
             peer.ackPublishes(false);
             links.put(new LinkSpec("ab", HOST, peer.port(), Set.of("t/#"), Set.of(), 4));
@@ -288,7 +288,7 @@ class LinksTest {
     /// reordered once, and the window then opens again.
     @Test
     void aRefusedMessageGoesAgainAloneAndCountsTheOvertaking() throws Exception {
-        try (FakeBroker peer = new FakeBroker(); Broker a = broker(0); Links links = new Links(a, "A", dir, LOG);
+        try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient publisher = client(a, "publisher")) {
             peer.ackPublishes(false);
             links.put(new LinkSpec("ab", HOST, peer.port(), Set.of("t/#"), Set.of(), 4));
@@ -317,18 +317,18 @@ class LinksTest {
     /// Between real brokers: a peer whose own queue refuses the first of three messages (0x97) and takes the next
     /// two gets the first once more, alone, and none of the two again; the link counts the one overtaking.
     @Test
-    void aRefusalBetweenBrokersResendsOnlyTheRefusedMessage() throws Exception {
-        try (Broker a = broker(0); Links links = new Links(a, "A", dir, LOG);
+    void aRefusalBetweenGatewaysResendsOnlyTheRefusedMessage() throws Exception {
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient publisher = client(a, "publisher")) {
             final int port;
-            try (Broker b = broker(0)) {
+            try (Gateway b = gateway(0)) {
                 port = b.port();
                 links.put(new LinkSpec("ab", HOST, port, Set.of("t/#"), Set.of(), 4));
                 awaitConnected(links, "ab");
             }
             await().atMost(WAIT).until(() -> !state(links, "ab").connected());
             assertThat(publishAll(publisher, "t/x", 0, 3)).containsOnly(Packet.SUCCESS);
-            try (Broker b = broker(port)) {
+            try (Gateway b = gateway(port)) {
                 final RefuseFirst gate = new RefuseFirst();
                 b.subscribe("gate", "t/#", 1, false, gate);
                 await().atMost(WAIT).until(() -> gate.accepted.size() == 3);
@@ -346,7 +346,7 @@ class LinksTest {
     /// queue holds one append for all of them; once free, the strand appends what waited.
     @Test
     void qosZeroMessagesOverTheLinksQueueAreDroppedAndCounted() throws Exception {
-        try (Broker a = broker(0); Links links = new Links(a, "A", dir, LOG);
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG);
                 MqttClient publisher = client(a, "publisher")) {
             links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
             final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
@@ -375,7 +375,7 @@ class LinksTest {
     /// waited and answers each 0x00.
     @Test
     void aQosOneMessageOverTheLinksQueueIsAnsweredQuotaExceeded() throws Exception {
-        try (Broker a = broker(0); Links links = new Links(a, "A", dir, LOG)) {
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG)) {
             links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
             final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
             final CountDownLatch release = new CountDownLatch(1);
@@ -404,7 +404,7 @@ class LinksTest {
     @Test
     void theLinksQueueBoundComesFromItsOptionsAndItsStateShowsItsUsage() throws Exception {
         final int queueMax = 10;
-        try (Broker a = broker(0); Links links = new Links(a, "A", dir, LOG, new LinkOptions(queueMax, QUEUE_MAX))) {
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG, new LinkOptions(queueMax, QUEUE_MAX))) {
             links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
             final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
             final CountDownLatch release = new CountDownLatch(1);
@@ -433,7 +433,7 @@ class LinksTest {
     void thePeersQos0MessagesWaitWithinTheLinksQueueBoundAndTheRestAreDroppedAndCounted() throws Exception {
         final int queueMax = 10;
         final int count = 10 * queueMax;
-        try (FakeBroker peer = new FakeBroker(); Broker a = broker(0);
+        try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0);
                 Links links = new Links(a, "A", dir, LOG, new LinkOptions(queueMax, QUEUE_MAX))) {
             final Probe onA = Probe.on(a, "in/#");
             links.put(new LinkSpec("ab", HOST, peer.port(), Set.of(), Set.of("in/#"), 4));
@@ -468,7 +468,7 @@ class LinksTest {
     @Test
     void theLinksWindowIsCappedByItsOptionsBelowThePeersReceiveMaximum() throws Exception {
         final int windowMax = 2;
-        try (FakeBroker peer = new FakeBroker(); Broker a = broker(0);
+        try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0);
                 Links links = new Links(a, "A", dir, LOG, new LinkOptions(QUEUE_MAX, windowMax));
                 MqttClient publisher = client(a, "publisher")) {
             peer.ackPublishes(false);
@@ -490,7 +490,7 @@ class LinksTest {
     @Test
     void aCaughtUpLinkSendsEachMessageWithoutWaitingForAnswers() throws Exception {
         final int windowMax = 4;
-        try (FakeBroker peer = new FakeBroker(); Broker a = broker(0);
+        try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0);
                 Links links = new Links(a, "A", dir, LOG, new LinkOptions(QUEUE_MAX, windowMax));
                 MqttClient publisher = client(a, "publisher")) {
             peer.ackPublishes(false);
@@ -510,7 +510,7 @@ class LinksTest {
     @Test
     void theLinkRefillsItsWindowOnceHalfOfItIsFree() throws Exception {
         final int windowMax = 4;
-        try (FakeBroker peer = new FakeBroker(); Broker a = broker(0);
+        try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0);
                 Links links = new Links(a, "A", dir, LOG, new LinkOptions(QUEUE_MAX, windowMax));
                 MqttClient publisher = client(a, "publisher")) {
             peer.ackPublishes(false);
@@ -544,7 +544,7 @@ class LinksTest {
     /// task closes the log once the busy one returns.
     @Test
     void aCloseAnswersWhatWaitsAndInterruptsNothing() throws Exception {
-        try (Broker a = broker(0); Links links = new Links(a, "A", dir, LOG)) {
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG)) {
             links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
             final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
             final CountDownLatch release = new CountDownLatch(1);
@@ -569,7 +569,7 @@ class LinksTest {
     @Test
     void anExpiredMessageIsSkippedAndALiveOneDecremented() throws Exception {
         final ManualClock clock = new ManualClock(1_700_000_000_000L);
-        try (FakeBroker peer = new FakeBroker(); Broker a = broker(0);
+        try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0);
                 Links links = new Links(a, "A", dir, LOG, LinkOptions.defaults(), clock);
                 MqttClient publisher = client(a, "publisher")) {
             peer.connectCode(Packet.NOT_AUTHORIZED);
@@ -598,7 +598,7 @@ class LinksTest {
     /// one before it unsubscribes from the old.
     @Test
     void theInSideAnswersThePeerAfterTheLocalPublish() throws Exception {
-        try (FakeBroker peer = new FakeBroker(); Broker a = broker(0); Links links = new Links(a, "A", dir, LOG)) {
+        try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG)) {
             final Probe onA = Probe.holding(a, "in/#");
             links.put(new LinkSpec("ab", HOST, peer.port(), Set.of(), Set.of("in/#"), 2));
             await().atMost(WAIT).until(() -> peer.received(Packet.Subscribe.class).size() == 1);
@@ -633,7 +633,7 @@ class LinksTest {
     /// cover the topic; each such message is counted as dropped, and one the filters cover still arrives.
     @Test
     void aMessageInOutsideTheInFiltersIsDroppedAndCounted() throws Exception {
-        try (FakeBroker peer = new FakeBroker(); FakeBroker other = new FakeBroker(); Broker a = broker(0);
+        try (FakeGateway peer = new FakeGateway(); FakeGateway other = new FakeGateway(); Gateway a = gateway(0);
                 Links links = new Links(a, "A", dir, LOG)) {
             final Probe onA = Probe.on(a, "#");
             links.put(new LinkSpec("main@b", HOST, peer.port(), Set.of("comando/v1/b/instance/+/inbox"), Set.of(),
@@ -662,8 +662,8 @@ class LinksTest {
     /// of range, a filter that is not one) and a change to an unknown link; it replaces a link put again, forgets a
     /// removed one, and lists the links by id.
     @Test
-    void theMeshChecksWhatItIsGivenAndListsById() throws Exception {
-        try (Broker a = broker(0); Broker b = broker(0); Links links = new Links(a, "A", dir, LOG)) {
+    void theOctopusChecksWhatItIsGivenAndListsById() throws Exception {
+        try (Gateway a = gateway(0); Gateway b = gateway(0); Links links = new Links(a, "A", dir, LOG)) {
             for (final LinkSpec bad : List.of(
                     new LinkSpec("..", HOST, b.port(), Set.of(), Set.of(), 1),
                     new LinkSpec("a/b", HOST, b.port(), Set.of(), Set.of(), 1),
@@ -696,7 +696,7 @@ class LinksTest {
     /// folder of that name and brings it back from there after a restart; a `/` after it is still refused.
     @Test
     void aLinkToAnotherMachineIsNamedNodeAtMachine() throws Exception {
-        try (Broker a = broker(0); Broker b = broker(0)) {
+        try (Gateway a = gateway(0); Gateway b = gateway(0)) {
             final LinkSpec remote = new LinkSpec("main@b", HOST, b.port(), Set.of("t/#"), Set.of(), 2);
             try (Links links = new Links(a, "A", dir, LOG)) {
                 links.put(remote);
@@ -717,10 +717,10 @@ class LinksTest {
     @Test
     void aLinkComesBackAfterARestartWithItsFiltersAndDrainsItsBacklog() throws Exception {
         final int port;
-        try (Broker b = broker(0)) {
+        try (Gateway b = gateway(0)) {
             port = b.port();
         }
-        try (Broker a = broker(0); MqttClient publisher = client(a, "publisher")) {
+        try (Gateway a = gateway(0); MqttClient publisher = client(a, "publisher")) {
             try (Links links = new Links(a, "A", dir, LOG)) {
                 links.put(new LinkSpec("ab", HOST, port, Set.of("t/#"), Set.of(), 4));
                 links.filters("ab", Direction.OUT, Set.of("u/#"));
@@ -733,7 +733,7 @@ class LinksTest {
                 assertThat(state(links, "ab").queued()).isEqualTo(50);
                 assertThat(LinkFile.read(Files.readAllBytes(dir.resolve("ab").resolve(LinkFile.NAME))))
                         .isEqualTo(new LinkSpec("ab", HOST, port, Set.of("u/#"), Set.of("r/#"), 4));
-                try (Broker b = broker(port)) {
+                try (Gateway b = gateway(port)) {
                     final Probe onB = Probe.on(b, "#");
                     await().atMost(WAIT).until(() -> onB.messages.size() == 50);
                     assertThat(publish(publisher, "t/x", 50)).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
@@ -753,7 +753,7 @@ class LinksTest {
     /// link; a remove refuses an id that is not a folder name.
     @Test
     void aRemovedLinkAndAnUnreadableSpecDoNotComeBack() throws Exception {
-        try (Broker a = broker(0)) {
+        try (Gateway a = gateway(0)) {
             try (Links links = new Links(a, "A", dir, LOG)) {
                 links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 2));
                 links.put(new LinkSpec("ac", HOST, 1, Set.of("t/#"), Set.of(), 2));
@@ -783,7 +783,7 @@ class LinksTest {
         final MachineKey local = MachineKey.loadOrCreate(keys.resolve("a"), "a");
         final MachineKey remote = MachineKey.loadOrCreate(keys.resolve("b"), "b");
         final SSLContext tls = Tls.context(local, pins(remote));
-        try (Broker a = broker(0); FakeBroker peer = new FakeBroker();
+        try (Gateway a = gateway(0); FakeGateway peer = new FakeGateway();
                 Terminator b = new Terminator(Tls.context(remote, pins(local)), peer.port())) {
             try (Links links = new Links(a, "A", dir, LOG)) {
                 links.put(new LinkSpec("ab", HOST, b.port(), Set.of("t/#"), Set.of(), 4, true));
@@ -815,7 +815,7 @@ class LinksTest {
         final MachineKey local = MachineKey.loadOrCreate(keys.resolve("a"), "a");
         final MachineKey remote = MachineKey.loadOrCreate(keys.resolve("b"), "b");
         final Links closed;
-        try (Broker a = broker(0); Broker c = broker(0); FakeBroker peer = new FakeBroker();
+        try (Gateway a = gateway(0); Gateway c = gateway(0); FakeGateway peer = new FakeGateway();
                 Terminator b = new Terminator(Tls.context(remote, pins(local)), peer.port());
                 Links links = new Links(a, "A", dir, LOG)) {
             closed = links;
@@ -843,7 +843,7 @@ class LinksTest {
         final MachineKey c = MachineKey.loadOrCreate(keys.resolve("c"), "c");
         final Map<String, SSLContext> contexts = Map.of("ab", Tls.context(local, pins(b)),
                 "ac", Tls.context(local, pins(c)));
-        try (Broker a = broker(0); FakeBroker peer = new FakeBroker();
+        try (Gateway a = gateway(0); FakeGateway peer = new FakeGateway();
                 Terminator asC = new Terminator(Tls.context(c, pins(local)), peer.port());
                 Links links = new Links(a, "A", dir, LOG)) {
             links.tls(contexts::get);
@@ -890,7 +890,7 @@ class LinksTest {
         throw new AssertionError("no queue reading [link=" + id + ']');
     }
 
-    private static List<Integer> payloads(final FakeBroker peer) {
+    private static List<Integer> payloads(final FakeGateway peer) {
         final List<Integer> payloads = new ArrayList<>();
         for (final Packet.Publish p : peer.received(Packet.Publish.class)) {
             payloads.add(payload(p));
@@ -904,12 +904,12 @@ class LinksTest {
         return pins;
     }
 
-    private static Broker broker(final int port) throws IOException {
-        return Broker.start(BrokerOptions.defaults(new InetSocketAddress(HOST, port)));
+    private static Gateway gateway(final int port) throws IOException {
+        return Gateway.start(GatewayOptions.defaults(new InetSocketAddress(HOST, port)));
     }
 
-    private static MqttClient client(final Broker broker, final String clientId) throws Exception {
-        final MqttClient client = new MqttClient(new MqttClient.Options(HOST, broker.port(), clientId, 60,
+    private static MqttClient client(final Gateway gateway, final String clientId) throws Exception {
+        final MqttClient client = new MqttClient(new MqttClient.Options(HOST, gateway.port(), clientId, 60,
                 Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null), new Quiet(), callbacks);
         try {
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
@@ -947,7 +947,7 @@ class LinksTest {
                 new Packet.Meta(-1, expirySeconds, null, List.of()));
     }
 
-    private static Packet.Publish sentTo(final FakeBroker peer, final int index) {
+    private static Packet.Publish sentTo(final FakeGateway peer, final int index) {
         return peer.received(Packet.Publish.class).get(index);
     }
 
@@ -988,15 +988,15 @@ class LinksTest {
             this.holding = holding;
         }
 
-        static Probe on(final Broker broker, final String filter) {
+        static Probe on(final Gateway gateway, final String filter) {
             final Probe probe = new Probe(false);
-            broker.subscribe("probe", filter, 1, false, probe);
+            gateway.subscribe("probe", filter, 1, false, probe);
             return probe;
         }
 
-        static Probe holding(final Broker broker, final String filter) {
+        static Probe holding(final Gateway gateway, final String filter) {
             final Probe probe = new Probe(true);
-            broker.subscribe("probe", filter, 1, false, probe);
+            gateway.subscribe("probe", filter, 1, false, probe);
             return probe;
         }
 

@@ -12,7 +12,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
 public interface InternalSubscriber {
 
     /**
-     * Takes {@code message}, published by {@code origin} (a client id, or the origin given to {@link Broker#publish});
+     * Takes {@code message}, published by {@code origin} (a client id, or the origin given to {@link Gateway#publish});
      * completes with a reason code: 0x00 accepted (durable where it persists), 0x97 quota exceeded, another code at or
      * above 0x80 for a refusal. A stage that fails counts as 0x80.
      */

@@ -24,16 +24,16 @@ import dev.marregui.comando.core.json.JsonException;
 import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.frontear.gateway.Broker;
 import dev.marregui.comando.frontear.gateway.Gate;
+import dev.marregui.comando.frontear.gateway.Gateway;
 import dev.marregui.comando.frontear.octopus.Direction;
 import dev.marregui.comando.frontear.octopus.LinkSpec;
-import dev.marregui.comando.frontear.octopus.Mesh;
+import dev.marregui.comando.frontear.octopus.Octopus;
 import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 
 /**
- * A node's control plane: signed requests on {@code $frontear/control/<node>/<Method>} change its {@link Mesh}, and
+ * A node's control plane: signed requests on {@code $frontear/control/<node>/<Method>} change its {@link Octopus}, and
  * its links' state is kept retained on {@code $frontear/state/<node>/links}.
  *
  * <p>Requests. A request is a JSON object, content type {@code application/json}, signed as {@link Seal} defines by a
@@ -81,8 +81,8 @@ public final class ControlPlane implements AutoCloseable {
     /** How often a refusal is logged at warning level at most; the others go to debug. Unmeasured. */
     private static final Duration REFUSAL_LOG_EVERY = Duration.ofMinutes(1);
 
-    private final Broker broker;
-    private final Mesh mesh;
+    private final Gateway gateway;
+    private final Octopus octopus;
     private final String node;
     private final String id;
     private final String prefix;
@@ -114,16 +114,16 @@ public final class ControlPlane implements AutoCloseable {
     private boolean refusalLogged;
 
     /**
-     * Starts the control plane of {@code node} on {@code broker}, changing {@code mesh}, trusting the Ed25519 keys
+     * Starts the control plane of {@code node} on {@code gateway}, changing {@code octopus}, trusting the Ed25519 keys
      * {@code trusted} and reading the time from {@code clock}: it installs its gate, subscribes to its control topics
      * and publishes the state topic.
      *
      * @throws IllegalArgumentException when {@code node} is not one topic level or a key is not an Ed25519 key
      */
-    public ControlPlane(final Broker broker, final Mesh mesh, final String node, final Set<PublicKey> trusted,
+    public ControlPlane(final Gateway gateway, final Octopus octopus, final String node, final Set<PublicKey> trusted,
             final InstantSource clock) {
-        this.broker = Objects.requireNonNull(broker, "broker");
-        this.mesh = Objects.requireNonNull(mesh, "mesh");
+        this.gateway = Objects.requireNonNull(gateway, "broker");
+        this.octopus = Objects.requireNonNull(octopus, "mesh");
         this.node = Objects.requireNonNull(node, "node");
         this.clock = Objects.requireNonNull(clock, "clock");
         if (node.isEmpty() || node.indexOf('/') >= 0 || node.indexOf('+') >= 0 || node.indexOf('#') >= 0
@@ -133,15 +133,15 @@ public final class ControlPlane implements AutoCloseable {
         this.seal = new Seal(Objects.requireNonNull(trusted, "trusted"), clock);
         this.id = "$control/" + node;
         this.prefix = Names.CONTROL + node + '/';
-        this.state = new StateTopic(mesh, node, clock, message -> publish(message, "state"));
+        this.state = new StateTopic(octopus, node, clock, message -> publish(message, "state"));
         this.strand = Threads.timedStrand("frontear-control-" + node);
         try {
-            broker.gate(gate);
-            broker.subscribe(id, prefix + '+', 1, false, this::deliver);
+            gateway.gate(gate);
+            gateway.subscribe(id, prefix + '+', 1, false, this::deliver);
             strand.scheduleWithFixedDelay(this::tick, 0, StateTopic.EVERY.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final RuntimeException | Error e) {
             try {
-                broker.unsubscribeAll(id);
+                gateway.unsubscribeAll(id);
             } catch (final RuntimeException suppressed) {
                 e.addSuppressed(suppressed);
             }
@@ -184,7 +184,7 @@ public final class ControlPlane implements AutoCloseable {
             return;
         }
         try {
-            broker.unsubscribeAll(id);
+            gateway.unsubscribeAll(id);
         } finally {
             ExecutorStop.drain("control-" + node, ExecutorStop.WAIT, strand);
             for (final CompletableFuture<Integer> left : waiting) {
@@ -282,11 +282,11 @@ public final class ControlPlane implements AutoCloseable {
         final ObjectNode reply = Json.object().put("ok", true);
         try {
             switch (request) {
-                case Request.PutLink(final LinkSpec spec) -> mesh.put(spec);
-                case Request.RemoveLink(final String link) -> mesh.remove(link);
+                case Request.PutLink(final LinkSpec spec) -> octopus.put(spec);
+                case Request.RemoveLink(final String link) -> octopus.remove(link);
                 case Request.SetFilters(final String link, final Direction direction, final Set<String> filters) ->
-                        mesh.filters(link, direction, filters);
-                case Request.GetState() -> reply.setAll(StateTopic.json(mesh.state()));
+                        octopus.filters(link, direction, filters);
+                case Request.GetState() -> reply.setAll(StateTopic.json(octopus.state()));
             }
         } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "mesh refused a control request [node=" + node + ", method="
@@ -331,7 +331,7 @@ public final class ControlPlane implements AutoCloseable {
     }
 
     private void publish(final Packet.Publish message, final String what) {
-        broker.publish(message, id).whenComplete((code, failure) -> {
+        gateway.publish(message, id).whenComplete((code, failure) -> {
             if (failure != null) {
                 LOG.log(System.Logger.Level.WARNING, "cannot publish control " + what + " [node=" + node + ", topic="
                         + message.topic() + ']', failure);

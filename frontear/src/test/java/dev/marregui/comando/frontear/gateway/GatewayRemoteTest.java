@@ -39,7 +39,7 @@ import static org.awaitility.Awaitility.await;
 /// TLS 1.3 with both sides pinned, what a connection of a paired machine may do, the machine stamped on what it
 /// publishes, the session its link holds, the clients closed unanswered and counted, the bounds, the connections
 /// ended when their machine is unpaired, and the listener's close beside a loopback listener that goes on as before.
-class BrokerRemoteTest {
+class GatewayRemoteTest {
 
     private static final String HERE = "here";
     private static final String NODE = "main";
@@ -57,7 +57,7 @@ class BrokerRemoteTest {
     // trusted by nothing
     private static RemoteTls.Machine stranger;
 
-    private Broker broker;
+    private Gateway gateway;
     private SSLContext server;
     private int remotePort;
 
@@ -72,16 +72,16 @@ class BrokerRemoteTest {
 
     @BeforeEach
     void start() throws Exception {
-        broker = Broker.start(new BrokerOptions(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 8,
+        gateway = Gateway.start(new GatewayOptions(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 8,
                 64 * 1024, 16, InstantSource.system(), 4), new Watch(1), NODE);
-        broker.gate(new RemoteGate(new Open(), HERE));
+        gateway.gate(new RemoteGate(new Open(), HERE));
         server = RemoteTls.context(here, there, yonder, unpaired);
-        remotePort = broker.listenRemote(listen(MAX_CONNECTIONS, RemoteTls.HANDSHAKE));
+        remotePort = gateway.listenRemote(listen(MAX_CONNECTIONS, RemoteTls.HANDSHAKE));
     }
 
     @AfterEach
     void stop() {
-        broker.close();
+        gateway.close();
     }
 
     /// A paired machine's link client publishes to an inbox of this machine, PUBACK 0x00, and a local subscriber gets
@@ -89,7 +89,7 @@ class BrokerRemoteTest {
     /// properties go through as they were sent.
     @Test
     void aPairedLinkPublishesToAnInboxHereStampedWithItsMachine() throws Exception {
-        try (RawClient reader = RawClient.connected(broker.port(), "reader");
+        try (RawClient reader = RawClient.connected(gateway.port(), "reader");
                 RawClient remote = connected(there, "a~main")) {
             assertThat(reader.subscribe(new Packet.Subscription("comando/v1/here/instance/+/inbox", 1)))
                     .containsExactly(1);
@@ -149,7 +149,7 @@ class BrokerRemoteTest {
     @Test
     void theWillOfARemoteClientIsStampedWithItsMachine() throws Exception {
         final String presence = "comando/v1/there/instance/a/presence";
-        try (RawClient reader = RawClient.connected(broker.port(), "reader")) {
+        try (RawClient reader = RawClient.connected(gateway.port(), "reader")) {
             assertThat(reader.subscribe(new Packet.Subscription(presence, 1))).containsExactly(1);
             final Packet.Publish will = withProperties(new Packet.Publish(presence, "{}".getBytes(
                     StandardCharsets.UTF_8), 1, false, false, 0, null, null), List.of(new Packet.UserProperty(
@@ -167,8 +167,8 @@ class BrokerRemoteTest {
     @Test
     void aRemoteLinkHoldsASessionOfItsOwnMachine() throws Exception {
         final List<String> accepted = new CopyOnWriteArrayList<>();
-        broker.addConnectListener(accepted::add);
-        try (RawClient local = RawClient.connected(broker.port(), "a~main");
+        gateway.addConnectListener(accepted::add);
+        try (RawClient local = RawClient.connected(gateway.port(), "a~main");
                 RawClient fromThere = connected(there, "a~main");
                 RawClient fromYonder = connected(yonder, "a~main")) {
             assertThat(local.ping()).isEmpty();
@@ -188,50 +188,50 @@ class BrokerRemoteTest {
     /// machine is paired with is closed past it: neither gets a CONNACK, each is counted under its kind.
     @Test
     void anUnpinnedOrUnpairedPeerGetsNoConnAckAndIsCounted() throws Exception {
-        final long failures = broker.remoteStats().handshakeFailures();
+        final long failures = gateway.remoteStats().handshakeFailures();
         assertThat(unanswered(RemoteTls.dial(RemoteTls.context(stranger, here), remotePort))).isEmpty();
-        await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().handshakeFailures() == failures + 1);
-        assertThat(broker.remoteStats().unpinned()).isZero();
+        await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().handshakeFailures() == failures + 1);
+        assertThat(gateway.remoteStats().unpinned()).isZero();
         assertThat(unanswered(RemoteTls.dial(RemoteTls.context(unpaired, here), remotePort))).isEmpty();
-        await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().unpinned() == 1);
-        assertThat(broker.remoteStats().handshakeFailures()).isEqualTo(failures + 1);
+        await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().unpinned() == 1);
+        assertThat(gateway.remoteStats().handshakeFailures()).isEqualTo(failures + 1);
     }
 
     /// A plain TCP client on the TLS port sends a CONNECT the handshake cannot read: it gets no CONNACK, only the
     /// socket's close, and the failed handshake is counted.
     @Test
     void aPlainTcpClientOnTheTlsPortGetsNoConnAckAndIsCounted() throws Exception {
-        final long failures = broker.remoteStats().handshakeFailures();
+        final long failures = gateway.remoteStats().handshakeFailures();
         try (Socket plain = new Socket(InetAddress.getLoopbackAddress(), remotePort)) {
-            plain.setSoTimeout((int) TestBroker.WAIT.toMillis());
+            plain.setSoTimeout((int) TestGateway.WAIT.toMillis());
             plain.getOutputStream().write(Codec.encode(RawClient.connect("a~main", true, 0)));
             plain.getOutputStream().flush();
             assertThat(isConnAck(untilEnd(plain.getInputStream()))).isFalse();
         }
-        await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().handshakeFailures() == failures + 1);
+        await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().handshakeFailures() == failures + 1);
     }
 
     /// A client that opens the TLS port and sends nothing is closed once the handshake bound passes, and counted.
     @Test
     void aHandshakeThatOutlastsItsBoundIsClosedAndCounted() throws Exception {
-        broker.closeRemote();
-        remotePort = broker.listenRemote(listen(MAX_CONNECTIONS, Duration.ofMillis(200)));
-        final long failures = broker.remoteStats().handshakeFailures();
+        gateway.closeRemote();
+        remotePort = gateway.listenRemote(listen(MAX_CONNECTIONS, Duration.ofMillis(200)));
+        final long failures = gateway.remoteStats().handshakeFailures();
         try (Socket silent = new Socket(InetAddress.getLoopbackAddress(), remotePort)) {
-            silent.setSoTimeout((int) TestBroker.WAIT.toMillis());
+            silent.setSoTimeout((int) TestGateway.WAIT.toMillis());
             // what comes before the close is at most the TLS alerts of an abandoned handshake, never an MQTT packet
             assertThat(isConnAck(untilEnd(silent.getInputStream()))).isFalse();
         }
-        await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().handshakeFailures() == failures + 1);
+        await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().handshakeFailures() == failures + 1);
     }
 
     /// A client that trickles a byte every 200 ms, each read in the handshake well within its bound, is closed once
     /// the 1 s bound has passed since its accept, and counted; its place, the only one, takes the next client.
     @Test
     void aHandshakeThatTricklesIsClosedAtItsBoundFromTheAccept() throws Exception {
-        broker.closeRemote();
-        remotePort = broker.listenRemote(listen(1, Duration.ofSeconds(1)));
-        final long failures = broker.remoteStats().handshakeFailures();
+        gateway.closeRemote();
+        remotePort = gateway.listenRemote(listen(1, Duration.ofSeconds(1)));
+        final long failures = gateway.remoteStats().handshakeFailures();
         final long started = System.nanoTime();
         long closedNanos = -1;
         try (Socket slow = new Socket(InetAddress.getLoopbackAddress(), remotePort)) {
@@ -256,8 +256,8 @@ class BrokerRemoteTest {
         }
         assertThat(closedNanos).as("closed, in ns").isBetween(Duration.ofMillis(800).toNanos(),
                 Duration.ofSeconds(3).toNanos());
-        await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().handshakeFailures() == failures + 1);
-        await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().connections() == 0);
+        await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().handshakeFailures() == failures + 1);
+        await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().connections() == 0);
         try (RawClient next = connected(there, "a~main")) {
             assertThat(next.ping()).isEmpty();
         }
@@ -269,21 +269,21 @@ class BrokerRemoteTest {
     void aConnectionWhoseMachineIsNoLongerPairedEndsAtTheRecheck() throws Exception {
         final AtomicReference<Function<Certificate, String>> paired = new AtomicReference<>(
                 RemoteTls.machineOf(there, yonder, unpaired));
-        broker.closeRemote();
-        remotePort = broker.listenRemote(RemoteTls.listen(server, peer -> paired.get().apply(peer), HERE,
+        gateway.closeRemote();
+        remotePort = gateway.listenRemote(RemoteTls.listen(server, peer -> paired.get().apply(peer), HERE,
                 MAX_CONNECTIONS, RemoteTls.HANDSHAKE));
         try (RawClient dropped = connected(there, "a~main");
                 RawClient renamed = connected(unpaired, "b~main");
                 RawClient kept = connected(yonder, "c~main")) {
-            broker.recheckRemote();
+            gateway.recheckRemote();
             assertThat(kept.ping()).isEmpty();
             paired.set(peer -> peer.getPublicKey().equals(yonder.key()) ? "yonder"
                     : peer.getPublicKey().equals(unpaired.key()) ? "there" : null);
-            broker.recheckRemote();
+            gateway.recheckRemote();
             assertThat(dropped.untilClosed()).containsExactly(new Packet.Disconnect(Packet.NOT_AUTHORIZED, null));
             assertThat(renamed.untilClosed()).containsExactly(new Packet.Disconnect(Packet.NOT_AUTHORIZED, null));
             assertThat(kept.ping()).isEmpty();
-            await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().connections() == 1);
+            await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().connections() == 1);
         }
     }
 
@@ -314,16 +314,16 @@ class BrokerRemoteTest {
     /// gets in.
     @Test
     void pastItsBoundAClientIsClosedUnansweredAndCounted() throws Exception {
-        broker.closeRemote();
-        remotePort = broker.listenRemote(listen(1, RemoteTls.HANDSHAKE));
+        gateway.closeRemote();
+        remotePort = gateway.listenRemote(listen(1, RemoteTls.HANDSHAKE));
         try (RawClient first = connected(there, "a~main")) {
-            assertThat(broker.remoteStats().connections()).isEqualTo(1);
-            assertThat(broker.remoteStats().maxConnections()).isEqualTo(1);
+            assertThat(gateway.remoteStats().connections()).isEqualTo(1);
+            assertThat(gateway.remoteStats().maxConnections()).isEqualTo(1);
             assertThat(unanswered(RemoteTls.dial(RemoteTls.context(yonder, here), remotePort))).isEmpty();
-            await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().refused() == 1);
+            await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().refused() == 1);
             assertThat(first.ping()).isEmpty();
         }
-        await().atMost(TestBroker.WAIT).until(() -> broker.remoteStats().connections() == 0);
+        await().atMost(TestGateway.WAIT).until(() -> gateway.remoteStats().connections() == 0);
         try (RawClient next = connected(yonder, "a~main")) {
             assertThat(next.ping()).isEmpty();
         }
@@ -333,22 +333,22 @@ class BrokerRemoteTest {
     /// on it again), and leaves the loopback listener and its client as they were; a second call does nothing.
     @Test
     void closeRemoteEndsTheRemoteConnectionsAndFreesThePort() throws Exception {
-        try (RawClient local = RawClient.connected(broker.port(), "local");
+        try (RawClient local = RawClient.connected(gateway.port(), "local");
                 RawClient remote = connected(there, "a~main");
                 RawClient handshaking = RemoteTls.dial(RemoteTls.context(there, here), remotePort)) {
-            broker.closeRemote();
+            gateway.closeRemote();
             assertThat(remote.untilClosed()).containsExactly(new Packet.Disconnect(Packet.SERVER_SHUTTING_DOWN,
                     null));
             assertThat(unanswered(handshaking)).isEmpty();
-            broker.closeRemote();
-            assertThat(broker.remoteStats().port()).isZero();
-            assertThat(broker.remoteStats().connections()).isZero();
+            gateway.closeRemote();
+            assertThat(gateway.remoteStats().port()).isZero();
+            assertThat(gateway.remoteStats().connections()).isZero();
             assertThat(local.ping()).isEmpty();
-            try (RawClient late = RawClient.connected(broker.port(), "late")) {
+            try (RawClient late = RawClient.connected(gateway.port(), "late")) {
                 assertThat(late.ping()).isEmpty();
             }
         }
-        assertThat(broker.listenRemote(listen(remotePort, MAX_CONNECTIONS, RemoteTls.HANDSHAKE)))
+        assertThat(gateway.listenRemote(listen(remotePort, MAX_CONNECTIONS, RemoteTls.HANDSHAKE)))
                 .isEqualTo(remotePort);
         try (RawClient again = connected(there, "a~main")) {
             assertThat(again.ping()).isEmpty();
@@ -358,16 +358,16 @@ class BrokerRemoteTest {
     /// A second `listenRemote` while one is open is refused, and so is one after the broker closed; the close ends
     /// the remote listener with the broker's.
     @Test
-    void theRemoteListenerOpensOnceAndClosesWithTheBroker() throws Exception {
-        assertThatThrownBy(() -> broker.listenRemote(listen(MAX_CONNECTIONS, RemoteTls.HANDSHAKE)))
+    void theRemoteListenerOpensOnceAndClosesWithTheGateway() throws Exception {
+        assertThatThrownBy(() -> gateway.listenRemote(listen(MAX_CONNECTIONS, RemoteTls.HANDSHAKE)))
                 .isInstanceOf(IllegalStateException.class);
         try (RawClient remote = connected(there, "a~main")) {
-            broker.close();
+            gateway.close();
             assertThat(remote.untilClosed()).containsExactly(new Packet.Disconnect(Packet.SERVER_SHUTTING_DOWN,
                     null));
         }
-        assertThat(broker.remoteStats().port()).isZero();
-        assertThatThrownBy(() -> broker.listenRemote(listen(MAX_CONNECTIONS, RemoteTls.HANDSHAKE)))
+        assertThat(gateway.remoteStats().port()).isZero();
+        assertThatThrownBy(() -> gateway.listenRemote(listen(MAX_CONNECTIONS, RemoteTls.HANDSHAKE)))
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> new Socket(InetAddress.getLoopbackAddress(), remotePort).close())
                 .isInstanceOf(IOException.class);
@@ -377,10 +377,10 @@ class BrokerRemoteTest {
     /// remote connection in. A local client stays as it was: what it publishes carries the `frontear-origin` it set.
     @Test
     void aGateThatKnowsNoMachineLetsNoRemoteClientIn() throws Exception {
-        broker.gate(new Open());
+        gateway.gate(new Open());
         assertThat(refusal(there, "a~main")).isEqualTo(Packet.NOT_AUTHORIZED);
-        try (RawClient reader = RawClient.connected(broker.port(), "reader");
-                RawClient local = RawClient.connected(broker.port(), "local")) {
+        try (RawClient reader = RawClient.connected(gateway.port(), "reader");
+                RawClient local = RawClient.connected(gateway.port(), "local")) {
             assertThat(reader.subscribe(new Packet.Subscription(INBOX, 1))).containsExactly(1);
             assertThat(local.publish(withProperties(RawClient.qos1(INBOX, "q"), List.of(new Packet.UserProperty(
                     Names.ORIGIN, "@there"))))).isEqualTo(Packet.SUCCESS);
@@ -392,8 +392,8 @@ class BrokerRemoteTest {
     /// and the count not yet told is told at the listener's close.
     @Test
     void aRecurringFailureIsCountedAlwaysAndToldOnceAMinute() {
-        final Broker.Failures f = new Broker.Failures("test failure");
-        final long minute = Broker.Failures.TELL_EVERY_NANOS;
+        final Gateway.Failures f = new Gateway.Failures("test failure");
+        final long minute = Gateway.Failures.TELL_EVERY_NANOS;
         assertThat(f.add("c", "first", 5)).isEqualTo(1);
         assertThat(f.add("c", "second", 6)).isZero();
         assertThat(f.add("c", "third", 5 + minute - 1)).isZero();

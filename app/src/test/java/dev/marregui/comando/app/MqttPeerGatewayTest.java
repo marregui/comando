@@ -17,11 +17,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import dev.marregui.comando.frontear.protocol.FakeBroker;
+import dev.marregui.comando.frontear.protocol.FakeGateway;
 import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Relay;
-import dev.marregui.comando.mcp.PeerBroker;
+import dev.marregui.comando.mcp.PeerGateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -29,7 +29,7 @@ import static org.awaitility.Awaitility.await;
 /// The instances' broker on comando's own MQTT client (record 123): its message mapping and handler routing without
 /// a broker, its connect, will, resubscription, publish and following of frontear against a fake broker on a local
 /// port, and its renewal after a cut against the real broker `COMANDO_MQTT_BROKER` names.
-class MqttPeerBrokerTest {
+class MqttPeerGatewayTest {
 
     private static final String INBOX = "comando/v1/local/instance/b/inbox";
     private static final String REPLY = "comando/v1/local/instance/main/reply";
@@ -37,11 +37,11 @@ class MqttPeerBrokerTest {
     private static final String OTHER_INBOX = "comando/v1/local/instance/c/inbox";
     private static final Duration WAIT = Duration.ofSeconds(10);
 
-    private static FakeBroker fake;
+    private static FakeGateway fake;
 
     @BeforeAll
     static void startFake() {
-        fake = new FakeBroker();
+        fake = new FakeGateway();
     }
 
     @AfterAll
@@ -61,17 +61,17 @@ class MqttPeerBrokerTest {
     /// correlation reads back empty and null.
     @Test
     void aQuestionKeepsItsResponseTopicAndCorrelationDataThroughTheClientsTypes() {
-        final Packet.Publish p = MqttPeerBroker.publishOf(INBOX, bytes("{\"text\":\"what is X?\"}"), false, REPLY,
+        final Packet.Publish p = MqttPeerGateway.publishOf(INBOX, bytes("{\"text\":\"what is X?\"}"), false, REPLY,
                 bytes("id-1"));
         assertThat(p.qos()).isEqualTo(1);
         assertThat(p.retain()).isFalse();
-        final PeerBroker.Message m = MqttPeerBroker.message(p);
+        final PeerGateway.Message m = MqttPeerGateway.message(p);
         assertThat(m.topic()).isEqualTo(INBOX);
         assertThat(m.payload()).isEqualTo(bytes("{\"text\":\"what is X?\"}"));
         assertThat(m.responseTopic()).isEqualTo(REPLY);
         assertThat(m.correlation()).isEqualTo(bytes("id-1"));
 
-        final PeerBroker.Message presence = MqttPeerBroker.message(MqttPeerBroker.publishOf(PRESENCE, new byte[0],
+        final PeerGateway.Message presence = MqttPeerGateway.message(MqttPeerGateway.publishOf(PRESENCE, new byte[0],
                 true, null, null));
         assertThat(presence.payload()).isEmpty();
         assertThat(presence.responseTopic()).isNull();
@@ -83,14 +83,14 @@ class MqttPeerBrokerTest {
     /// properties do not count.
     @Test
     void theOriginIsTheLastFrontearOriginUserPropertyAndNullWithoutOne() {
-        final Packet.Publish stamped = MqttPeerBroker.publishOf(INBOX, bytes("{}"), false, REPLY, bytes("id-1"))
+        final Packet.Publish stamped = MqttPeerGateway.publishOf(INBOX, bytes("{}"), false, REPLY, bytes("id-1"))
                 .withMeta(new Packet.Meta(-1, -1, null, List.of(new Packet.UserProperty("frontear-origin", "@x"),
                         new Packet.UserProperty("other", "@y"), new Packet.UserProperty("frontear-origin", "@b"))));
-        assertThat(MqttPeerBroker.message(stamped).origin()).isEqualTo("@b");
-        final Packet.Publish local = MqttPeerBroker.publishOf(INBOX, bytes("{}"), false, REPLY, bytes("id-1"))
+        assertThat(MqttPeerGateway.message(stamped).origin()).isEqualTo("@b");
+        final Packet.Publish local = MqttPeerGateway.publishOf(INBOX, bytes("{}"), false, REPLY, bytes("id-1"))
                 .withMeta(new Packet.Meta(-1, -1, null, List.of(new Packet.UserProperty("other", "@y"))));
-        assertThat(MqttPeerBroker.message(local).origin()).isNull();
-        assertThat(MqttPeerBroker.message(MqttPeerBroker.publishOf(INBOX, bytes("{}"), false, null, null)).origin())
+        assertThat(MqttPeerGateway.message(local).origin()).isNull();
+        assertThat(MqttPeerGateway.message(MqttPeerGateway.publishOf(INBOX, bytes("{}"), false, null, null)).origin())
                 .isNull();
     }
 
@@ -98,12 +98,12 @@ class MqttPeerBrokerTest {
     /// none.
     @Test
     void aPublishWithAnExpirySendsItAndOneWithoutSendsNone() throws Exception {
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true, () -> 1L)) {
-            broker.follow();
-            await().atMost(WAIT).until(broker::connected);
-            broker.publish(OTHER_INBOX, bytes("q"), false, REPLY, bytes("id-1"), 30L).get(WAIT.toMillis(),
+        try (MqttPeerGateway gateway = new MqttPeerGateway("comando-a", fake::port, () -> true, () -> 1L)) {
+            gateway.follow();
+            await().atMost(WAIT).until(gateway::connected);
+            gateway.publish(OTHER_INBOX, bytes("q"), false, REPLY, bytes("id-1"), 30L).get(WAIT.toMillis(),
                     TimeUnit.MILLISECONDS);
-            broker.publish(OTHER_INBOX, bytes("r"), false, REPLY, bytes("id-2")).get(WAIT.toMillis(),
+            gateway.publish(OTHER_INBOX, bytes("r"), false, REPLY, bytes("id-2")).get(WAIT.toMillis(),
                     TimeUnit.MILLISECONDS);
             await().atMost(WAIT).until(() -> fake.received(Packet.Publish.class).size() == 2);
             final List<Packet.Publish> out = fake.received(Packet.Publish.class);
@@ -117,14 +117,14 @@ class MqttPeerBrokerTest {
     /// neither.
     @Test
     void aMessageReachesOnlyTheHandlersWhoseFiltersMatchItsTopic() {
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-test", () -> 1, () -> false, () -> 1L)) {
+        try (MqttPeerGateway gateway = new MqttPeerGateway("comando-test", () -> 1, () -> false, () -> 1L)) {
             final List<String> presence = new CopyOnWriteArrayList<>();
             final List<String> inbox = new CopyOnWriteArrayList<>();
-            broker.subscribe("comando/v1/local/instance/+/presence", m -> presence.add(m.topic()));
-            broker.subscribe(INBOX, m -> inbox.add(m.topic()));
-            broker.deliver(MqttPeerBroker.publishOf(PRESENCE, bytes("{}"), true, null, null));
-            broker.deliver(MqttPeerBroker.publishOf(INBOX, bytes("{}"), false, REPLY, bytes("id-1")));
-            broker.deliver(MqttPeerBroker.publishOf(OTHER_INBOX, bytes("{}"), false, null,
+            gateway.subscribe("comando/v1/local/instance/+/presence", m -> presence.add(m.topic()));
+            gateway.subscribe(INBOX, m -> inbox.add(m.topic()));
+            gateway.deliver(MqttPeerGateway.publishOf(PRESENCE, bytes("{}"), true, null, null));
+            gateway.deliver(MqttPeerGateway.publishOf(INBOX, bytes("{}"), false, REPLY, bytes("id-1")));
+            gateway.deliver(MqttPeerGateway.publishOf(OTHER_INBOX, bytes("{}"), false, null,
                     null));
             assertThat(presence).containsExactly(PRESENCE);
             assertThat(inbox).containsExactly(INBOX);
@@ -136,19 +136,19 @@ class MqttPeerBrokerTest {
     @Test
     void withFrontearDownItNeverConnectsAndAPublishFailsAtOnce() {
         final AtomicInteger looked = new AtomicInteger();
-        final MqttPeerBroker broker = new MqttPeerBroker("comando-test", () -> 1, () -> {
+        final MqttPeerGateway gateway = new MqttPeerGateway("comando-test", () -> 1, () -> {
             looked.incrementAndGet();
             return false;
         }, () -> 1L);
         try {
-            broker.follow();
-            broker.follow();
+            gateway.follow();
+            gateway.follow();
             assertThat(looked).hasValue(2);
-            assertThat(broker.connected()).isFalse();
-            assertThat(broker.publish(INBOX, bytes("{}"), false, REPLY, bytes("id-1"))).isCompletedExceptionally();
-            broker.close();
+            assertThat(gateway.connected()).isFalse();
+            assertThat(gateway.publish(INBOX, bytes("{}"), false, REPLY, bytes("id-1"))).isCompletedExceptionally();
+            gateway.close();
         } finally {
-            broker.close();
+            gateway.close();
         }
         assertThat(fake.accepted()).isZero();
     }
@@ -157,11 +157,11 @@ class MqttPeerBrokerTest {
     /// attempts have failed.
     @Test
     void aDroppedConnectionIsRetriedSoonThenAtMostEveryFiveSeconds() {
-        assertThat(MqttPeerBroker.reconnectDelay(0)).isEqualTo(1_000);
-        assertThat(MqttPeerBroker.reconnectDelay(1)).isEqualTo(2_000);
-        assertThat(MqttPeerBroker.reconnectDelay(2)).isEqualTo(4_000);
-        assertThat(MqttPeerBroker.reconnectDelay(3)).isEqualTo(MqttPeerBroker.FOLLOW_EVERY.toMillis());
-        assertThat(MqttPeerBroker.reconnectDelay(1_000)).isEqualTo(MqttPeerBroker.FOLLOW_EVERY.toMillis());
+        assertThat(MqttPeerGateway.reconnectDelay(0)).isEqualTo(1_000);
+        assertThat(MqttPeerGateway.reconnectDelay(1)).isEqualTo(2_000);
+        assertThat(MqttPeerGateway.reconnectDelay(2)).isEqualTo(4_000);
+        assertThat(MqttPeerGateway.reconnectDelay(3)).isEqualTo(MqttPeerGateway.FOLLOW_EVERY.toMillis());
+        assertThat(MqttPeerGateway.reconnectDelay(1_000)).isEqualTo(MqttPeerGateway.FOLLOW_EVERY.toMillis());
     }
 
     /// Following a running frontear connects with the client id, a 60 s keep alive and the will as a retained QoS 1
@@ -170,13 +170,13 @@ class MqttPeerBrokerTest {
     @Test
     void itConnectsWithItsWillAndRenewsListenersAndSubscriptionsAfterADrop() {
         final AtomicInteger connects = new AtomicInteger();
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true, () -> 1L)) {
-            broker.will(PRESENCE, bytes("{\"state\":\"gone\"}"), true);
-            broker.onConnected(connects::incrementAndGet);
-            broker.subscribe(INBOX, _ -> { });
-            broker.follow();
+        try (MqttPeerGateway gateway = new MqttPeerGateway("comando-a", fake::port, () -> true, () -> 1L)) {
+            gateway.will(PRESENCE, bytes("{\"state\":\"gone\"}"), true);
+            gateway.onConnected(connects::incrementAndGet);
+            gateway.subscribe(INBOX, _ -> { });
+            gateway.follow();
             await().atMost(WAIT).until(() -> fake.received(Packet.Subscribe.class).size() == 1);
-            assertThat(broker.connected()).isTrue();
+            assertThat(gateway.connected()).isTrue();
             assertThat(connects).hasValue(1);
             final Packet.Connect c = fake.received(Packet.Connect.class).getFirst();
             assertThat(c.clientId()).isEqualTo("comando-a");
@@ -191,7 +191,7 @@ class MqttPeerBrokerTest {
             await().atMost(WAIT).until(() -> fake.received(Packet.Subscribe.class).size() == 2);
             assertThat(connects).hasValue(2);
             assertThat(fake.accepted()).isEqualTo(2);
-            assertThat(broker.connected()).isTrue();
+            assertThat(gateway.connected()).isTrue();
         }
     }
 
@@ -205,14 +205,14 @@ class MqttPeerBrokerTest {
         final List<Long> heard = new CopyOnWriteArrayList<>();
         final AtomicInteger sentBefore = new AtomicInteger(-1);
         final AtomicLong generation = new AtomicLong(7L);
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true, generation::get)) {
-            broker.subscribe(INBOX, _ -> { });
-            broker.subscribe(PRESENCE, _ -> { });
-            broker.onSubscribed(against -> {
+        try (MqttPeerGateway gateway = new MqttPeerGateway("comando-a", fake::port, () -> true, generation::get)) {
+            gateway.subscribe(INBOX, _ -> { });
+            gateway.subscribe(PRESENCE, _ -> { });
+            gateway.onSubscribed(against -> {
                 sentBefore.compareAndSet(-1, fake.received(Packet.Subscribe.class).size());
                 heard.add(against);
             });
-            broker.follow();
+            gateway.follow();
             await().atMost(WAIT).until(() -> heard.size() == 1);
             assertThat(heard).containsExactly(7L);
             assertThat(sentBefore).as("both filters subscribed first").hasValue(2);
@@ -232,12 +232,12 @@ class MqttPeerBrokerTest {
             // of that look is heard
             generation.set(9L);
             fake.subscribeCode(1);
-            broker.follow();
+            gateway.follow();
             await().atMost(WAIT).until(() -> heard.size() == 3);
             assertThat(heard).containsExactly(7L, 8L, 9L);
             assertThat(fake.received(Packet.Subscribe.class)).hasSize(8);
             assertThat(fake.accepted()).as("no new connection").isEqualTo(3);
-            broker.follow();
+            gateway.follow();
             await().during(Duration.ofMillis(300)).atMost(WAIT).until(() -> fake.received(Packet.Subscribe.class)
                     .size() == 8);
         }
@@ -249,11 +249,11 @@ class MqttPeerBrokerTest {
     void aPublishCompletesOnItsAcknowledgementAndMessagesArriveInOrder() throws Exception {
         fake.ackPublishes(false);
         final List<String> heard = new CopyOnWriteArrayList<>();
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true, () -> 1L)) {
-            broker.subscribe(INBOX, m -> heard.add(new String(m.payload(), StandardCharsets.UTF_8)));
-            broker.follow();
-            await().atMost(WAIT).until(broker::connected);
-            final CompletableFuture<Void> sent = broker.publish(OTHER_INBOX, bytes("q"), false, REPLY, bytes("id-1"));
+        try (MqttPeerGateway gateway = new MqttPeerGateway("comando-a", fake::port, () -> true, () -> 1L)) {
+            gateway.subscribe(INBOX, m -> heard.add(new String(m.payload(), StandardCharsets.UTF_8)));
+            gateway.follow();
+            await().atMost(WAIT).until(gateway::connected);
+            final CompletableFuture<Void> sent = gateway.publish(OTHER_INBOX, bytes("q"), false, REPLY, bytes("id-1"));
             await().atMost(WAIT).until(() -> fake.received(Packet.Publish.class).size() == 1);
             final Packet.Publish out = fake.received(Packet.Publish.class).getFirst();
             assertThat(out.responseTopic()).isEqualTo(REPLY);
@@ -276,16 +276,16 @@ class MqttPeerBrokerTest {
     @Test
     void whenFrontearStopsItDisconnects() {
         final AtomicBoolean up = new AtomicBoolean(true);
-        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, up::get, () -> 1L)) {
-            broker.follow();
-            await().atMost(WAIT).until(broker::connected);
+        try (MqttPeerGateway gateway = new MqttPeerGateway("comando-a", fake::port, up::get, () -> 1L)) {
+            gateway.follow();
+            await().atMost(WAIT).until(gateway::connected);
             up.set(false);
-            broker.follow();
+            gateway.follow();
             await().atMost(WAIT).until(() -> !fake.received(Packet.Disconnect.class).isEmpty());
             assertThat(fake.received(Packet.Disconnect.class)).containsExactly(new Packet.Disconnect(Packet.SUCCESS,
                     null));
-            assertThat(broker.connected()).isFalse();
-            assertThat(broker.publish(INBOX, bytes("{}"), false, null, null)).isCompletedExceptionally();
+            assertThat(gateway.connected()).isFalse();
+            assertThat(gateway.publish(INBOX, bytes("{}"), false, null, null)).isCompletedExceptionally();
         }
     }
 
@@ -294,18 +294,18 @@ class MqttPeerBrokerTest {
     @Test
     void aPortChangeMovesTheClientToTheNewPort() {
         final AtomicInteger at = new AtomicInteger(fake.port());
-        try (FakeBroker moved = new FakeBroker();
-                MqttPeerBroker broker = new MqttPeerBroker("comando-a", at::get, () -> true, () -> 1L)) {
-            broker.follow();
-            await().atMost(WAIT).until(broker::connected);
-            broker.follow();
+        try (FakeGateway moved = new FakeGateway();
+                MqttPeerGateway gateway = new MqttPeerGateway("comando-a", at::get, () -> true, () -> 1L)) {
+            gateway.follow();
+            await().atMost(WAIT).until(gateway::connected);
+            gateway.follow();
             assertThat(fake.received(Packet.Disconnect.class)).as("the same port").isEmpty();
             assertThat(fake.accepted()).isEqualTo(1);
 
             at.set(moved.port());
-            broker.follow();
+            gateway.follow();
 
-            await().atMost(WAIT).until(() -> moved.accepted() == 1 && broker.connected());
+            await().atMost(WAIT).until(() -> moved.accepted() == 1 && gateway.connected());
             await().atMost(WAIT).until(() -> !fake.received(Packet.Disconnect.class).isEmpty());
             assertThat(fake.received(Packet.Disconnect.class)).containsExactly(new Packet.Disconnect(Packet.SUCCESS,
                     null));
@@ -318,7 +318,7 @@ class MqttPeerBrokerTest {
     /// back about a second later, the connect listeners run again, and the subscription is renewed, so a message
     /// published after the cut arrives.
     @Test
-    void aCutConnectionToARealBrokerIsRenewedAndItsWillPublished() throws Exception {
+    void aCutConnectionToARealServerIsRenewedAndItsWillPublished() throws Exception {
         final String at = System.getenv("COMANDO_MQTT_BROKER");
         Assumptions.assumeTrue(at != null && at.lastIndexOf(':') > 0,
                 "set COMANDO_MQTT_BROKER=host:port to run against a broker");
@@ -348,16 +348,16 @@ class MqttPeerBrokerTest {
             }
         };
         try (Relay relay = new Relay(host, port);
-                MqttPeerBroker broker = new MqttPeerBroker(id, relay::port, () -> true, () -> 1L);
+                MqttPeerGateway gateway = new MqttPeerGateway(id, relay::port, () -> true, () -> 1L);
                 MqttClient watcher = new MqttClient(new MqttClient.Options(host, port, id + "-watcher", 30,
-                        MqttPeerBroker.MAXIMUM_PACKET_SIZE, null), watching, Runnable::run)) {
+                        MqttPeerGateway.MAXIMUM_PACKET_SIZE, null), watching, Runnable::run)) {
             watcher.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             watcher.subscribe(presence, 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            broker.will(presence, bytes("{\"state\":\"gone\"}"), false);
-            broker.onConnected(connects::incrementAndGet);
-            broker.subscribe(inbox, m -> heard.add(new String(m.payload(), StandardCharsets.UTF_8)));
-            broker.follow();
-            await().atMost(WAIT).until(() -> broker.connected() && connects.get() == 1);
+            gateway.will(presence, bytes("{\"state\":\"gone\"}"), false);
+            gateway.onConnected(connects::incrementAndGet);
+            gateway.subscribe(inbox, m -> heard.add(new String(m.payload(), StandardCharsets.UTF_8)));
+            gateway.follow();
+            await().atMost(WAIT).until(() -> gateway.connected() && connects.get() == 1);
             // the subscription is granted some time after the connect; publish until one comes back
             await().atMost(WAIT).pollInterval(Duration.ofMillis(200)).until(() -> {
                 watcher.publish(new Packet.Publish(inbox, bytes("before"), 1, false, false, 0, null, null));
@@ -367,7 +367,7 @@ class MqttPeerBrokerTest {
             relay.cut();
             await().atMost(WAIT).until(() -> watched.size() == 1);
             assertThat(watched.getFirst().payload()).isEqualTo(bytes("{\"state\":\"gone\"}"));
-            await().atMost(WAIT).until(() -> broker.connected() && connects.get() == 2);
+            await().atMost(WAIT).until(() -> gateway.connected() && connects.get() == 2);
             await().atMost(WAIT).pollInterval(Duration.ofMillis(200)).until(() -> {
                 watcher.publish(new Packet.Publish(inbox, bytes("after"), 1, false, false, 0, null, null));
                 return heard.contains("after");

@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-/// The client against [FakeBroker] on a real socket: connect, subscriptions with their options and unsubscribes,
+/// The client against [FakeGateway] on a real socket: connect, subscriptions with their options and unsubscribes,
 /// publishes both ways at QoS 0 and 1, PUBACKs in that wait for the handler, the bound on QoS 0 messages in that wait
 /// for it, the Receive Maximum both ways, keep alive
 /// and its timeout, a broker that drops, refuses or disconnects, a malformed or too large packet in, a connect reason
@@ -35,22 +35,22 @@ class MqttClientTest {
     private static final Duration WAIT = Duration.ofSeconds(10);
     private static final HexFormat HEX = HexFormat.ofDelimiter(" ").withUpperCase();
 
-    private static FakeBroker broker;
+    private static FakeGateway gateway;
     private static ExecutorService callbacks;
 
     private final Recorder recorder = new Recorder();
 
     @BeforeAll
-    static void startBroker() {
-        broker = new FakeBroker();
+    static void startGateway() {
+        gateway = new FakeGateway();
         callbacks = Threads.strand("mqtt-test-callbacks");
     }
 
     @AfterAll
-    static void stopBroker() {
+    static void stopGateway() {
         try {
-            if (broker != null) {
-                broker.close();
+            if (gateway != null) {
+                gateway.close();
             }
         } finally {
             if (callbacks != null) {
@@ -60,8 +60,8 @@ class MqttClientTest {
     }
 
     @BeforeEach
-    void resetBroker() {
-        broker.reset();
+    void resetGateway() {
+        gateway.reset();
     }
 
     /// The CONNECT carries the options: client id, a clean start whose session ends with the connection, the keep
@@ -73,7 +73,7 @@ class MqttClientTest {
         try (MqttClient client = client(30, 1_048_576, will)) {
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             assertThat(client.connected()).isTrue();
-            assertThat(broker.received(Packet.Connect.class)).containsExactly(new Packet.Connect("test-client", true,
+            assertThat(gateway.received(Packet.Connect.class)).containsExactly(new Packet.Connect("test-client", true,
                     30, 0, Packet.DEFAULT_RECEIVE_MAXIMUM, 1_048_576, will));
             await().atMost(WAIT).until(() -> recorder.connects.get() == 1);
             assertThat(client.connect()).isSameAs(client.connect());
@@ -86,10 +86,10 @@ class MqttClientTest {
     void messagesInReachTheHandlerInOrderAndQos1OnesAreAcknowledged() throws Exception {
         try (MqttClient client = connected()) {
             client.subscribe("a/#", 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            assertThat(broker.received(Packet.Subscribe.class).getFirst().subscriptions())
+            assertThat(gateway.received(Packet.Subscribe.class).getFirst().subscriptions())
                     .containsExactly(new Packet.Subscription("a/#", 1));
             for (int i = 1; i <= 5; i++) {
-                broker.send(new Packet.Publish("a/" + i, bytes("m" + i), i == 3 ? 0 : 1, false, false, 0, "a/reply",
+                gateway.send(new Packet.Publish("a/" + i, bytes("m" + i), i == 3 ? 0 : 1, false, false, 0, "a/reply",
                         bytes("c" + i)));
             }
             await().atMost(WAIT).until(() -> recorder.messages.size() == 5);
@@ -97,10 +97,10 @@ class MqttClientTest {
                     .containsExactly("m1", "m2", "m3", "m4", "m5");
             assertThat(recorder.messages.getFirst().responseTopic()).isEqualTo("a/reply");
             assertThat(recorder.messages.getFirst().correlation()).isEqualTo(bytes("c1"));
-            await().atMost(WAIT).until(() -> broker.received(Packet.PubAck.class).size() == 4);
-            assertThat(broker.received(Packet.PubAck.class)).extracting(Packet.PubAck::packetId)
+            await().atMost(WAIT).until(() -> gateway.received(Packet.PubAck.class).size() == 4);
+            assertThat(gateway.received(Packet.PubAck.class)).extracting(Packet.PubAck::packetId)
                     .containsExactly(1, 2, 3, 4);
-            assertThat(broker.received(Packet.PubAck.class)).extracting(Packet.PubAck::reasonCode)
+            assertThat(gateway.received(Packet.PubAck.class)).extracting(Packet.PubAck::reasonCode)
                     .containsOnly(Packet.SUCCESS);
         }
     }
@@ -109,20 +109,20 @@ class MqttClientTest {
     /// PUBACK refuses it.
     @Test
     void aQos1PublishCompletesOnItsAcknowledgement() throws Exception {
-        broker.ackPublishes(false);
+        gateway.ackPublishes(false);
         try (MqttClient client = connected()) {
             final CompletableFuture<Void> sent = client.publish(publish("b/1", 1));
-            await().atMost(WAIT).until(() -> broker.received(Packet.Publish.class).size() == 1);
-            final Packet.Publish out = broker.received(Packet.Publish.class).getFirst();
+            await().atMost(WAIT).until(() -> gateway.received(Packet.Publish.class).size() == 1);
+            final Packet.Publish out = gateway.received(Packet.Publish.class).getFirst();
             assertThat(out.qos()).isEqualTo(1);
             assertThat(out.packetId()).isPositive();
             assertThat(sent).isNotDone();
-            broker.send(new Packet.PubAck(out.packetId(), Packet.SUCCESS, null));
+            gateway.send(new Packet.PubAck(out.packetId(), Packet.SUCCESS, null));
             sent.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
 
             final CompletableFuture<Void> refused = client.publish(publish("b/2", 1));
-            await().atMost(WAIT).until(() -> broker.received(Packet.Publish.class).size() == 2);
-            broker.send(new Packet.PubAck(broker.received(Packet.Publish.class).get(1).packetId(), 0x87,
+            await().atMost(WAIT).until(() -> gateway.received(Packet.Publish.class).size() == 2);
+            gateway.send(new Packet.PubAck(gateway.received(Packet.Publish.class).get(1).packetId(), 0x87,
                     "not allowed"));
             assertFailsWith(refused, 0x87);
             assertThat(client.connected()).isTrue();
@@ -132,11 +132,11 @@ class MqttClientTest {
     /// A QoS 0 publish completes once written and goes out without a packet id.
     @Test
     void aQos0PublishCompletesOnceWritten() throws Exception {
-        broker.ackPublishes(false);
+        gateway.ackPublishes(false);
         try (MqttClient client = connected()) {
             client.publish(publish("b/0", 0)).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            await().atMost(WAIT).until(() -> broker.received(Packet.Publish.class).size() == 1);
-            assertThat(broker.received(Packet.Publish.class).getFirst()).isEqualTo(publish("b/0", 0));
+            await().atMost(WAIT).until(() -> gateway.received(Packet.Publish.class).size() == 1);
+            assertThat(gateway.received(Packet.Publish.class).getFirst()).isEqualTo(publish("b/0", 0));
         }
     }
 
@@ -155,23 +155,23 @@ class MqttClientTest {
     /// goes out in its turn.
     @Test
     void publishesPastTheReceiveMaximumWaitForASlot() throws Exception {
-        broker.receiveMaximum(2);
-        broker.ackPublishes(false);
+        gateway.receiveMaximum(2);
+        gateway.ackPublishes(false);
         try (MqttClient client = connected()) {
             final List<CompletableFuture<Void>> sent = new ArrayList<>();
             for (int i = 1; i <= 3; i++) {
                 sent.add(client.publish(publish("c/" + i, 1)));
             }
             await().during(Duration.ofMillis(300)).atMost(WAIT)
-                    .until(() -> broker.received(Packet.Publish.class).size() == 2);
+                    .until(() -> gateway.received(Packet.Publish.class).size() == 2);
             assertThat(sent.get(2)).isNotDone();
-            broker.send(new Packet.PubAck(broker.received(Packet.Publish.class).getFirst().packetId(),
+            gateway.send(new Packet.PubAck(gateway.received(Packet.Publish.class).getFirst().packetId(),
                     Packet.SUCCESS, null));
-            await().atMost(WAIT).until(() -> broker.received(Packet.Publish.class).size() == 3);
-            assertThat(broker.received(Packet.Publish.class)).extracting(Packet.Publish::topic)
+            await().atMost(WAIT).until(() -> gateway.received(Packet.Publish.class).size() == 3);
+            assertThat(gateway.received(Packet.Publish.class)).extracting(Packet.Publish::topic)
                     .containsExactly("c/1", "c/2", "c/3");
-            for (final Packet.Publish p : broker.received(Packet.Publish.class).subList(1, 3)) {
-                broker.send(new Packet.PubAck(p.packetId(), Packet.SUCCESS, null));
+            for (final Packet.Publish p : gateway.received(Packet.Publish.class).subList(1, 3)) {
+                gateway.send(new Packet.PubAck(p.packetId(), Packet.SUCCESS, null));
             }
             CompletableFuture.allOf(sent.toArray(CompletableFuture[]::new))
                     .get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
@@ -182,9 +182,9 @@ class MqttClientTest {
     /// stays connected while the broker answers.
     @Test
     void theClientPingsWithinTheServersKeepAlive() throws Exception {
-        broker.serverKeepAliveSeconds(1);
+        gateway.serverKeepAliveSeconds(1);
         try (MqttClient client = connected()) {
-            await().atMost(WAIT).until(() -> broker.received(Packet.PingReq.class).size() >= 3);
+            await().atMost(WAIT).until(() -> gateway.received(Packet.PingReq.class).size() >= 3);
             assertThat(client.connected()).isTrue();
             assertThat(recorder.causes).isEmpty();
         }
@@ -194,15 +194,15 @@ class MqttClientTest {
     /// as its handler asks.
     @Test
     void anUnansweredPingEndsTheConnection() throws Exception {
-        broker.serverKeepAliveSeconds(1);
-        broker.answerPings(false);
+        gateway.serverKeepAliveSeconds(1);
+        gateway.answerPings(false);
         try (MqttClient client = connected()) {
             await().atMost(WAIT).until(() -> !recorder.causes.isEmpty());
             assertThat(recorder.causes.getFirst()).isInstanceOfSatisfying(MqttException.class,
                     e -> assertThat(e.reasonCode()).isEqualTo(Packet.KEEP_ALIVE_TIMEOUT));
             assertThat(recorder.attempts.getFirst()).isZero();
             await().atMost(WAIT).until(() -> recorder.connects.get() >= 2);
-            assertThat(broker.accepted()).isGreaterThanOrEqualTo(2);
+            assertThat(gateway.accepted()).isGreaterThanOrEqualTo(2);
             assertThat(client.connect()).isDone();
         }
     }
@@ -210,16 +210,16 @@ class MqttClientTest {
     /// Only a PINGRESP answers a ping: a broker that keeps sending messages but never answers is timed out with Keep
     /// Alive timeout all the same (§3.12.4).
     @Test
-    void aBrokerThatSendsMessagesButNeverAnswersAPingIsTimedOut() throws Exception {
-        broker.serverKeepAliveSeconds(1);
-        broker.answerPings(false);
+    void aGatewayThatSendsMessagesButNeverAnswersAPingIsTimedOut() throws Exception {
+        gateway.serverKeepAliveSeconds(1);
+        gateway.answerPings(false);
         recorder.retry = null;
         try (MqttClient client = connected()) {
             await().atMost(WAIT).pollInterval(Duration.ofMillis(100)).until(() -> {
-                broker.send(publish("p/chatter", 0));
+                gateway.send(publish("p/chatter", 0));
                 return !recorder.causes.isEmpty();
             });
-            assertThat(broker.received(Packet.PingReq.class)).isNotEmpty();
+            assertThat(gateway.received(Packet.PingReq.class)).isNotEmpty();
             assertThat(recorder.messages).isNotEmpty();
             assertThat(recorder.causes.getFirst()).isInstanceOfSatisfying(MqttException.class,
                     e -> assertThat(e.reasonCode()).isEqualTo(Packet.KEEP_ALIVE_TIMEOUT));
@@ -231,16 +231,16 @@ class MqttClientTest {
     /// and is connected to again after the handler's delay.
     @Test
     void aDroppedConnectionFailsWhatWasInFlightAndReconnects() throws Exception {
-        broker.ackPublishes(false);
+        gateway.ackPublishes(false);
         try (MqttClient client = connected()) {
             final CompletableFuture<Void> inFlight = client.publish(publish("d/1", 1));
-            await().atMost(WAIT).until(() -> broker.received(Packet.Publish.class).size() == 1);
-            broker.drop();
+            await().atMost(WAIT).until(() -> gateway.received(Packet.Publish.class).size() == 1);
+            gateway.drop();
             assertFailsWith(inFlight, Packet.UNSPECIFIED);
             await().atMost(WAIT).until(() -> recorder.connects.get() == 2 && client.connected());
             assertThat(recorder.attempts).containsExactly(0);
-            assertThat(broker.accepted()).isEqualTo(2);
-            broker.ackPublishes(true);
+            assertThat(gateway.accepted()).isEqualTo(2);
+            gateway.ackPublishes(true);
             client.publish(publish("d/2", 1)).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
         }
     }
@@ -251,9 +251,9 @@ class MqttClientTest {
     void aMalformedPacketIsAnsweredWithDisconnect() throws Exception {
         recorder.retry = null;
         try (MqttClient client = connected()) {
-            broker.sendRaw(HEX.parseHex("30 02 00 05"));
-            await().atMost(WAIT).until(() -> !broker.received(Packet.Disconnect.class).isEmpty());
-            assertThat(broker.received(Packet.Disconnect.class).getFirst().reasonCode()).isEqualTo(Packet.MALFORMED);
+            gateway.sendRaw(HEX.parseHex("30 02 00 05"));
+            await().atMost(WAIT).until(() -> !gateway.received(Packet.Disconnect.class).isEmpty());
+            assertThat(gateway.received(Packet.Disconnect.class).getFirst().reasonCode()).isEqualTo(Packet.MALFORMED);
             await().atMost(WAIT).until(() -> !recorder.causes.isEmpty());
             assertThat(recorder.causes.getFirst()).isInstanceOfSatisfying(MqttException.class,
                     e -> assertThat(e.reasonCode()).isEqualTo(Packet.MALFORMED));
@@ -267,9 +267,9 @@ class MqttClientTest {
         recorder.retry = null;
         try (MqttClient client = client(60, 1_024, null)) {
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            broker.send(new Packet.Publish("e/1", new byte[2_000], 0, false, false, 0, null, null));
-            await().atMost(WAIT).until(() -> !broker.received(Packet.Disconnect.class).isEmpty());
-            assertThat(broker.received(Packet.Disconnect.class).getFirst().reasonCode())
+            gateway.send(new Packet.Publish("e/1", new byte[2_000], 0, false, false, 0, null, null));
+            await().atMost(WAIT).until(() -> !gateway.received(Packet.Disconnect.class).isEmpty());
+            assertThat(gateway.received(Packet.Disconnect.class).getFirst().reasonCode())
                     .isEqualTo(Packet.PACKET_TOO_LARGE);
             await().atMost(WAIT).until(() -> !client.connected());
         }
@@ -279,17 +279,17 @@ class MqttClientTest {
     /// the first-connect future fails with the broker's reason code.
     @Test
     void aRefusedConnectIsRetriedUntilTheHandlerStops() throws Exception {
-        broker.connectCode(0x87);
+        gateway.connectCode(0x87);
         try (MqttClient retried = client(60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null)) {
             final CompletableFuture<Void> first = retried.connect();
             await().atMost(WAIT).until(() -> recorder.attempts.size() >= 2);
-            broker.connectCode(Packet.SUCCESS);
+            gateway.connectCode(Packet.SUCCESS);
             first.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             assertThat(recorder.attempts.subList(0, 2)).containsExactly(1, 2);
             assertThat(recorder.causes.getFirst()).isInstanceOfSatisfying(MqttException.class,
                     e -> assertThat(e.reasonCode()).isEqualTo(0x87));
         }
-        broker.connectCode(0x87);
+        gateway.connectCode(0x87);
         recorder.retry = null;
         try (MqttClient given = client(60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null)) {
             assertFailsWith(given.connect(), 0x87);
@@ -303,7 +303,7 @@ class MqttClientTest {
     /// begins after one attempt, not two.
     @Test
     void aWakeWhileTheScheduledConnectHasBegunLeavesOneConnectChain() throws Exception {
-        broker.connectCode(0x87);
+        gateway.connectCode(0x87);
         final List<Integer> startedAfter = new CopyOnWriteArrayList<>();
         final CountDownLatch held = new CountDownLatch(1);
         final CountDownLatch release = new CountDownLatch(1);
@@ -338,12 +338,12 @@ class MqttClientTest {
     /// it with DISCONNECT Protocol Error and the connection never counts as up.
     @Test
     void aConnectReasonCodeOutsideTheTableNeverCountsAsConnected() throws Exception {
-        broker.connectCode(0x01);
+        gateway.connectCode(0x01);
         recorder.retry = null;
         try (MqttClient client = client(60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null)) {
             assertFailsWith(client.connect(), Packet.PROTOCOL_ERROR);
-            await().atMost(WAIT).until(() -> !broker.received(Packet.Disconnect.class).isEmpty());
-            assertThat(broker.received(Packet.Disconnect.class).getFirst().reasonCode())
+            await().atMost(WAIT).until(() -> !gateway.received(Packet.Disconnect.class).isEmpty());
+            assertThat(gateway.received(Packet.Disconnect.class).getFirst().reasonCode())
                     .isEqualTo(Packet.PROTOCOL_ERROR);
             assertThat(recorder.connects).hasValue(0);
             assertThat(client.connected()).isFalse();
@@ -354,7 +354,7 @@ class MqttClientTest {
     /// the connection never counts as up.
     @Test
     void aSessionPresentAfterACleanStartIsAProtocolError() throws Exception {
-        broker.sessionPresent(true);
+        gateway.sessionPresent(true);
         recorder.retry = null;
         try (MqttClient client = client(60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null)) {
             assertFailsWith(client.connect(), Packet.PROTOCOL_ERROR);
@@ -366,30 +366,30 @@ class MqttClientTest {
     /// [MQTT-3.2.2-11] and [MQTT-3.2.2-14]: past a CONNACK that states Maximum QoS 0 and Retain Available 0, a QoS 1
     /// publish fails with 0x9B and a retained one with 0x9A, neither sent; a plain QoS 0 publish still goes out.
     @Test
-    void aPublishPastTheBrokersCapabilitiesFailsUnsent() throws Exception {
-        broker.capabilities(new Packet.Capabilities(0, false, true, false, false));
+    void aPublishPastTheGatewaysCapabilitiesFailsUnsent() throws Exception {
+        gateway.capabilities(new Packet.Capabilities(0, false, true, false, false));
         try (MqttClient client = connected()) {
             assertFailsWith(client.publish(publish("q/1", 1)), Packet.QOS_NOT_SUPPORTED);
             assertFailsWith(client.publish(new Packet.Publish("q/r", bytes("r"), 0, true, false, 0, null, null)),
                     Packet.RETAIN_NOT_SUPPORTED);
             client.publish(publish("q/0", 0)).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            await().atMost(WAIT).until(() -> broker.received(Packet.Publish.class).size() == 1);
-            assertThat(broker.received(Packet.Publish.class)).containsExactly(publish("q/0", 0));
+            await().atMost(WAIT).until(() -> gateway.received(Packet.Publish.class).size() == 1);
+            assertThat(gateway.received(Packet.Publish.class)).containsExactly(publish("q/0", 0));
             assertThat(client.connected()).isTrue();
         }
     }
 
     /// A DISCONNECT from the broker ends the connection with the broker's reason code, unanswered.
     @Test
-    void theBrokersDisconnectEndsTheConnection() throws Exception {
+    void theGatewaysDisconnectEndsTheConnection() throws Exception {
         recorder.retry = null;
         try (MqttClient client = connected()) {
-            broker.send(new Packet.Disconnect(0x8B, "shutting down"));
+            gateway.send(new Packet.Disconnect(0x8B, "shutting down"));
             await().atMost(WAIT).until(() -> !recorder.causes.isEmpty());
             assertThat(recorder.causes.getFirst()).isInstanceOfSatisfying(MqttException.class,
                     e -> assertThat(e.reasonCode()).isEqualTo(0x8B));
             assertThat(client.connected()).isFalse();
-            assertThat(broker.received(Packet.Disconnect.class)).isEmpty();
+            assertThat(gateway.received(Packet.Disconnect.class)).isEmpty();
         }
     }
 
@@ -400,20 +400,20 @@ class MqttClientTest {
         try (MqttClient client = connected()) {
             final CompletableFuture<Void> stopped = client.disconnect();
             stopped.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            await().atMost(WAIT).until(() -> !broker.received(Packet.Disconnect.class).isEmpty());
-            assertThat(broker.received(Packet.Disconnect.class)).containsExactly(new Packet.Disconnect(
+            await().atMost(WAIT).until(() -> !gateway.received(Packet.Disconnect.class).isEmpty());
+            assertThat(gateway.received(Packet.Disconnect.class)).containsExactly(new Packet.Disconnect(
                     Packet.SUCCESS, null));
             assertThat(client.disconnect()).isSameAs(stopped);
             assertThat(client.connected()).isFalse();
             assertThat(recorder.causes).isEmpty();
-            assertThat(broker.accepted()).isEqualTo(1);
+            assertThat(gateway.accepted()).isEqualTo(1);
         }
     }
 
     /// A subscription the broker refuses fails with its reason code; the connection stays up.
     @Test
     void aRefusedSubscriptionFails() throws Exception {
-        broker.subscribeCode(0x87);
+        gateway.subscribeCode(0x87);
         try (MqttClient client = connected()) {
             assertFailsWith(client.subscribe("f/#", 1), 0x87);
             assertThat(client.connected()).isTrue();
@@ -437,7 +437,7 @@ class MqttClientTest {
         } finally {
             idle.close();
         }
-        assertThat(broker.accepted()).isEqualTo(1);
+        assertThat(gateway.accepted()).isEqualTo(1);
     }
 
     /// A subscription goes out with its options, No Local, Retain As Published and Retain Handling, and an
@@ -447,10 +447,10 @@ class MqttClientTest {
         try (MqttClient client = connected()) {
             final Packet.Subscription options = new Packet.Subscription("g/#", 1, true, true, 2);
             client.subscribe(options).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            assertThat(broker.received(Packet.Subscribe.class).getFirst().subscriptions()).containsExactly(options);
+            assertThat(gateway.received(Packet.Subscribe.class).getFirst().subscriptions()).containsExactly(options);
             client.unsubscribe("g/#").get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             client.unsubscribe("never/#").get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            assertThat(broker.received(Packet.Unsubscribe.class)).extracting(Packet.Unsubscribe::filters)
+            assertThat(gateway.received(Packet.Unsubscribe.class)).extracting(Packet.Unsubscribe::filters)
                     .containsExactly(List.of("g/#"), List.of("never/#"));
             assertThat(client.connected()).isTrue();
         }
@@ -465,21 +465,21 @@ class MqttClientTest {
     @Test
     void aMessageInIsAcknowledgedWhenItsHandlerStageCompletesInArrivalOrder() throws Exception {
         final Answering answering = new Answering();
-        try (MqttClient client = client(answering, new MqttClient.Options("127.0.0.1", broker.port(), "test-client",
+        try (MqttClient client = client(answering, new MqttClient.Options("127.0.0.1", gateway.port(), "test-client",
                 60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null))) {
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             for (int i = 1; i <= 3; i++) {
-                broker.send(publish("h/" + i, 1));
+                gateway.send(publish("h/" + i, 1));
             }
             await().atMost(WAIT).until(() -> answering.answers.size() == 3);
             answering.answers.get(1).complete(Packet.SUCCESS);
             await().during(Duration.ofMillis(300)).atMost(WAIT)
-                    .until(() -> broker.received(Packet.PubAck.class).isEmpty());
+                    .until(() -> gateway.received(Packet.PubAck.class).isEmpty());
             answering.answers.getFirst().complete(Packet.QUOTA_EXCEEDED);
-            await().atMost(WAIT).until(() -> broker.received(Packet.PubAck.class).size() == 2);
+            await().atMost(WAIT).until(() -> gateway.received(Packet.PubAck.class).size() == 2);
             answering.answers.get(2).completeExceptionally(new IllegalStateException("local publish failed"));
-            await().atMost(WAIT).until(() -> broker.received(Packet.PubAck.class).size() == 3);
-            assertThat(broker.received(Packet.PubAck.class)).containsExactly(
+            await().atMost(WAIT).until(() -> gateway.received(Packet.PubAck.class).size() == 3);
+            assertThat(gateway.received(Packet.PubAck.class)).containsExactly(
                     new Packet.PubAck(1, Packet.QUOTA_EXCEEDED, null), new Packet.PubAck(2, Packet.SUCCESS, null),
                     new Packet.PubAck(3, Packet.UNSPECIFIED, null));
             assertThat(recorder.messages).extracting(Packet.Publish::topic).containsExactly("h/1", "h/2", "h/3");
@@ -492,15 +492,15 @@ class MqttClientTest {
     void moreMessagesInUnacknowledgedThanTheClientsReceiveMaximumIsAnsweredWithDisconnect() throws Exception {
         recorder.retry = null;
         final Answering answering = new Answering();
-        try (MqttClient client = client(answering, new MqttClient.Options("127.0.0.1", broker.port(), "test-client",
+        try (MqttClient client = client(answering, new MqttClient.Options("127.0.0.1", gateway.port(), "test-client",
                 60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null, 2))) {
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            assertThat(broker.received(Packet.Connect.class).getFirst().receiveMaximum()).isEqualTo(2);
+            assertThat(gateway.received(Packet.Connect.class).getFirst().receiveMaximum()).isEqualTo(2);
             for (int i = 1; i <= 3; i++) {
-                broker.send(publish("i/" + i, 1));
+                gateway.send(publish("i/" + i, 1));
             }
-            await().atMost(WAIT).until(() -> !broker.received(Packet.Disconnect.class).isEmpty());
-            assertThat(broker.received(Packet.Disconnect.class).getFirst().reasonCode())
+            await().atMost(WAIT).until(() -> !gateway.received(Packet.Disconnect.class).isEmpty());
+            assertThat(gateway.received(Packet.Disconnect.class).getFirst().reasonCode())
                     .isEqualTo(Packet.RECEIVE_MAXIMUM_EXCEEDED);
             await().atMost(WAIT).until(() -> !client.connected());
         }
@@ -512,25 +512,25 @@ class MqttClientTest {
     /// refused.
     @Test
     void qos0MessagesInPastTheBoundWhileTheHandlerBlocksAreDroppedAndCounted() throws Exception {
-        assertThatThrownBy(() -> new MqttClient.Options("127.0.0.1", broker.port(), "test-client", 60,
+        assertThatThrownBy(() -> new MqttClient.Options("127.0.0.1", gateway.port(), "test-client", 60,
                 Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null, Packet.DEFAULT_RECEIVE_MAXIMUM, 0))
                 .isInstanceOf(IllegalArgumentException.class);
         final int max = 10;
         final int count = 100;
         final Blocking blocking = new Blocking();
-        try (MqttClient client = client(blocking, new MqttClient.Options("127.0.0.1", broker.port(), "test-client",
+        try (MqttClient client = client(blocking, new MqttClient.Options("127.0.0.1", gateway.port(), "test-client",
                 60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null, Packet.DEFAULT_RECEIVE_MAXIMUM, max))) {
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             await().atMost(WAIT).until(() -> recorder.connects.get() == 1);
             for (int i = 0; i < count; i++) {
-                broker.send(publish("q/" + i, 0));
+                gateway.send(publish("q/" + i, 0));
             }
             await().atMost(WAIT).until(() -> client.droppedQos0() == count - max);
             assertThat(waitingQos0("test-client")).isEqualTo(max);
             assertThat(client.connected()).isTrue();
             blocking.release.countDown();
             await().atMost(WAIT).until(() -> recorder.messages.size() == max);
-            broker.send(publish("q/after", 0));
+            gateway.send(publish("q/after", 0));
             await().atMost(WAIT).until(() -> recorder.messages.size() == max + 1);
             final List<String> expected = new ArrayList<>();
             for (int i = 0; i < max; i++) {
@@ -547,8 +547,8 @@ class MqttClientTest {
 
     /// The client reports the broker's Receive Maximum while connected, 0 otherwise.
     @Test
-    void theClientReportsTheBrokersReceiveMaximum() throws Exception {
-        broker.receiveMaximum(7);
+    void theClientReportsTheGatewaysReceiveMaximum() throws Exception {
+        gateway.receiveMaximum(7);
         try (MqttClient client = client(60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null)) {
             assertThat(client.receiveMaximum()).isZero();
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
@@ -560,18 +560,18 @@ class MqttClientTest {
     /// once written; it fails only when no PUBACK can come, here a dropped connection.
     @Test
     void anAcknowledgedPublishCompletesWithThePubackReasonCode() throws Exception {
-        broker.ackPublishes(false);
+        gateway.ackPublishes(false);
         try (MqttClient client = connected()) {
             final CompletableFuture<Integer> refused = client.publishAcknowledged(publish("j/1", 1));
-            await().atMost(WAIT).until(() -> broker.received(Packet.Publish.class).size() == 1);
-            broker.send(new Packet.PubAck(broker.received(Packet.Publish.class).getFirst().packetId(),
+            await().atMost(WAIT).until(() -> gateway.received(Packet.Publish.class).size() == 1);
+            gateway.send(new Packet.PubAck(gateway.received(Packet.Publish.class).getFirst().packetId(),
                     Packet.QUOTA_EXCEEDED, "full"));
             assertThat(refused.get(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.QUOTA_EXCEEDED);
             assertThat(client.publishAcknowledged(publish("j/0", 0)).get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
                     .isEqualTo(Packet.SUCCESS);
             final CompletableFuture<Integer> lost = client.publishAcknowledged(publish("j/2", 1));
-            await().atMost(WAIT).until(() -> broker.received(Packet.Publish.class).size() == 3);
-            broker.drop();
+            await().atMost(WAIT).until(() -> gateway.received(Packet.Publish.class).size() == 3);
+            gateway.drop();
             assertThatThrownBy(() -> lost.get(WAIT.toMillis(), TimeUnit.MILLISECONDS)).cause()
                     .isInstanceOfSatisfying(MqttException.class,
                             e -> assertThat(e.reasonCode()).isEqualTo(Packet.UNSPECIFIED));
@@ -590,7 +590,7 @@ class MqttClientTest {
     }
 
     private MqttClient client(final int keepAliveSeconds, final int maximumPacketSize, final Packet.Publish will) {
-        return new MqttClient(new MqttClient.Options("127.0.0.1", broker.port(), "test-client", keepAliveSeconds,
+        return new MqttClient(new MqttClient.Options("127.0.0.1", gateway.port(), "test-client", keepAliveSeconds,
                 maximumPacketSize, will), recorder, callbacks);
     }
 

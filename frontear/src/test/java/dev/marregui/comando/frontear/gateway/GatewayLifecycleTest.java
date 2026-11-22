@@ -26,20 +26,20 @@ import static org.awaitility.Awaitility.await;
 
 /// Wills and their delay, the presence of each client, the Gate, internal subscribers, the broker's own publishes,
 /// a clean close, and one round trip with the project's own client.
-class BrokerLifecycleTest {
+class GatewayLifecycleTest {
 
     private static final String PRESENCE = "$frontear/presence/";
     private static final byte[] ONLINE = "{\"online\":true}".getBytes(StandardCharsets.UTF_8);
 
-    private TestBroker test;
-    private TestBroker.Recording watch;
+    private TestGateway test;
+    private TestGateway.Recording watch;
 
     @BeforeEach
     void start() throws IOException {
-        test = TestBroker.start();
-        watch = new TestBroker.Recording();
-        test.broker.subscribe("watch", "will/#", 1, false, watch);
-        test.broker.subscribe("watch", PRESENCE + "+", 1, false, watch);
+        test = TestGateway.start();
+        watch = new TestGateway.Recording();
+        test.gateway.subscribe("watch", "will/#", 1, false, watch);
+        test.gateway.subscribe("watch", PRESENCE + "+", 1, false, watch);
     }
 
     @AfterEach
@@ -92,7 +92,7 @@ class BrokerLifecycleTest {
                         && held.compareAndSet(false, true)) {
                     entered.countDown();
                     try {
-                        release.await(TestBroker.WAIT.toSeconds(), TimeUnit.SECONDS);
+                        release.await(TestGateway.WAIT.toSeconds(), TimeUnit.SECONDS);
                     } catch (final InterruptedException _) {
                         Thread.currentThread().interrupt();
                     }
@@ -117,7 +117,7 @@ class BrokerLifecycleTest {
             try (RawClient a = RawClient.open(test.port(), withWill("a", 0))) {
                 a.read(Packet.ConnAck.class);
             }
-            assertThat(entered.await(TestBroker.WAIT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+            assertThat(entered.await(TestGateway.WAIT.toSeconds(), TimeUnit.SECONDS)).isTrue();
             try (RawClient again = RawClient.connected(test.port(), RawClient.connect("a", false, 60))) {
                 release.countDown();
                 again.send(new Packet.Disconnect(Packet.SUCCESS, null));
@@ -166,7 +166,7 @@ class BrokerLifecycleTest {
     /// message when its connection ends, a takeover included, so a later subscriber sees who is connected.
     @Test
     void presenceIsRetainedOnlineAndClearedOnEnd() throws IOException {
-        test.broker.gate(new AllowAll());
+        test.gateway.gate(new AllowAll());
         try (RawClient a = RawClient.connected(test.port(), "a");
                 RawClient again = RawClient.connected(test.port(), "a");
                 RawClient s = RawClient.connected(test.port(), "s")) {
@@ -202,8 +202,8 @@ class BrokerLifecycleTest {
 
     /// An installed Gate decides for clients, and never for the broker's own publishes.
     @Test
-    void anInstalledGateDecidesForClientsButNotForTheBroker() throws IOException {
-        test.broker.gate(new Gate() {
+    void anInstalledGateDecidesForClientsButNotForTheGateway() throws IOException {
+        test.gateway.gate(new Gate() {
             @Override
             public boolean mayPublish(final String clientId, final String topic) {
                 return false;
@@ -228,24 +228,24 @@ class BrokerLifecycleTest {
     /// subscribing again under the same id replaces it, and unsubscribing leaves no subscriber (0x10).
     @Test
     void internalSubscribersFollowTheirFiltersAndOptions() {
-        final TestBroker.Recording first = new TestBroker.Recording();
-        test.broker.subscribe("$link/x", "t/#", 1, true, first);
-        test.broker.subscribe("$link/x", "u", 1, true, first);
+        final TestGateway.Recording first = new TestGateway.Recording();
+        test.gateway.subscribe("$link/x", "t/#", 1, true, first);
+        test.gateway.subscribe("$link/x", "u", 1, true, first);
         assertThat(publish("t/1", "$link/x")).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
         assertThat(publish("t/1", "other")).isEqualTo(Packet.SUCCESS);
-        assertThat(first.deliveries).extracting(TestBroker.Delivery::origin).containsExactly("other");
+        assertThat(first.deliveries).extracting(TestGateway.Delivery::origin).containsExactly("other");
 
-        final TestBroker.Recording second = new TestBroker.Recording();
+        final TestGateway.Recording second = new TestGateway.Recording();
         second.code = Packet.QUOTA_EXCEEDED;
-        test.broker.subscribe("$link/x", "t/#", 1, true, second);
+        test.gateway.subscribe("$link/x", "t/#", 1, true, second);
         assertThat(publish("t/2", "other")).isEqualTo(Packet.QUOTA_EXCEEDED);
         assertThat(first.deliveries).hasSize(1);
         assertThat(second.topics()).containsExactly("t/2");
 
-        test.broker.unsubscribe("$link/x", "t/#");
+        test.gateway.unsubscribe("$link/x", "t/#");
         assertThat(publish("t/3", "other")).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
         assertThat(publish("u", "other")).isEqualTo(Packet.QUOTA_EXCEEDED);
-        test.broker.unsubscribeAll("$link/x");
+        test.gateway.unsubscribeAll("$link/x");
         assertThat(publish("u", "other")).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
     }
 
@@ -263,7 +263,7 @@ class BrokerLifecycleTest {
         }
         test.close();
         final String names = "frontear-broker-[a-z]+-" + port + "(-[0-9]+)?";
-        await().atMost(TestBroker.WAIT).until(() -> Threads.alive().stream()
+        await().atMost(TestGateway.WAIT).until(() -> Threads.alive().stream()
                 .noneMatch(t -> t.getName().matches(names)));
         assertThat(watch.topics()).doesNotContain("will/a");
     }
@@ -291,13 +291,13 @@ class BrokerLifecycleTest {
         };
         try (MqttClient client = new MqttClient(new MqttClient.Options("127.0.0.1", test.port(), "m", 0,
                 Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null), handler, Runnable::run)) {
-            client.connect().get(TestBroker.WAIT.toSeconds(), TimeUnit.SECONDS);
-            client.subscribe("t", 1).get(TestBroker.WAIT.toSeconds(), TimeUnit.SECONDS);
+            client.connect().get(TestGateway.WAIT.toSeconds(), TimeUnit.SECONDS);
+            client.subscribe("t", 1).get(TestGateway.WAIT.toSeconds(), TimeUnit.SECONDS);
             final Packet.Publish m = new Packet.Publish("t", "hello".getBytes(StandardCharsets.UTF_8), 1, false,
                     false, 0, null, null);
-            assertThat(client.publishAcknowledged(m).get(TestBroker.WAIT.toSeconds(), TimeUnit.SECONDS))
+            assertThat(client.publishAcknowledged(m).get(TestGateway.WAIT.toSeconds(), TimeUnit.SECONDS))
                     .isEqualTo(Packet.SUCCESS);
-            await().atMost(TestBroker.WAIT).until(() -> !received.isEmpty());
+            await().atMost(TestGateway.WAIT).until(() -> !received.isEmpty());
             assertThat(received.getFirst().payload()).isEqualTo("hello".getBytes(StandardCharsets.UTF_8));
         }
     }
@@ -318,13 +318,13 @@ class BrokerLifecycleTest {
 
     /// Waits until the watcher saw `clientId`'s presence cleared.
     private void awaitOffline(final String clientId) {
-        await().atMost(TestBroker.WAIT).until(() -> watch.deliveries.stream()
+        await().atMost(TestGateway.WAIT).until(() -> watch.deliveries.stream()
                 .anyMatch(d -> d.message().topic().equals(PRESENCE + clientId) && d.message().payload().length == 0));
     }
 
     /// Waits until the watcher saw `count` presence messages of `clientId`, online or cleared.
     private void awaitPresence(final String clientId, final int count) {
-        await().atMost(TestBroker.WAIT).until(() -> watch.topics().stream()
+        await().atMost(TestGateway.WAIT).until(() -> watch.topics().stream()
                 .filter(t -> t.equals(PRESENCE + clientId)).count() >= count);
     }
 

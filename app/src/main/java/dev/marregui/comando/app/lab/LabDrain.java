@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.port.LabPort;
-import dev.marregui.comando.frontear.gateway.Broker;
+import dev.marregui.comando.frontear.gateway.Gateway;
 import dev.marregui.comando.frontear.octopus.LinkState;
 import dev.marregui.comando.frontear.watch.ForceRound;
 import dev.marregui.comando.frontear.watch.LinkStep;
@@ -248,11 +248,11 @@ public final class LabDrain implements LabPort, AutoCloseable {
                             r.rate.perSecond(nowMillis, false), r.lastRecords, r.lastBytes,
                             r.lastNanos / NANOS_PER_MILLI, r.percentileMillis(0.50), r.percentileMillis(0.99)));
         }
-        return new Node(s.node(), s.port(), nowMillis, true, totals(s.broker()), List.copyOf(links),
+        return new Node(s.node(), s.port(), nowMillis, true, totals(s.gateway()), List.copyOf(links),
                 List.copyOf(logs), Counts.NONE);
     }
 
-    private static Totals totals(final Broker.Stats b) {
+    private static Totals totals(final Gateway.Stats b) {
         return new Totals(b.sessions(), b.connections(), b.retained(), b.retainedBytes(), b.droppedFull(),
                 b.droppedExpired(), b.droppedOversize(),
                 b.refusedRetained() + b.refusedTopics() + b.refusedSubscriptions(), b.backlogDisconnects());

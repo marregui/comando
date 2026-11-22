@@ -77,7 +77,7 @@ class FrontearLabAdapterTest {
             controller.subscribe("replies/#", 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             subscriber.subscribe("t/#", 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             putLink(controller, signer, replies, b.port());
-            await().atMost(WAIT).until(() -> b.broker().stats().connections() == 2);
+            await().atMost(WAIT).until(() -> b.gateway().stats().connections() == 2);
             drain.open();
             await().atMost(WAIT).until(() -> a.watch().on());
 

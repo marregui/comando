@@ -7,7 +7,7 @@
 ## 1. Context
 
 comando instances talk to each other over MQTT 5 ([record 123](0123-instances-consult-each-other.md)):
-`MqttPeerBroker` connects to the comando Edge, a separate broker process that `EmbeddedEdge` downloads and runs.
+`MqttPeerGateway` connects to the comando Edge, a separate broker process that `EmbeddedEdge` downloads and runs.
 comando already speaks MQTT 5 with its own client and codec ([record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md)).
 What it does not own is the broker in the middle, nor a way for several brokers to form a mesh, nor a way to change a
 mesh at run time other than by editing a broker's configuration.

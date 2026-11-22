@@ -35,7 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import dev.marregui.comando.app.FrontearFabric.Entry;
+import dev.marregui.comando.app.FrontearOctopus.Entry;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
@@ -46,7 +46,7 @@ import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.MqttException;
 import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
-import dev.marregui.comando.mcp.PeerBroker;
+import dev.marregui.comando.mcp.PeerGateway;
 import dev.marregui.comando.mcp.Peers;
 import dev.marregui.comando.testkit.RecordingSink;
 
@@ -54,7 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-/// [FrontearFabric]: every instance hosts a frontear node of its own, and the nodes are linked (record 187). Every
+/// [FrontearOctopus]: every instance hosts a frontear node of its own, and the nodes are linked (record 187). Every
 /// test runs its instances in this one process, each on its own data root in a temporary folder, against a registry
 /// there and ports from a free one up, never the user's `~/.comando-fabric.json` or port 18883.
 /// - each instance's node runs on a port of its own, and the registry, version 2, holds every slug's node
@@ -71,7 +71,7 @@ import static org.awaitility.Awaitility.await;
 /// - a busy port moves the node to the next free one; a held registry lock, a second instance of the same name and a
 ///   stop by hand start nothing; looks at once give each instance a port of its own
 /// - off the peers, the registry and the port are the data root's own
-class FrontearFabricTest {
+class FrontearOctopusTest {
 
     /// Each wait's bound: a start, a connect or a control reply takes well under a second here.
     private static final Duration WAIT = Duration.ofSeconds(30);
@@ -88,7 +88,7 @@ class FrontearFabricTest {
     Path dir;
     private Path registry;
     private int base;
-    private final List<FrontearFabric> fabrics = new ArrayList<>();
+    private final List<FrontearOctopus> octopuses = new ArrayList<>();
     private final AtomicInteger probes = new AtomicInteger();
 
     @BeforeEach
@@ -100,7 +100,7 @@ class FrontearFabricTest {
     @AfterEach
     void tearDown() {
         // each stops the node it hosts, should a test have failed with one running
-        fabrics.forEach(FrontearFabric::close);
+        octopuses.forEach(FrontearOctopus::close);
     }
 
     /// The peer link's first look hosts the node without a word before it, on the lowest free port; a second instance
@@ -110,8 +110,8 @@ class FrontearFabricTest {
     @Test
     void eachInstanceHostsItsOwnNodeAndOneReconcileLinksThem() throws Exception {
         final RecordingSink sinkX = new RecordingSink();
-        final FrontearFabric x = fabric("x", sinkX);
-        final FrontearFabric y = fabric("y", new RecordingSink());
+        final FrontearOctopus x = octopus("x", sinkX);
+        final FrontearOctopus y = octopus("y", new RecordingSink());
 
         assertThat(look(x)).as("none ran at the look").isFalse();
         await().atMost(WAIT).until(x::isRunning);
@@ -138,7 +138,7 @@ class FrontearFabricTest {
         assertThat(spec.path("port").asInt()).isEqualTo(yp);
         assertThat(strings(spec.path("out"))).containsExactlyInAnyOrder(INBOX_Y, Peers.replyTopic("y"), PRESENCE_X);
         assertThat(strings(spec.path("in"))).isEmpty();
-        assertThat(spec.path("hopLimit").asInt()).isEqualTo(FrontearFabric.HOP_LIMIT);
+        assertThat(spec.path("hopLimit").asInt()).isEqualTo(FrontearOctopus.HOP_LIMIT);
         assertThat(strings(Json.readTree(Files.readString(dir.resolve("y/fabric/x/link.json"))).path("out")))
                 .containsExactlyInAnyOrder(Peers.inboxTopic("x"), REPLY_X, Peers.presenceTopic("y"));
         await().atMost(WAIT).pollInterval(POLL).until(() -> connected("x", xp, "y") && connected("y", yp, "x"));
@@ -151,15 +151,15 @@ class FrontearFabricTest {
     /// node, which hands it to a client that subscribes later as retained.
     @Test
     void aQuestionAndItsReplyCrossTheLinksAndThePresenceIsRetainedOnThePeersNode() throws Exception {
-        final FrontearFabric x = fabric("x", new RecordingSink());
-        final FrontearFabric y = fabric("y", new RecordingSink());
+        final FrontearOctopus x = octopus("x", new RecordingSink());
+        final FrontearOctopus y = octopus("y", new RecordingSink());
         link(x, y);
         final int xp = x.mqttPort();
         final int yp = y.mqttPort();
-        final List<PeerBroker.Message> answers = new CopyOnWriteArrayList<>();
-        final List<PeerBroker.Message> questions = new CopyOnWriteArrayList<>();
-        try (MqttPeerBroker onX = new MqttPeerBroker("comando-x", x::mqttPort, x::isRunning, x::generation);
-                MqttPeerBroker onY = new MqttPeerBroker("comando-y", y::mqttPort, y::isRunning, y::generation)) {
+        final List<PeerGateway.Message> answers = new CopyOnWriteArrayList<>();
+        final List<PeerGateway.Message> questions = new CopyOnWriteArrayList<>();
+        try (MqttPeerGateway onX = new MqttPeerGateway("comando-x", x::mqttPort, x::isRunning, x::generation);
+                MqttPeerGateway onY = new MqttPeerGateway("comando-y", y::mqttPort, y::isRunning, y::generation)) {
             onY.subscribe(INBOX_Y, m -> {
                 questions.add(m);
                 onY.publish(m.responseTopic(), bytes("X is 42"), false, null, m.correlation());
@@ -174,11 +174,11 @@ class FrontearFabricTest {
                 return !answers.isEmpty();
             });
 
-            final PeerBroker.Message question = questions.getFirst();
+            final PeerGateway.Message question = questions.getFirst();
             assertThat(question.payload()).isEqualTo(bytes("what is X?"));
             assertThat(question.responseTopic()).isEqualTo(REPLY_X);
             assertThat(question.correlation()).isEqualTo(bytes("id-1"));
-            final PeerBroker.Message answer = answers.getFirst();
+            final PeerGateway.Message answer = answers.getFirst();
             assertThat(answer.topic()).isEqualTo(REPLY_X);
             assertThat(answer.payload()).isEqualTo(bytes("X is 42"));
             assertThat(answer.correlation()).isEqualTo(bytes("id-1"));
@@ -212,8 +212,8 @@ class FrontearFabricTest {
     /// X's presence reaches Y.
     @Test
     void aQuestionQueuedForAPeerThatIsDownReachesItsInboxOnceAfterItsRestart() throws Exception {
-        final FrontearFabric x = fabric("x", new RecordingSink());
-        final FrontearFabric y = fabric("y", new RecordingSink());
+        final FrontearOctopus x = octopus("x", new RecordingSink());
+        final FrontearOctopus y = octopus("y", new RecordingSink());
         link(x, y);
         final int xp = x.mqttPort();
         final int yp = y.mqttPort();
@@ -236,7 +236,7 @@ class FrontearFabricTest {
                     .until(() -> links("x", xp).get("y").path("queued").asLong() > queued);
             assertThat(ups.get()).as("no link connected since").isZero();
 
-            final FrontearFabric back = fabric("y", new RecordingSink());
+            final FrontearOctopus back = octopus("y", new RecordingSink());
             start(back);
 
             assertThat(back.mqttPort()).as("the port kept in the registry").isEqualTo(yp);
@@ -247,9 +247,9 @@ class FrontearFabricTest {
                         .cause()
                         .isInstanceOfSatisfying(MqttException.class, e -> assertThat(e.reasonCode()).isEqualTo(0x88));
             }
-            final List<PeerBroker.Message> questions = new CopyOnWriteArrayList<>();
+            final List<PeerGateway.Message> questions = new CopyOnWriteArrayList<>();
             final List<String> presences = new CopyOnWriteArrayList<>();
-            try (MqttPeerBroker onY = new MqttPeerBroker("comando-y", back::mqttPort, back::isRunning,
+            try (MqttPeerGateway onY = new MqttPeerGateway("comando-y", back::mqttPort, back::isRunning,
                     back::generation)) {
                 onY.subscribe(INBOX_Y, questions::add);
                 onY.subscribe(PRESENCE_X, m -> presences.add(new String(m.payload(), StandardCharsets.UTF_8)));
@@ -276,8 +276,8 @@ class FrontearFabricTest {
     /// entry records tells the listener once, as a connect would, and the same start read again tells nothing.
     @Test
     void aPeerWhoseStartChangedGetsThePresenceAgain() throws Exception {
-        final FrontearFabric x = fabric("x", new RecordingSink());
-        final FrontearFabric y = fabric("y", new RecordingSink());
+        final FrontearOctopus x = octopus("x", new RecordingSink());
+        final FrontearOctopus y = octopus("y", new RecordingSink());
         final AtomicInteger ups = new AtomicInteger();
         x.onPeers((_, _) -> { }, ups::incrementAndGet);
         // the link's connect is seen at the reconcile that put it or at the next, by the time both are done
@@ -301,7 +301,7 @@ class FrontearFabricTest {
     /// the stopped node, acknowledged late, lets them in, until the peer link subscribes against the new node.
     @Test
     void aSubscribeBeforeTheStartPublishesItsNodeLetsTheLinksInOnceItDoes() throws Exception {
-        final FrontearFabric y = fabric("y", new RecordingSink());
+        final FrontearOctopus y = octopus("y", new RecordingSink());
         // the generation the start takes before it binds, as the peer link reads it once connected
         y.openLinks(y.generation() + 1);
         start(y);
@@ -330,8 +330,8 @@ class FrontearFabricTest {
     /// not hold puts none of its own.
     @Test
     void aLinkToAPeerIsPutAtOnceWhenItIsWanted() throws Exception {
-        final FrontearFabric x = fabric("x", new RecordingSink());
-        final FrontearFabric y = fabric("y", new RecordingSink());
+        final FrontearOctopus x = octopus("x", new RecordingSink());
+        final FrontearOctopus y = octopus("y", new RecordingSink());
         host(x);
         host(y);
         final int xp = x.mqttPort();
@@ -352,7 +352,7 @@ class FrontearFabricTest {
     /// records, and of no live one; both keep their links, the gone one's queueing.
     @Test
     void aPeerWhoseProcessIsGoneIsToldWithItsStart() throws Exception {
-        final FrontearFabric x = fabric("x", new RecordingSink());
+        final FrontearOctopus x = octopus("x", new RecordingSink());
         host(x);
         final List<String> gone = new CopyOnWriteArrayList<>();
         x.onPeers((slug, started) -> gone.add(slug + ' ' + started), () -> { });
@@ -373,8 +373,8 @@ class FrontearFabricTest {
     /// and the link's spec go, and the next reconcile does not put it back. Forgetting oneself does nothing.
     @Test
     void forgettingAPeerRemovesItsLinkAndItsEntry() throws Exception {
-        final FrontearFabric x = fabric("x", new RecordingSink());
-        final FrontearFabric y = fabric("y", new RecordingSink());
+        final FrontearOctopus x = octopus("x", new RecordingSink());
+        final FrontearOctopus y = octopus("y", new RecordingSink());
         link(x, y);
         final int xp = x.mqttPort();
 
@@ -400,7 +400,7 @@ class FrontearFabricTest {
     @Test
     void aRegistryOfVersion1IsReplacedAndOneOfALaterVersionIsNotRead() throws Exception {
         final RecordingSink sink = new RecordingSink();
-        final FrontearFabric a = fabric("a", sink);
+        final FrontearOctopus a = octopus("a", sink);
         Files.writeString(registry, "{\"pid\":" + PID + ",\"owner\":\"" + dir.resolve("b") + "\",\"name\":\"b\","
                 + "\"port\":" + base + ",\"started\":\"" + Peers.PROCESS_STARTED + "\"}\n");
 
@@ -409,9 +409,9 @@ class FrontearFabricTest {
         assertThat(nodes().keySet()).containsExactly("a");
         a.close();
 
-        final String later = "{\"version\":" + (FrontearFabric.REGISTRY_VERSION + 1) + ",\"nodes\":{}}\n";
+        final String later = "{\"version\":" + (FrontearOctopus.REGISTRY_VERSION + 1) + ",\"nodes\":{}}\n";
         Files.writeString(registry, later);
-        final FrontearFabric b = fabric("b", sink);
+        final FrontearOctopus b = octopus("b", sink);
         final Intent.Notify refused = toggle(b, sink);
 
         assertThat(refused.level()).isEqualTo(Notice.Level.WARN);
@@ -427,8 +427,8 @@ class FrontearFabricTest {
     /// after.
     @Test
     void closingMarksTheNodeDownAndKeepsItsPort() throws Exception {
-        final FrontearFabric a = fabric("a", new RecordingSink());
-        final FrontearFabric b = fabric("b", new RecordingSink());
+        final FrontearOctopus a = octopus("a", new RecordingSink());
+        final FrontearOctopus b = octopus("b", new RecordingSink());
         assertThat(a.node()).as("none before the start").isNull();
         host(a);
         host(b);
@@ -442,7 +442,7 @@ class FrontearFabricTest {
         assertThat(closed).isLessThan(WAIT);
         final Entry down = new Entry(port, 0L, Peers.PROCESS_STARTED, "a", dir.resolve("a").toString());
         assertThat(nodes().get("a")).isEqualTo(down);
-        assertThat(FrontearFabric.taken(port)).isFalse();
+        assertThat(FrontearOctopus.taken(port)).isFalse();
         assertThat(a.isRunning()).isFalse();
         assertThat(a.node()).as("none once closed").isNull();
         assertThat(a.mqttPort()).as("the lowest port a start may take").isEqualTo(base);
@@ -450,7 +450,7 @@ class FrontearFabricTest {
         a.close();
         assertThat(nodes().get("a")).isEqualTo(down);
 
-        final FrontearFabric again = fabric("a", new RecordingSink());
+        final FrontearOctopus again = octopus("a", new RecordingSink());
         host(again);
         assertThat(again.mqttPort()).isEqualTo(port);
     }
@@ -462,11 +462,11 @@ class FrontearFabricTest {
     @Test
     void theControlKeyPairIsMadeOnceAndTheNodeTrustsIt() throws Exception {
         final RecordingSink sink = new RecordingSink();
-        final FrontearFabric a = fabric("a", sink);
+        final FrontearOctopus a = octopus("a", sink);
         final Path root = dir.resolve("a/fabric");
         toggle(a, sink);
-        final Path secret = root.resolve(FrontearFabric.PRIVATE_KEY);
-        final Path shared = root.resolve(FrontearFabric.PUBLIC_KEY);
+        final Path secret = root.resolve(FrontearOctopus.PRIVATE_KEY);
+        final Path shared = root.resolve(FrontearOctopus.PUBLIC_KEY);
         assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(root))).isEqualTo("rwx------");
         assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(secret))).isEqualTo("rw-------");
         assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(shared))).isEqualTo("rw-r--r--");
@@ -498,12 +498,12 @@ class FrontearFabricTest {
         toggle(a, sink);
         assertThat(toggle(a, sink).text()).startsWith("frontear is up");
         a.close();
-        final FrontearFabric again = fabric("a", sink);
+        final FrontearOctopus again = octopus("a", sink);
         assertThat(toggle(again, sink).text()).startsWith("frontear is up");
 
         assertThat(Files.readAllBytes(secret)).isEqualTo(secretBytes);
         assertThat(Files.readAllBytes(shared)).isEqualTo(sharedBytes);
-        assertThat(FrontearFabric.keys(root).getPublic()).isEqualTo(pub);
+        assertThat(FrontearOctopus.keys(root).getPublic()).isEqualTo(pub);
     }
 
     /// Half a pair, as a crash between the two writes leaves it, is replaced by a whole one; a pair that does not read
@@ -511,26 +511,26 @@ class FrontearFabricTest {
     @Test
     void halfAPairIsReplacedAndAPairThatDoesNotReadIsKept() throws Exception {
         final Path half = Files.createDirectories(dir.resolve("half"));
-        Files.writeString(half.resolve(FrontearFabric.PRIVATE_KEY), "left by a crash\n");
+        Files.writeString(half.resolve(FrontearOctopus.PRIVATE_KEY), "left by a crash\n");
 
-        final KeyPair made = FrontearFabric.keys(half);
+        final KeyPair made = FrontearOctopus.keys(half);
 
-        assertThat(FrontearFabric.keys(half).getPublic()).isEqualTo(made.getPublic());
-        assertThat(FrontearFabric.keys(half).getPrivate()).isEqualTo(made.getPrivate());
+        assertThat(FrontearOctopus.keys(half).getPublic()).isEqualTo(made.getPublic());
+        assertThat(FrontearOctopus.keys(half).getPrivate()).isEqualTo(made.getPrivate());
 
         final RecordingSink sink = new RecordingSink();
-        final FrontearFabric a = fabric("a", sink);
+        final FrontearOctopus a = octopus("a", sink);
         final Path root = Files.createDirectories(dir.resolve("a/fabric"));
-        Files.writeString(root.resolve(FrontearFabric.PRIVATE_KEY), "not a key\n");
-        Files.writeString(root.resolve(FrontearFabric.PUBLIC_KEY), "not a key\n");
+        Files.writeString(root.resolve(FrontearOctopus.PRIVATE_KEY), "not a key\n");
+        Files.writeString(root.resolve(FrontearOctopus.PUBLIC_KEY), "not a key\n");
 
-        assertThatThrownBy(() -> FrontearFabric.keys(root)).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> FrontearOctopus.keys(root)).isInstanceOf(IOException.class);
         final Intent.Notify refused = toggle(a, sink);
 
         assertThat(refused.level()).isEqualTo(Notice.Level.ERROR);
-        assertThat(Files.readString(root.resolve(FrontearFabric.PRIVATE_KEY))).isEqualTo("not a key\n");
+        assertThat(Files.readString(root.resolve(FrontearOctopus.PRIVATE_KEY))).isEqualTo("not a key\n");
         assertThat(registry).doesNotExist();
-        assertThat(FrontearFabric.taken(base)).isFalse();
+        assertThat(FrontearOctopus.taken(base)).isFalse();
     }
 
     /// With the lowest port held by another listener on loopback, a start takes the next free one, records it, and
@@ -538,7 +538,7 @@ class FrontearFabricTest {
     @Test
     void aBusyPortMovesTheNodeToTheNextFreeOne() throws Exception {
         final RecordingSink sink = new RecordingSink();
-        final FrontearFabric a = fabric("a", sink);
+        final FrontearOctopus a = octopus("a", sink);
         try (ServerSocket holder = new ServerSocket()) {
             holder.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), base));
 
@@ -557,8 +557,8 @@ class FrontearFabricTest {
     @Test
     void aHeldRegistryLockHoldsOffAStartUntilItIsLetGo() throws Exception {
         final RecordingSink sink = new RecordingSink();
-        final FrontearFabric a = fabric("a", sink);
-        try (final FileChannel channel = FileChannel.open(FrontearFabric.lockFile(registry),
+        final FrontearOctopus a = octopus("a", sink);
+        try (final FileChannel channel = FileChannel.open(FrontearOctopus.lockFile(registry),
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                 final FileLock _ = channel.lock()) {
 
@@ -566,7 +566,7 @@ class FrontearFabricTest {
 
             assertThat(a.isRunning()).isFalse();
             assertThat(registry).doesNotExist();
-            assertThat(FrontearFabric.taken(base)).as("nothing bound").isFalse();
+            assertThat(FrontearOctopus.taken(base)).as("nothing bound").isFalse();
             assertThat(sink.of(Intent.Notify.class)).as("a look says nothing of it").isEmpty();
         }
         await().atMost(WAIT).until(() -> {
@@ -580,11 +580,11 @@ class FrontearFabricTest {
     /// warning names the other's root, process and port, and the registry keeps the first.
     @Test
     void aSecondInstanceOfTheSameNameIsRefused() throws Exception {
-        final FrontearFabric first = fabric("a", new RecordingSink());
+        final FrontearOctopus first = octopus("a", new RecordingSink());
         final RecordingSink sink = new RecordingSink();
-        final FrontearFabric second = new FrontearFabric(dir.resolve("other/fabric"), dir.resolve("other"), "a", sink,
+        final FrontearOctopus second = new FrontearOctopus(dir.resolve("other/fabric"), dir.resolve("other"), "a", sink,
                 registry, base);
-        fabrics.add(second);
+        octopuses.add(second);
         host(first);
         final Entry entry = nodes().get("a");
 
@@ -605,17 +605,17 @@ class FrontearFabricTest {
         final List<Integer> taken = new ArrayList<>();
         for (int round = 0; round < 5; round++) {
             final List<String> names = List.of(round + "a", round + "b", round + "c");
-            final List<FrontearFabric> all = names.stream().map(n -> fabric(n, new RecordingSink())).toList();
-            all.forEach(FrontearFabric::runningOrHost);
-            await().atMost(WAIT).until(() -> all.stream().noneMatch(FrontearFabric::busy));
+            final List<FrontearOctopus> all = names.stream().map(n -> octopus(n, new RecordingSink())).toList();
+            all.forEach(FrontearOctopus::runningOrHost);
+            await().atMost(WAIT).until(() -> all.stream().noneMatch(FrontearOctopus::busy));
 
-            assertThat(all.stream().allMatch(FrontearFabric::isRunning)).as("round " + round).isTrue();
+            assertThat(all.stream().allMatch(FrontearOctopus::isRunning)).as("round " + round).isTrue();
             final Map<String, Entry> nodes = nodes();
             for (int i = 0; i < all.size(); i++) {
                 assertThat(nodes.get(names.get(i)).port()).as("round " + round).isEqualTo(all.get(i).mqttPort());
                 taken.add(all.get(i).mqttPort());
             }
-            all.forEach(FrontearFabric::close);
+            all.forEach(FrontearOctopus::close);
         }
         assertThat(new HashSet<>(taken)).as("no port twice").hasSize(taken.size());
         assertThat(nodes().values()).allMatch(e -> e.pid() == 0L);
@@ -626,7 +626,7 @@ class FrontearFabricTest {
     @Test
     void aStopByHandHoldsInItsOwnInstance() throws Exception {
         final RecordingSink sink = new RecordingSink();
-        final FrontearFabric a = fabric("a", sink);
+        final FrontearOctopus a = octopus("a", sink);
         look(a);
         await().atMost(WAIT).until(a::isRunning);
         final int port = a.mqttPort();
@@ -647,28 +647,28 @@ class FrontearFabricTest {
     /// Off the peers, as every test and picture tool runs, the fabric's registry is the data root's and its port one
     /// the OS picks: a toggle hosts there and never binds the machine's port.
     @Test
-    void offThePeersTheFabricKeepsToTheDataRoot() throws Exception {
+    void offThePeersTheOctopusKeepsToTheDataRoot() throws Exception {
         final RecordingSink sink = new RecordingSink();
         final Path home = Files.createDirectories(dir.resolve("off"));
-        final FrontearFabric off = FrontearFabric.of(home, "off", sink, false);
-        fabrics.add(off);
+        final FrontearOctopus off = FrontearOctopus.of(home, "off", sink, false);
+        octopuses.add(off);
 
-        assertThat(off.mqttPort()).isNotEqualTo(FrontearFabric.PORT);
+        assertThat(off.mqttPort()).isNotEqualTo(FrontearOctopus.PORT);
         final Intent.Notify up = toggle(off, sink);
 
         assertThat(up.text()).startsWith("frontear is up: MQTT 127.0.0.1:")
-                .isNotEqualTo("frontear is up: MQTT 127.0.0.1:" + FrontearFabric.PORT);
-        final Entry entry = nodes(home.resolve(FrontearFabric.REGISTRY.getFileName())).get("off");
+                .isNotEqualTo("frontear is up: MQTT 127.0.0.1:" + FrontearOctopus.PORT);
+        final Entry entry = nodes(home.resolve(FrontearOctopus.REGISTRY.getFileName())).get("off");
         assertThat(entry.owner()).isEqualTo(home.toString());
         assertThat(entry.pid()).isEqualTo(PID);
         assertThat(entry.port()).isEqualTo(off.mqttPort());
     }
 
-    /// Starts `fabric`'s node as an agent's `server_start frontear` does, waits until it runs, and lets the peers'
+    /// Starts `octopus`'s node as an agent's `server_start frontear` does, waits until it runs, and lets the peers'
     /// links in, as its peer broker does once subscribed.
-    private static void host(final FrontearFabric fabric) {
-        start(fabric);
-        fabric.openLinks(fabric.generation());
+    private static void host(final FrontearOctopus octopus) {
+        start(octopus);
+        octopus.openLinks(octopus.generation());
     }
 
     /// The node on `port` refuses a link client 0x88: it holds its links.
@@ -681,16 +681,16 @@ class FrontearFabricTest {
         }
     }
 
-    /// Starts `fabric`'s node as an agent's `server_start frontear` does, and waits until it runs, its links held.
-    private static void start(final FrontearFabric fabric) {
-        await().atMost(WAIT).until(() -> !fabric.busy());
-        fabric.want(true);
-        await().atMost(WAIT).until(() -> !fabric.busy() && fabric.isRunning());
+    /// Starts `octopus`'s node as an agent's `server_start frontear` does, and waits until it runs, its links held.
+    private static void start(final FrontearOctopus octopus) {
+        await().atMost(WAIT).until(() -> !octopus.busy());
+        octopus.want(true);
+        await().atMost(WAIT).until(() -> !octopus.busy() && octopus.isRunning());
     }
 
     /// Hosts the nodes of `x` and `y`, named so, reconciles each once, and waits until each one's link to the other
     /// connected.
-    private void link(final FrontearFabric x, final FrontearFabric y) {
+    private void link(final FrontearOctopus x, final FrontearOctopus y) {
         host(x);
         host(y);
         x.reconcile();
@@ -700,21 +700,21 @@ class FrontearFabricTest {
     }
 
     /// One look of the peer link, waited for: whether the node ran when it looked.
-    private static boolean look(final FrontearFabric fabric) {
-        await().atMost(WAIT).until(() -> !fabric.busy());
-        final boolean ran = fabric.runningOrHost();
-        await().atMost(WAIT).until(() -> !fabric.busy());
+    private static boolean look(final FrontearOctopus octopus) {
+        await().atMost(WAIT).until(() -> !octopus.busy());
+        final boolean ran = octopus.runningOrHost();
+        await().atMost(WAIT).until(() -> !octopus.busy());
         return ran;
     }
 
     /// Toggles once the previous toggle has finished, and returns the notice of its outcome: the last it posts, after
     /// the "Starting frontear…" or "Stopping frontear…" said at once.
-    private static Intent.Notify toggle(final FrontearFabric fabric, final RecordingSink sink) {
-        await().atMost(WAIT).until(() -> !fabric.busy());
+    private static Intent.Notify toggle(final FrontearOctopus octopus, final RecordingSink sink) {
+        await().atMost(WAIT).until(() -> !octopus.busy());
         sink.clear();
-        fabric.toggle();
+        octopus.toggle();
         sink.await(Intent.Notify.class, WAIT);
-        await().atMost(WAIT).until(() -> !fabric.busy());
+        await().atMost(WAIT).until(() -> !octopus.busy());
         return sink.of(Intent.Notify.class).getLast();
     }
 
@@ -727,7 +727,7 @@ class FrontearFabricTest {
     /// The links of node `instance` on `port` by id, as its control plane answers a `GetState` signed with the
     /// instance's pod key.
     private Map<String, JsonNode> links(final String instance, final int port) throws Exception {
-        final KeyPair pair = FrontearFabric.keys(dir.resolve(instance + "/fabric"));
+        final KeyPair pair = FrontearOctopus.keys(dir.resolve(instance + "/fabric"));
         final String id = "probe-" + probes.incrementAndGet();
         final List<Packet.Publish> replies = new CopyOnWriteArrayList<>();
         try (MqttClient pod = client(port, id, replies)) {
@@ -776,10 +776,10 @@ class FrontearFabricTest {
         return s.getBytes(StandardCharsets.UTF_8);
     }
 
-    private FrontearFabric fabric(final String instance, final RecordingSink sink) {
-        final FrontearFabric f = new FrontearFabric(dir.resolve(instance + "/fabric"), dir.resolve(instance), instance,
-                sink, registry, base);
-        fabrics.add(f);
+    private FrontearOctopus octopus(final String instance, final RecordingSink sink) {
+        final FrontearOctopus f = new FrontearOctopus(dir.resolve(instance + "/fabric"), dir.resolve(instance),
+                instance, sink, registry, base);
+        octopuses.add(f);
         return f;
     }
 
@@ -812,7 +812,7 @@ class FrontearFabricTest {
 
     private static Map<String, Entry> nodes(final Path file) throws IOException {
         final JsonNode tree = Json.readTree(Files.readString(file));
-        assertThat(tree.path("version").asInt(0)).isEqualTo(FrontearFabric.REGISTRY_VERSION);
+        assertThat(tree.path("version").asInt(0)).isEqualTo(FrontearOctopus.REGISTRY_VERSION);
         final Map<String, Entry> nodes = new TreeMap<>();
         for (final Map.Entry<String, JsonNode> n : tree.path("nodes").properties()) {
             final JsonNode e = n.getValue();
@@ -825,7 +825,7 @@ class FrontearFabricTest {
 
     /// Writes `nodes` as the registry, as another instance's start would.
     private void write(final Map<String, Entry> nodes) throws IOException {
-        final ObjectNode tree = Json.object().put("version", FrontearFabric.REGISTRY_VERSION);
+        final ObjectNode tree = Json.object().put("version", FrontearOctopus.REGISTRY_VERSION);
         final ObjectNode all = tree.putObject("nodes");
         nodes.forEach((slug, e) -> all.putObject(slug).put("port", e.port()).put("pid", e.pid())
                 .put("started", e.started()).put("name", e.name()).put("owner", e.owner()));

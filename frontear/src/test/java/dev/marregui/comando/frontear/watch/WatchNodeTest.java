@@ -71,7 +71,7 @@ class WatchNodeTest {
             controller.subscribe("replies/#", 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             subscriber.subscribe("t/#", 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             putLink(controller, signer, replies, b.port());
-            await().atMost(WAIT).until(() -> b.broker().stats().connections() == 2);
+            await().atMost(WAIT).until(() -> b.gateway().stats().connections() == 2);
             a.watch().on(true);
             b.watch().on(true);
 
@@ -139,7 +139,7 @@ class WatchNodeTest {
                 assertThat(c.receiveMaximum()).isPositive();
                 assertThat(c.sinceMillis()).isPositive();
             });
-            assertThat(snapB.broker().connections()).isEqualTo(2);
+            assertThat(snapB.gateway().connections()).isEqualTo(2);
         }
     }
 
@@ -172,7 +172,7 @@ class WatchNodeTest {
                     StandardCharsets.UTF_8), 1, false, false, 0, null, null))
                     .get(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.SUCCESS);
             await().during(REFUSED_FOR).atMost(REFUSED_FOR.plus(WAIT))
-                    .until(() -> onC.isEmpty() && c.broker().stats().connections() == 1);
+                    .until(() -> onC.isEmpty() && c.gateway().stats().connections() == 1);
             final List<Observation> onA = all(a.watch());
             assertThat(steps(onA, "b", LinkStep.Kind.APPENDED)).hasSize(1);
             assertThat(steps(onA, "b", LinkStep.Kind.CONNECTED)).isEmpty();

@@ -176,7 +176,7 @@ over by `app`.
 | `TerminalPort` | the MCP tools reach a panel's terminal | `TerminalAccess` in `ui` |
 | `SearchPort` | the window search files and conversations | `Searcher` in `app` |
 | `TopicPort` | the window ask for a panel's topic line | `ClaudeTopics` in `claude` |
-| `ServerSwitch` | the MCP tools start or stop a local server, as your button does | `MachineCdb`, `FrontearFabric` in `app` |
+| `ServerSwitch` | the MCP tools start or stop a local server, as your button does | `MachineCdb`, `FrontearOctopus` in `app` |
 | `Clock`, `WaitLog` | code read the time, and record how long a wait took | the system clock, `MetricsLog` in `claude` |
 
 In a test, `testkit` brings the plugs instead: `RecordingPorts` implements all six effect ports and writes each call
@@ -254,7 +254,7 @@ For `cdb` and `frontear` the reason is one: a file force or a CPU-bound query ho
 | `ClaudeProcess` | K3 | `claude-out-<session>` |
 | `ClaudeAdapter` | K4 | `claude-strand-<session>`: owns a session's process and writes its transcript |
 | `db`'s `Lane` | K4 | one per connection; it ends when it has no connection and no work |
-| `Errands` of `App`, `MachineCdb`, `FrontearFabric`, `MetricsSink`, `ClaudeAdapter`, `DbAdapter`, `Peers`, `ToolsAdapter`, `UiErrands` | K5 | one virtual thread per call |
+| `Errands` of `App`, `MachineCdb`, `FrontearOctopus`, `MetricsSink`, `ClaudeAdapter`, `DbAdapter`, `Peers`, `ToolsAdapter`, `UiErrands` | K5 | one virtual thread per call |
 
 Each module's page lists its own threads and what stops each.
 

@@ -94,14 +94,14 @@ import dev.marregui.comando.ui.kit.tree.TreeView;
 final class InstancesTab {
 
     /** frontear's toggle, as far as the tab needs it: whether it runs, and a start. */
-    interface Fabric {
+    interface Octopus {
         boolean running();
 
         boolean busy();
 
         void start();
 
-        Fabric NONE = new Fabric() {
+        Octopus NONE = new Octopus() {
             @Override
             public boolean running() {
                 return false;
@@ -141,8 +141,8 @@ final class InstancesTab {
     private final Navigator<Row> navigator;
     /** The rows shown, by their node's link: the key of each row's card. */
     private Map<String, Row> rows = Map.of();
-    /** Written once on the EDT by {@link #fabric}; read on the EDT by the header and the start button. */
-    private volatile Fabric fabric = Fabric.NONE;
+    /** Written once on the EDT by {@link #octopus}; read on the EDT by the header and the start button. */
+    private volatile Octopus octopus = Octopus.NONE;
     private final JPanel root = new JPanel(new BorderLayout());
     /**
      * Why the tab has no instances to show; clipped rather than widening the sidebar: a label's minimum is its whole
@@ -185,7 +185,7 @@ final class InstancesTab {
         status.putClientProperty("html.disable", Boolean.TRUE);
         start.setIcon(Icons.get("frontear-start"));
         start.setToolTipText("Start frontear, the instances' MQTT fabric; every instance connects to it");
-        start.addActionListener(_ -> fabric.start());
+        start.addActionListener(_ -> octopus.start());
         final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         buttons.setOpaque(false);
         buttons.add(start);
@@ -260,8 +260,8 @@ final class InstancesTab {
     }
 
     /** frontear's toggle, set once the window has it. */
-    void fabric(final Fabric f) {
-        fabric = f == null ? Fabric.NONE : f;
+    void octopus(final Octopus f) {
+        octopus = f == null ? Octopus.NONE : f;
         header();
     }
 
@@ -406,7 +406,7 @@ final class InstancesTab {
     /** The header says something only while this instance is not connected: why, and frontear's start. */
     private void header() {
         final InstancesState i = shown == null ? InstancesState.NONE : shown;
-        final Fabric e = fabric;
+        final Octopus e = octopus;
         String text;
         if (i.connected()) {
             text = "";
@@ -425,7 +425,7 @@ final class InstancesTab {
             status.setVisible(!text.isEmpty());
             root.revalidate();
         }
-        final boolean offer = !i.connected() && !e.running() && !e.busy() && e != Fabric.NONE;
+        final boolean offer = !i.connected() && !e.running() && !e.busy() && e != Octopus.NONE;
         if (start.isVisible() != offer) {
             start.setVisible(offer);
             root.revalidate();

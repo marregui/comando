@@ -24,14 +24,14 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.frontear.protocol.FakeBroker;
+import dev.marregui.comando.frontear.protocol.FakeGateway;
 import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.Packet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// The client given a TLS context: MQTT over TLS 1.3 through a terminator in front of [FakeBroker], both sides
+/// The client given a TLS context: MQTT over TLS 1.3 through a terminator in front of [FakeGateway], both sides
 /// pinned; a plain broker, a server the client does not pin, a server that does not pin the client and a server that
 /// never answers the handshake each end the attempt before CONNECT, told to the handler as the cause.
 class MqttClientOverTlsTest {
@@ -65,17 +65,17 @@ class MqttClientOverTlsTest {
         final MachineKey server = key("server");
         final MachineKey client = key("client");
         final Heard heard = new Heard();
-        try (FakeBroker broker = new FakeBroker();
-                Terminator terminator = new Terminator(Tls.context(server, pins(client)), broker.port());
+        try (FakeGateway gateway = new FakeGateway();
+                Terminator terminator = new Terminator(Tls.context(server, pins(client)), gateway.port());
                 MqttClient mqtt = client(terminator.port(), heard, Tls.context(client, pins(server)))) {
             mqtt.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             mqtt.subscribe("a/#", 1).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            broker.send(new Packet.Publish("a/1", bytes("in"), 1, false, false, 0, null, null));
+            gateway.send(new Packet.Publish("a/1", bytes("in"), 1, false, false, 0, null, null));
             await().atMost(WAIT).until(() -> heard.messages.size() == 1);
             assertThat(heard.messages.getFirst().payload()).isEqualTo(bytes("in"));
             mqtt.publishAcknowledged(new Packet.Publish("b/1", bytes("out"), 1, false, false, 0, null, null))
                     .get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            assertThat(broker.received(Packet.Connect.class)).hasSize(1);
+            assertThat(gateway.received(Packet.Connect.class)).hasSize(1);
             assertThat(heard.connects.get()).isEqualTo(1);
             assertThat(terminator.protocols()).containsExactly(Tls.PROTOCOL);
             assertThat(terminator.peers()).containsExactly(client.fingerprint());
@@ -84,16 +84,16 @@ class MqttClientOverTlsTest {
 
     /// A plain broker does not speak TLS: the handshake fails, the handler hears why, and no CONNECT reached it.
     @Test
-    void aPlainBrokerIsRefused() throws Exception {
+    void aPlainGatewayIsRefused() throws Exception {
         final MachineKey client = key("client");
         final Heard heard = new Heard();
-        try (FakeBroker broker = new FakeBroker();
-                MqttClient mqtt = client(broker.port(), heard, Tls.context(client, pins(key("server"))))) {
+        try (FakeGateway gateway = new FakeGateway();
+                MqttClient mqtt = client(gateway.port(), heard, Tls.context(client, pins(key("server"))))) {
             mqtt.connect();
             await().atMost(WAIT).until(() -> !heard.causes.isEmpty());
             assertThat(heard.causes.getFirst()).isInstanceOf(SSLException.class);
             assertThat(heard.connects.get()).isZero();
-            assertThat(broker.received(Packet.Connect.class)).isEmpty();
+            assertThat(gateway.received(Packet.Connect.class)).isEmpty();
         }
     }
 
@@ -103,14 +103,14 @@ class MqttClientOverTlsTest {
         final MachineKey server = key("server");
         final MachineKey client = key("client");
         final Heard heard = new Heard();
-        try (FakeBroker broker = new FakeBroker();
-                Terminator terminator = new Terminator(Tls.context(server, pins(client)), broker.port());
+        try (FakeGateway gateway = new FakeGateway();
+                Terminator terminator = new Terminator(Tls.context(server, pins(client)), gateway.port());
                 MqttClient mqtt = client(terminator.port(), heard, Tls.context(client, new Pins()))) {
             mqtt.connect();
             await().atMost(WAIT).until(() -> !heard.causes.isEmpty());
             assertThat(heard.causes.getFirst()).isInstanceOf(SSLHandshakeException.class);
             assertThat(heard.connects.get()).isZero();
-            assertThat(broker.received(Packet.Connect.class)).isEmpty();
+            assertThat(gateway.received(Packet.Connect.class)).isEmpty();
         }
     }
 
@@ -123,14 +123,14 @@ class MqttClientOverTlsTest {
         final MachineKey server = key("server");
         final MachineKey client = key("client");
         final Heard heard = new Heard();
-        try (FakeBroker broker = new FakeBroker();
-                Terminator terminator = new Terminator(Tls.context(server, new Pins()), broker.port());
+        try (FakeGateway gateway = new FakeGateway();
+                Terminator terminator = new Terminator(Tls.context(server, new Pins()), gateway.port());
                 MqttClient mqtt = client(terminator.port(), heard, Tls.context(client, pins(server)))) {
             mqtt.connect();
             await().atMost(WAIT).until(() -> !heard.causes.isEmpty());
             assertThat(heard.causes.getFirst()).isInstanceOf(IOException.class);
             assertThat(heard.connects.get()).isZero();
-            assertThat(broker.received(Packet.Connect.class)).isEmpty();
+            assertThat(gateway.received(Packet.Connect.class)).isEmpty();
             assertThat(terminator.failures()).singleElement().isInstanceOf(SSLHandshakeException.class);
         }
     }

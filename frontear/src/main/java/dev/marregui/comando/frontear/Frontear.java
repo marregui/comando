@@ -23,8 +23,8 @@ import javax.net.ssl.SSLContext;
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.frontear.alexander.ControlPlane;
 import dev.marregui.comando.frontear.alexander.RemoteGate;
-import dev.marregui.comando.frontear.gateway.Broker;
-import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.Gateway;
+import dev.marregui.comando.frontear.gateway.GatewayOptions;
 import dev.marregui.comando.frontear.gateway.RemoteListen;
 import dev.marregui.comando.frontear.octopus.Links;
 import dev.marregui.comando.frontear.store.LogOptions;
@@ -62,16 +62,16 @@ public final class Frontear implements AutoCloseable {
     private final String node;
     private final InstantSource clock;
     private final Watch watch;
-    private final Broker broker;
+    private final Gateway gateway;
     private final Links links;
     private final ControlPlane control;
 
-    private Frontear(final String node, final InstantSource clock, final Watch watch, final Broker broker,
+    private Frontear(final String node, final InstantSource clock, final Watch watch, final Gateway gateway,
             final Links links, final ControlPlane control) {
         this.node = node;
         this.clock = clock;
         this.watch = watch;
-        this.broker = broker;
+        this.gateway = gateway;
         this.links = links;
         this.control = control;
     }
@@ -109,26 +109,26 @@ public final class Frontear implements AutoCloseable {
             throw new IllegalArgumentException("links are held only on a node whose links name nodes [node=" + node
                     + ']');
         }
-        final BrokerOptions defaults = BrokerOptions.defaults(new InetSocketAddress(InetAddress.getLoopbackAddress(),
+        final GatewayOptions defaults = GatewayOptions.defaults(new InetSocketAddress(InetAddress.getLoopbackAddress(),
                 port));
-        final BrokerOptions options = new BrokerOptions(defaults.bind(), defaults.receiveMaximum(),
+        final GatewayOptions options = new GatewayOptions(defaults.bind(), defaults.receiveMaximum(),
                 defaults.maximumPacketSize(), defaults.maxSessions(), clock, defaults.maxQueued());
         final Watch watch = new Watch(WATCH_CAPACITY, clock);
-        final Broker broker = linksNameNodes ? Broker.start(options, watch, node, linksHeld)
-                : Broker.start(options, watch);
+        final Gateway gateway = linksNameNodes ? Gateway.start(options, watch, node, linksHeld)
+                : Gateway.start(options, watch);
         Links links = null;
         try {
-            links = new Links(broker, node, dataDir, LOG_OPTIONS, watch);
-            final ControlPlane control = new ControlPlane(broker, links, node, trusted, clock);
-            LOG.log(System.Logger.Level.INFO, "frontear started [node=" + node + ", port=" + broker.port()
+            links = new Links(gateway, node, dataDir, LOG_OPTIONS, watch);
+            final ControlPlane control = new ControlPlane(gateway, links, node, trusted, clock);
+            LOG.log(System.Logger.Level.INFO, "frontear started [node=" + node + ", port=" + gateway.port()
                     + ", dataDir=" + dataDir + ", keys=" + trusted.size() + ", linksNameNodes=" + linksNameNodes
                     + ", linksHeld=" + linksHeld + ']');
-            return new Frontear(node, clock, watch, broker, links, control);
+            return new Frontear(node, clock, watch, gateway, links, control);
         } catch (final RuntimeException e) {
             if (links != null) {
                 links.close();
             }
-            broker.close();
+            gateway.close();
             throw e;
         }
     }
@@ -170,41 +170,41 @@ public final class Frontear implements AutoCloseable {
 
     /** The broker's port. */
     public int port() {
-        return broker.port();
+        return gateway.port();
     }
 
     /** The broker, for a host that runs frontear in its own process (comando). */
-    public Broker broker() {
-        return broker;
+    public Gateway gateway() {
+        return gateway;
     }
 
     /** Lets the peers' links in, on a node started with its links held; nothing otherwise or when called again. */
     public void openLinks() {
-        broker.openLinks();
+        gateway.openLinks();
     }
 
     /**
      * Opens the broker's remote listener {@code r} (ADR 0189 §2.1), behind a {@link RemoteGate} around the control
-     * plane's gate, and returns its port; {@link Broker#listenRemote} says what it takes.
+     * plane's gate, and returns its port; {@link Gateway#listenRemote} says what it takes.
      *
      * @throws IllegalStateException when the remote listener is open, or the node closed
      */
     public int listenRemote(final RemoteListen r) throws IOException {
-        broker.gate(new RemoteGate(control.gate(), r.machine()));
-        return broker.listenRemote(r);
+        gateway.gate(new RemoteGate(control.gate(), r.machine()));
+        return gateway.listenRemote(r);
     }
 
     /** Closes the broker's remote listener and ends its connections; nothing when it is not open. */
     public void closeRemote() {
-        broker.closeRemote();
+        gateway.closeRemote();
     }
 
     /**
-     * Ends each remote connection whose key the pairings no longer hold; {@link Broker#recheckRemote} says how. For the
-     * host to call once it changed the pins its listener reads.
+     * Ends each remote connection whose key the pairings no longer hold; {@link Gateway#recheckRemote} says how. For
+     * the host to call once it changed the pins its listener reads.
      */
     public void recheckRemote() {
-        broker.recheckRemote();
+        gateway.recheckRemote();
     }
 
     /**
@@ -227,7 +227,7 @@ public final class Frontear implements AutoCloseable {
      * own, under no lock a publisher holds for longer than a copy.
      */
     public NodeSnapshot snapshot() {
-        return new NodeSnapshot(node, broker.port(), clock.millis(), broker.stats(), broker.connections(),
+        return new NodeSnapshot(node, gateway.port(), clock.millis(), gateway.stats(), gateway.connections(),
                 links.state(), links.logs());
     }
 
@@ -239,7 +239,7 @@ public final class Frontear implements AutoCloseable {
     @Override
     public void close() {
         RuntimeException failure = null;
-        for (final AutoCloseable part : List.<AutoCloseable>of(control, broker, links)) {
+        for (final AutoCloseable part : List.<AutoCloseable>of(control, gateway, links)) {
             try {
                 part.close();
             } catch (final Exception e) {

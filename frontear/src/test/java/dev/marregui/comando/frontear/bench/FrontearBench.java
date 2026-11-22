@@ -101,7 +101,7 @@ class FrontearBench {
                     .get(SETUP.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.SUCCESS);
             await().atMost(SETUP).until(() -> !replies.isEmpty());
             assertThat(new String(replies.getFirst().payload(), StandardCharsets.UTF_8)).contains("\"ok\":true");
-            await().atMost(SETUP).until(() -> b.broker().stats().connections() == 1);
+            await().atMost(SETUP).until(() -> b.gateway().stats().connections() == 1);
 
             run(publisher, b.port(), LINK, PAYLOADS[0], WARMUP, 0L, subscriberCallbacks);
             run(publisher, a.port(), ALONE, PAYLOADS[0], WARMUP, 0L, subscriberCallbacks);

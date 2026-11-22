@@ -30,11 +30,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// connection cut without DISCONNECT and its absence after one, pings across several keep-alive intervals, and payloads
 /// from empty to 1 MiB. Clients that must be cut connect through a [Relay]. Every test publishes under a topic prefix
 /// of its own run, so runs and other clients of the broker do not meet, and clears what it retained.
-class BrokerInteropTest {
+class ClientInteropTest {
 
-    private static final System.Logger LOG = System.getLogger(BrokerInteropTest.class.getName());
+    private static final System.Logger LOG = System.getLogger(ClientInteropTest.class.getName());
     private static final Duration WAIT = Duration.ofSeconds(15);
-    /// What the client reads: the protocol's largest packet, as `MqttPeerBroker` asks for, so none is announced.
+    /// What the client reads: the protocol's largest packet, as `MqttPeerGateway` asks for, so none is announced.
     private static final int MAXIMUM_PACKET_SIZE = Packet.PROTOCOL_MAXIMUM_PACKET_SIZE;
     private static final int PINGREQ = 12;
     private static final int PINGRESP = 13;
@@ -48,7 +48,7 @@ class BrokerInteropTest {
     private final String prefix = "comando-interop/" + run;
 
     @BeforeAll
-    static void broker() {
+    static void server() {
         final String at = System.getenv("COMANDO_MQTT_BROKER");
         assumeTrue(at != null && at.lastIndexOf(':') > 0, "set COMANDO_MQTT_BROKER=host:port to run against a broker");
         host = at.substring(0, at.lastIndexOf(':'));
@@ -66,7 +66,7 @@ class BrokerInteropTest {
     /// The broker accepts a CONNECT with an empty client id and assigns one; its CONNACK reads, with limits that let
     /// this client's largest payload through; and the client's own connect completes.
     @Test
-    void theBrokerAcceptsAConnectAndItsAcknowledgementReads() throws Exception {
+    void theServerAcceptsAConnectAndItsAcknowledgementReads() throws Exception {
         final Packet.ConnAck ack;
         try (Socket s = new Socket()) {
             s.connect(new InetSocketAddress(host, port), (int) WAIT.toMillis());
@@ -139,7 +139,7 @@ class BrokerInteropTest {
                 assertThat(m.correlation()).isEqualTo(correlation);
             });
             // the relay counts a packet once it has forwarded it, so a little after its receiver may have read it
-            await().atMost(WAIT).until(() -> relay.fromBroker(PUBACK) == 2 && relay.fromClient(PUBACK) == 1);
+            await().atMost(WAIT).until(() -> relay.fromGateway(PUBACK) == 2 && relay.fromClient(PUBACK) == 1);
         }
     }
 
@@ -215,7 +215,7 @@ class BrokerInteropTest {
         final Recorder recorder = new Recorder();
         try (Relay relay = new Relay(host, port); MqttClient client = relayed(relay, "pings", recorder, 2, null)) {
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            await().atMost(WAIT).until(() -> relay.fromClient(PINGREQ) >= 3 && relay.fromBroker(PINGRESP) >= 3);
+            await().atMost(WAIT).until(() -> relay.fromClient(PINGREQ) >= 3 && relay.fromGateway(PINGRESP) >= 3);
             assertThat(client.connected()).isTrue();
             assertThat(recorder.connects).hasValue(1);
             assertThat(recorder.causes).isEmpty();

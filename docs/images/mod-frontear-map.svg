@@ -21,7 +21,7 @@
 <rect x="60" y="262" width="340" height="130" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.6"/>
 <text x="76" y="290" font-size="16" fill="#E7C55A" font-family="Menlo, Consolas, monospace">broker</text>
 <text x="76" y="314" font-size="13" fill="#E8E8E8">sessions, retained messages, presence</text>
-<text x="76" y="338" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Broker · Connection · Session</text>
+<text x="76" y="338" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Gateway · Connection · Session</text>
 <text x="76" y="362" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">InternalSubscriber · Gate</text>
 <text x="76" y="382" font-size="13" fill="#9AA0A6">all in memory</text>
 

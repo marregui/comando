@@ -8,7 +8,7 @@ import java.util.Objects;
 import dev.marregui.comando.frontear.protocol.Packet;
 
 /**
- * Where a {@link Broker} listens and the limits it states in CONNACK and holds to. {@code receiveMaximum} is the QoS 1
+ * Where a {@link Gateway} listens and the limits it states in CONNACK and holds to. {@code receiveMaximum} is the QoS 1
  * publishes a client may leave unacknowledged (§3.2.2.3.3); {@code maximumPacketSize} the largest packet the broker
  * reads (§3.2.2.3.6); {@code maxSessions} the sessions it keeps, connected or not, before it refuses a new client
  * with 0x97; {@code maxQueued} the QoS 1 messages a session holds beyond its client's receive maximum, the newest
@@ -24,14 +24,14 @@ import dev.marregui.comando.frontear.protocol.Packet;
  * {@code maxSubscriptions} bound the filters of one SUBSCRIBE and of one session: a filter past either is refused
  * with 0x97 (§3.9.3), counted.
  */
-public record BrokerOptions(InetSocketAddress bind, int receiveMaximum, int maximumPacketSize, int maxSessions,
+public record GatewayOptions(InetSocketAddress bind, int receiveMaximum, int maximumPacketSize, int maxSessions,
         InstantSource clock, int maxQueued, long maxQueuedBytes, long maxBacklogBytes, int maxRetained,
         long maxRetainedBytes, int maxTopicLevels, int maxFiltersPerSubscribe, int maxSubscriptions) {
 
     // frontear's choice for a node: a link sends up to its peer's receive maximum unacknowledged (one window per
     // link), and 1,024 small messages cover a LAN round trip without letting one client hold more of the broker
     private static final int DEFAULT_RECEIVE_MAXIMUM = 1_024;
-    // BrokerInteropTest moves 5 MiB payloads; 16 MiB keeps room above that and bounds what one read allocates
+    // ClientInteropTest moves 5 MiB payloads; 16 MiB keeps room above that and bounds what one read allocates
     private static final int DEFAULT_MAXIMUM_PACKET_SIZE = 16 * 1024 * 1024;
     // a node serves its own comando instances and its links, tens at most; the bound keeps a client that connects
     // under ever new ids from growing the broker without limit
@@ -60,13 +60,13 @@ public record BrokerOptions(InetSocketAddress bind, int receiveMaximum, int maxi
     private static final int DEFAULT_MAX_SUBSCRIPTIONS = 1_000;
 
     /** Options with the default {@code maxQueued} and byte bounds. */
-    public BrokerOptions(final InetSocketAddress bind, final int receiveMaximum, final int maximumPacketSize,
+    public GatewayOptions(final InetSocketAddress bind, final int receiveMaximum, final int maximumPacketSize,
             final int maxSessions, final InstantSource clock) {
         this(bind, receiveMaximum, maximumPacketSize, maxSessions, clock, DEFAULT_MAX_QUEUED);
     }
 
     /** Options with the default byte bounds and subscription caps. */
-    public BrokerOptions(final InetSocketAddress bind, final int receiveMaximum, final int maximumPacketSize,
+    public GatewayOptions(final InetSocketAddress bind, final int receiveMaximum, final int maximumPacketSize,
             final int maxSessions, final InstantSource clock, final int maxQueued) {
         this(bind, receiveMaximum, maximumPacketSize, maxSessions, clock, maxQueued, DEFAULT_MAX_QUEUED_BYTES,
                 DEFAULT_MAX_BACKLOG_BYTES, DEFAULT_MAX_RETAINED, DEFAULT_MAX_RETAINED_BYTES, DEFAULT_MAX_TOPIC_LEVELS,
@@ -74,7 +74,7 @@ public record BrokerOptions(InetSocketAddress bind, int receiveMaximum, int maxi
     }
 
     /** Refuses a limit MQTT cannot state or a broker cannot hold to. */
-    public BrokerOptions {
+    public GatewayOptions {
         Objects.requireNonNull(bind, "bind");
         Objects.requireNonNull(clock, "clock");
         check(receiveMaximum >= 1 && receiveMaximum <= 65_535, "receive maximum out of range [value="
@@ -94,8 +94,8 @@ public record BrokerOptions(InetSocketAddress bind, int receiveMaximum, int maxi
     }
 
     /** The defaults on {@code bind}, timed by a clock that does not step backwards. */
-    public static BrokerOptions defaults(final InetSocketAddress bind) {
-        return new BrokerOptions(bind, DEFAULT_RECEIVE_MAXIMUM, DEFAULT_MAXIMUM_PACKET_SIZE, DEFAULT_MAX_SESSIONS,
+    public static GatewayOptions defaults(final InetSocketAddress bind) {
+        return new GatewayOptions(bind, DEFAULT_RECEIVE_MAXIMUM, DEFAULT_MAXIMUM_PACKET_SIZE, DEFAULT_MAX_SESSIONS,
                 new Monotonic(), DEFAULT_MAX_QUEUED);
     }
 

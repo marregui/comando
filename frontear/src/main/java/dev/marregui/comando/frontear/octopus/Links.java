@@ -20,7 +20,7 @@ import java.util.stream.Stream;
 import javax.net.ssl.SSLContext;
 
 import dev.marregui.comando.core.files.Mapped;
-import dev.marregui.comando.frontear.gateway.Broker;
+import dev.marregui.comando.frontear.gateway.Gateway;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Topics;
 import dev.marregui.comando.frontear.store.LogOptions;
@@ -41,7 +41,7 @@ import dev.marregui.comando.frontear.watch.Watch;
  * <p>A link whose spec asks for TLS connects over the context {@link #tls} gives for its id; until one is given, or
  * while it gives none for that id, the link stays down, its state saying why.</p>
  */
-public final class Links implements Mesh, AutoCloseable {
+public final class Links implements Octopus, AutoCloseable {
 
     /**
      * A link id names a folder: letters, digits, dot, dash, underscore and {@code @} (a link to another machine's
@@ -52,7 +52,7 @@ public final class Links implements Mesh, AutoCloseable {
     private static final System.Logger LOG = System.getLogger(Links.class.getName());
     private static final int MAX_PORT = 65_535;
 
-    private final Broker broker;
+    private final Gateway gateway;
     private final String localId;
     private final Path dataDir;
     private final LogOptions log;
@@ -73,23 +73,23 @@ public final class Links implements Mesh, AutoCloseable {
     private boolean closed;
 
     /**
-     * Links of {@code broker}, connecting to their peers as {@code localId}, with their logs under {@code dataDir},
+     * Links of {@code gateway}, connecting to their peers as {@code localId}, with their logs under {@code dataDir},
      * bounded by {@link LinkOptions#defaults}.
      */
-    public Links(final Broker broker, final String localId, final Path dataDir, final LogOptions log) {
-        this(broker, localId, dataDir, log, LinkOptions.defaults());
+    public Links(final Gateway gateway, final String localId, final Path dataDir, final LogOptions log) {
+        this(gateway, localId, dataDir, log, LinkOptions.defaults());
     }
 
     /** As above, each link bounded by {@code options}. */
-    public Links(final Broker broker, final String localId, final Path dataDir, final LogOptions log,
+    public Links(final Gateway gateway, final String localId, final Path dataDir, final LogOptions log,
             final LinkOptions options) {
-        this(broker, localId, dataDir, log, options, InstantSource.system());
+        this(gateway, localId, dataDir, log, options, InstantSource.system());
     }
 
     /** As the first, each link and its log keeping its steps in {@code watch} while that is on. */
-    public Links(final Broker broker, final String localId, final Path dataDir, final LogOptions log,
+    public Links(final Gateway gateway, final String localId, final Path dataDir, final LogOptions log,
             final Watch watch) {
-        this(broker, localId, dataDir, log, LinkOptions.defaults(), InstantSource.system(), watch);
+        this(gateway, localId, dataDir, log, LinkOptions.defaults(), InstantSource.system(), watch);
     }
 
     /**
@@ -97,9 +97,9 @@ public final class Links implements Mesh, AutoCloseable {
      *
      * @throws UncheckedIOException when {@code dataDir} exists and cannot be listed; the links it started are closed
      */
-    Links(final Broker broker, final String localId, final Path dataDir, final LogOptions log,
+    Links(final Gateway gateway, final String localId, final Path dataDir, final LogOptions log,
             final LinkOptions options, final InstantSource clock) {
-        this(broker, localId, dataDir, log, options, clock, new Watch(1));
+        this(gateway, localId, dataDir, log, options, clock, new Watch(1));
     }
 
     /**
@@ -107,10 +107,10 @@ public final class Links implements Mesh, AutoCloseable {
      *
      * @throws UncheckedIOException when {@code dataDir} exists and cannot be listed; the links it started are closed
      */
-    Links(final Broker broker, final String localId, final Path dataDir, final LogOptions log,
+    Links(final Gateway gateway, final String localId, final Path dataDir, final LogOptions log,
             final LinkOptions options, final InstantSource clock, final Watch watch) {
         this.watch = Objects.requireNonNull(watch, "watch");
-        this.broker = Objects.requireNonNull(broker, "broker");
+        this.gateway = Objects.requireNonNull(gateway, "broker");
         this.localId = Objects.requireNonNull(localId, "localId");
         this.dataDir = Objects.requireNonNull(dataDir, "dataDir");
         this.log = Objects.requireNonNull(log, "log");
@@ -118,7 +118,7 @@ public final class Links implements Mesh, AutoCloseable {
         this.clock = Objects.requireNonNull(clock, "clock");
         try {
             restore();
-            broker.addConnectListener(connectListener);
+            gateway.addConnectListener(connectListener);
         } catch (final RuntimeException | Error e) {
             try {
                 close();
@@ -296,7 +296,7 @@ public final class Links implements Mesh, AutoCloseable {
                 return;
             }
             closed = true;
-            broker.removeConnectListener(connectListener);
+            gateway.removeConnectListener(connectListener);
             for (final Link link : List.copyOf(links.values())) {
                 links.remove(link.id());
                 try {
@@ -404,7 +404,7 @@ public final class Links implements Mesh, AutoCloseable {
     private void start(final LinkSpec spec, final SSLContext context) {
         final Link added;
         try {
-            added = Link.open(spec.id(), localId, broker, dataDir.resolve(spec.id()), log, options, clock, watch);
+            added = Link.open(spec.id(), localId, gateway, dataDir.resolve(spec.id()), log, options, clock, watch);
         } catch (final IOException e) {
             throw new UncheckedIOException("link log not opened [link=" + spec.id() + ", dir="
                     + dataDir.resolve(spec.id()) + ']', e);

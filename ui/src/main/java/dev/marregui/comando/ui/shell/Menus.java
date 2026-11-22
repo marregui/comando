@@ -169,12 +169,12 @@ final class Menus {
      * (record 114, amended 2026-11-01): it starts when its tab is shown; Start, Stop and Restart the shell are in the
      * palette.
      */
-    static List<List<String>> corner(final boolean server, final boolean fabric) {
+    static List<List<String>> corner(final boolean server, final boolean octopus) {
         final List<List<String>> buttons = new ArrayList<>(List.of(List.of("run.plotStop")));
         if (server) {
             buttons.add(List.of("server.start", "server.stop"));
         }
-        if (fabric) {
+        if (octopus) {
             buttons.add(List.of("frontear.start", "frontear.stop"));
         }
         return List.copyOf(buttons);
@@ -193,17 +193,17 @@ final class Menus {
     }
 
     /** The Instances tab's menu: the Machines window (record 189), when comando has frontear. */
-    static List<String> instancesTab(final boolean fabric) {
-        return fabric ? List.of("frontear.machines") : List.of();
+    static List<String> instancesTab(final boolean octopus) {
+        return octopus ? List.of("frontear.machines") : List.of();
     }
 
     /** The Connections tab's menu: the embedded server's start and stop, then frontear's, each when comando has one. */
-    static List<String> toggles(final boolean server, final boolean fabric) {
+    static List<String> toggles(final boolean server, final boolean octopus) {
         final List<String> ids = new ArrayList<>();
         if (server) {
             ids.addAll(List.of("server.start", "server.stop"));
         }
-        if (fabric) {
+        if (octopus) {
             ids.addAll(List.of("frontear.start", "frontear.stop"));
         }
         return List.copyOf(ids);

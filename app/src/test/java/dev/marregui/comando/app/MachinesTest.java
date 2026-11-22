@@ -245,7 +245,7 @@ class MachinesTest {
     /// The gateway's link state shows per paired machine: connected while its last read said so, with when it last
     /// was; a machine its read does not name is not connected and keeps when it last was.
     @Test
-    void theGatewaysLinkStateShowsPerMachine() {
+    void theBorderGatewaysLinkStateShowsPerMachine() {
         b.listen(LOOPBACK);
         a.pair(b.self().token(), Grant.PEER);
         final Instant up = now.get();

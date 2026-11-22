@@ -136,7 +136,7 @@ class FrontearStress {
                     .get(SETUP.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.SUCCESS);
             await().atMost(SETUP).until(() -> control.reply != null);
             assertThat(control.reply).contains("\"ok\":true");
-            await().atMost(SETUP).until(() -> b.broker().stats().connections() == 1);
+            await().atMost(SETUP).until(() -> b.gateway().stats().connections() == 1);
 
             final List<Sink> sinks = new ArrayList<>();
             for (int j = 0; j < o.publishers(); j++) {
@@ -740,7 +740,7 @@ class FrontearStress {
                     latency.millis(1.0), acks.millis(0.99), acks.millis(1.0), lags.millis(1.0), queued,
                     queued * recordBytes, reordered, control.field("dropped"), refused, failed, outOfOrder(),
                     gc - gcMillis, memory.getHeapMemoryUsage().getUsed() >> 20, os.getProcessCpuLoad() * 100,
-                    a.broker().stats().droppedFull(), queues.toString().strip());
+                    a.gateway().stats().droppedFull(), queues.toString().strip());
             System.out.flush();
             gcMillis = gc;
             into.latency.add(latency);

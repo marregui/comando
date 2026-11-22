@@ -39,7 +39,7 @@ configurations.runtimeClasspath {
 tasks.withType<Test>().configureEach {
     systemProperty("comando.peers", "false")
     systemProperty("comando.metrics", "false")
-    // FrontearFabricTest's stale-entry takeovers: COMANDO_FABRIC_SEED0/1 replay a printed seed pair
+    // FrontearOctopusTest's stale-entry takeovers: COMANDO_FABRIC_SEED0/1 replay a printed seed pair
     System.getenv("COMANDO_FABRIC_SEED0")?.let { systemProperty("comando.fabric.seed0", it) }
     System.getenv("COMANDO_FABRIC_SEED1")?.let { systemProperty("comando.fabric.seed1", it) }
 }

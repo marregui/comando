@@ -106,9 +106,9 @@ import dev.marregui.comando.ui.shell.ServerToggle;
  * It answers to the name {@code frontear}: the window's toggle and an agent's {@code server_start frontear}, which
  * start and stop this instance's node only.
  */
-final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable {
+final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable {
 
-    private static final System.Logger LOG = System.getLogger(FrontearFabric.class.getName());
+    private static final System.Logger LOG = System.getLogger(FrontearOctopus.class.getName());
 
     /**
      * The registry's schema version this comando writes; version 1, one node for the machine, is replaced at the next
@@ -129,12 +129,12 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     /** A link's hop limit: each node pushes to a peer what that peer reads, and nothing it got from a link goes on. */
     static final int HOP_LIMIT = 1;
     /** The instance whose node is the machine's gateway (ADR 0189 §2.1): the unnamed one, {@code main}. */
-    static final String GATEWAY = InstanceName.slug("");
+    static final String BORDER = InstanceName.slug("");
     /**
      * The gateway's links to this machine's other nodes while a machine is paired: a question goes asker's node,
      * gateway, the other gateway, the node asked, and nothing goes further (ADR 0189 §2.2).
      */
-    static final int GATEWAY_HOP_LIMIT = 3;
+    static final int BORDER_HOP_LIMIT = 3;
     /** A gateway's link to another machine's: from the asker's node to here, then across (ADR 0189 §2.2). */
     static final int REMOTE_HOP_LIMIT = 2;
     private static final String ALGORITHM = "Ed25519";
@@ -239,7 +239,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
      * The fabric with its data in {@code root}, for the instance on data root {@code owner} named {@code name}, on
      * {@code registry}; its node takes the lowest port from {@code port} up that is free, or, for 0, one the OS picks.
      */
-    FrontearFabric(final Path root, final Path owner, final String name, final IntentSink intents, final Path registry,
+    FrontearOctopus(final Path root, final Path owner, final String name, final IntentSink intents, final Path registry,
             final int port) {
         this.root = root.toAbsolutePath().normalize();
         this.owner = owner.toAbsolutePath().normalize().toString();
@@ -257,9 +257,9 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
      * {@code -Dcomando.peers} false keeps every test and picture tool, a registry in the data root and a port the OS
      * picks, so neither the toggle nor {@code server_start frontear} touches the machine's.
      */
-    static FrontearFabric of(final Path home, final String name, final IntentSink intents, final boolean machine) {
-        return machine ? new FrontearFabric(home.resolve("fabric"), home, name, intents, REGISTRY, PORT)
-                : new FrontearFabric(home.resolve("fabric"), home, name, intents, home.resolve(REGISTRY.getFileName()),
+    static FrontearOctopus of(final Path home, final String name, final IntentSink intents, final boolean machine) {
+        return machine ? new FrontearOctopus(home.resolve("fabric"), home, name, intents, REGISTRY, PORT)
+                : new FrontearOctopus(home.resolve("fabric"), home, name, intents, home.resolve(REGISTRY.getFileName()),
                         0);
     }
 
@@ -411,13 +411,13 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         try {
             errands.close();
         } finally {
-            closeFabric();
+            closeOctopus();
         }
     }
 
     /**
      * Lets the other nodes' links into this instance's node, once its peer link has subscribed there: the listener of
-     * {@link MqttPeerBroker#onSubscribed}, with the node {@link #generation} it subscribed against. Nothing when the
+     * {@link MqttPeerGateway#onSubscribed}, with the node {@link #generation} it subscribed against. Nothing when the
      * node now running is of another generation, as a node started since then waits for the peer link's
      * subscriptions to it; a node not yet published opens once its start publishes it. Safe from any thread.
      */
@@ -488,8 +488,8 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
                     resend |= restarted(h, peer, e.started());
                 }
                 final Remoting r = remoting();
-                final boolean gateway = GATEWAY.equals(slug);
-                if (gateway) {
+                final boolean border = BORDER.equals(slug);
+                if (border) {
                     // first, so the links over TLS find the listener's context in place
                     listen(h, r);
                 }
@@ -500,7 +500,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
                 final Set<String> keep = new HashSet<>(nodes.keySet());
                 keep.addAll(wanted.keySet());
                 resend |= links(h, keep);
-                if (gateway && r.of() != null) {
+                if (border && r.of() != null) {
                     final Map<String, Boolean> up = new HashMap<>();
                     r.paired().keySet().forEach(m -> up.put(m, Boolean.TRUE.equals(h.up.get(remoteLink(m)))));
                     r.of().connected(up);
@@ -558,7 +558,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
      * that slug's inbox and reply topics and this slug's presence out, hop limit {@link #HOP_LIMIT}. While a machine
      * is paired, a node other than the gateway adds to its link to the gateway each paired machine's inbox and reply
      * topics and its own presence on this machine; the gateway adds to its link to each slug {@code X} {@code X}'s
-     * inbox and reply topics on this machine and each paired machine's presences, hop limit {@link #GATEWAY_HOP_LIMIT},
+     * inbox and reply topics on this machine and each paired machine's presences, hop limit {@link #BORDER_HOP_LIMIT},
      * and keeps a link {@code main@m} to each paired machine {@code m}, over TLS, to its host and port, with
      * {@code m}'s inbox and reply topics and this machine's presences out, hop limit {@link #REMOTE_HOP_LIMIT}
      * (ADR 0189 §2.2).
@@ -569,7 +569,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             final String machine,
             final Map<String, Machines.Remote> paired
     ) {
-        final boolean gateway = GATEWAY.equals(slug);
+        final boolean border = BORDER.equals(slug);
         final boolean across = !paired.isEmpty();
         final Map<String, LinkSpec> specs = new TreeMap<>();
         for (final Map.Entry<String, Entry> n : nodes.entrySet()) {
@@ -581,12 +581,12 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             final Set<String> out = new TreeSet<>(List.of(Peers.inboxTopic(peer), Peers.replyTopic(peer),
                     Peers.presenceTopic(slug)));
             int hopLimit = HOP_LIMIT;
-            if (across && gateway) {
+            if (across && border) {
                 out.add(Peers.inboxTopic(machine, peer));
                 out.add(Peers.replyTopic(machine, peer));
                 paired.keySet().forEach(m -> out.add(Peers.presenceTopic(m, "+")));
-                hopLimit = GATEWAY_HOP_LIMIT;
-            } else if (across && GATEWAY.equals(peer)) {
+                hopLimit = BORDER_HOP_LIMIT;
+            } else if (across && BORDER.equals(peer)) {
                 paired.keySet().forEach(m -> {
                     out.add(Peers.inboxTopic(m, "+"));
                     out.add(Peers.replyTopic(m, "+"));
@@ -595,7 +595,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             }
             specs.put(peer, new LinkSpec(peer, HOST, port, Set.copyOf(out), Set.of(), hopLimit));
         }
-        if (gateway) {
+        if (border) {
             for (final Machines.Remote r : paired.values()) {
                 final String id = remoteLink(r.machine());
                 final Set<String> out = Set.of(Peers.inboxTopic(r.machine(), "+"), Peers.replyTopic(r.machine(), "+"),
@@ -608,7 +608,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
 
     /** The gateway's link to machine {@code machine}: {@code main@<machine>} (ADR 0189 §2.2). */
     static String remoteLink(final String machine) {
-        return InstanceName.onMachine(GATEWAY, machine);
+        return InstanceName.onMachine(BORDER, machine);
     }
 
     /**
@@ -1221,7 +1221,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     /** Tells the machines that no gateway link of this node is connected, as it stops; nothing off the gateway. */
     private void disconnected() {
         final Machines of = machines;
-        if (of != null && GATEWAY.equals(slug)) {
+        if (of != null && BORDER.equals(slug)) {
             of.connected(Map.of());
         }
     }
@@ -1262,7 +1262,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         final CompletableFuture<JsonNode> reply = new CompletableFuture<>();
         h.replies.put(id, reply);
         try {
-            h.node().broker().publish(h.signer().sign(Names.CONTROL + slug + '/' + method, Json.writeBytes(body),
+            h.node().gateway().publish(h.signer().sign(Names.CONTROL + slug + '/' + method, Json.writeBytes(body),
                     h.replyTopic(), id.getBytes(StandardCharsets.UTF_8)), CONTROLLER);
             final JsonNode r = reply.get(CONTROL_WITHIN.toNanos(), TimeUnit.NANOSECONDS);
             if (!r.path("ok").asBoolean(false)) {
@@ -1282,7 +1282,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     /** Stops this instance's node and marks it down in the registry, its port kept. Idempotent. */
-    private synchronized void closeFabric() {
+    private synchronized void closeOctopus() {
         final Hosted h = hosted;
         if (h == null) {
             return;
@@ -1419,7 +1419,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         /** The node, of start {@code generation}, with its answers' subscriber in place. */
         static Hosted of(final Frontear node, final Signer signer, final String slug, final long generation) {
             final Hosted h = new Hosted(node, signer, slug, generation);
-            node.broker().subscribe(CONTROLLER, h.replyTopic, 1, false, h);
+            node.gateway().subscribe(CONTROLLER, h.replyTopic, 1, false, h);
             return h;
         }
 

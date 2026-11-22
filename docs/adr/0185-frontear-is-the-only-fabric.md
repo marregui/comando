@@ -21,7 +21,7 @@ users and agents read is frontear.
 
 | Question | Rule |
 |---|---|
-| the fabric | a frontear node named `comando`, hosted by `FrontearFabric` inside the JVM of one instance, MQTT 18883 on `127.0.0.1`; no child process, no download, no admin account |
+| the fabric | a frontear node named `comando`, hosted by `FrontearOctopus` inside the JVM of one instance, MQTT 18883 on `127.0.0.1`; no child process, no download, no admin account |
 | the name | `frontear` everywhere: the server name of `server_start`, `server_stop` and `ui_get_state`, the commands `frontear.start` and `frontear.stop` ("Start frontear", "Stop frontear"), the notices, the presence key `host` that says an instance hosts it |
 | when it runs | at launch, when no live instance is registered as its host; and at any later look of the peer link (every 5 s) that finds no live host, so when the host quits the next instance to look hosts it |
 | one host | `~/.comando-fabric.json` names the host (pid, name, data root, port); it is written to a temporary file and claimed by creating its link; every read-modify-write of it runs under an OS lock on `~/.comando-fabric.json.lock` (bounded wait), so of several instances starting at once exactly one hosts and a stale entry is replaced once; an entry whose process is gone is removed and claimed again; the lock file stays in the home |

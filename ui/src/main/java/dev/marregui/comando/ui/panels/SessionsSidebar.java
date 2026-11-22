@@ -781,25 +781,25 @@ public final class SessionsSidebar {
      */
     public void instances(
             final InstancesPort port,
-            final BooleanSupplier fabricRunning,
-            final BooleanSupplier fabricBusy,
-            final Runnable startFabric
+            final BooleanSupplier octopusRunning,
+            final BooleanSupplier octopusBusy,
+            final Runnable startOctopus
     ) {
         instancesPort = port == null ? InstancesPort.NONE : port;
-        instances.fabric(new InstancesTab.Fabric() {
+        instances.octopus(new InstancesTab.Octopus() {
             @Override
             public boolean running() {
-                return fabricRunning.getAsBoolean();
+                return octopusRunning.getAsBoolean();
             }
 
             @Override
             public boolean busy() {
-                return fabricBusy.getAsBoolean();
+                return octopusBusy.getAsBoolean();
             }
 
             @Override
             public void start() {
-                startFabric.run();
+                startOctopus.run();
             }
         });
     }

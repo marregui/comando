@@ -62,8 +62,8 @@
   <line x1="40" y1="542" x2="960" y2="542" stroke="#3A3A3A" stroke-width="1"/>
   <g font-family="Menlo, Consolas, monospace" font-size="13" fill="#E8E8E8">
     <text x="40" y="570">MachineCdb</text>
-    <text x="270" y="570">FrontearFabric</text>
-    <text x="570" y="570">MqttPeerBroker</text>
+    <text x="270" y="570">FrontearOctopus</text>
+    <text x="570" y="570">MqttPeerGateway</text>
     <text x="800" y="570">Searcher</text>
   </g>
   <g font-size="13" fill="#9AA0A6">

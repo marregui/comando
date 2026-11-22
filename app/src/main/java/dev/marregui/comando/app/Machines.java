@@ -103,7 +103,7 @@ final class Machines implements MachinesPort {
         this.folder = folder.toAbsolutePath().normalize();
         this.machineFile = this.folder.resolve(MACHINE_FILE);
         this.remotes = remotes.toAbsolutePath().normalize();
-        this.lock = FrontearFabric.lockFile(this.remotes);
+        this.lock = FrontearOctopus.lockFile(this.remotes);
         this.port = port;
         this.defaultId = defaultId;
         this.clock = clock;
@@ -453,7 +453,7 @@ final class Machines implements MachinesPort {
     }
 
     /**
-     * Runs {@code action} under the remotes file's lock, as {@link FrontearFabric} runs its registry's writes, and
+     * Runs {@code action} under the remotes file's lock, as {@link FrontearOctopus} runs its registry's writes, and
      * returns what it returns; a runtime failure of {@code action} goes to the caller as it is. Never nested: the lock
      * is not reentrant across its file.
      */
@@ -462,7 +462,7 @@ final class Machines implements MachinesPort {
         final AtomicReference<IOException> failed = new AtomicReference<>();
         final boolean ran;
         try {
-            ran = FrontearFabric.underLock(lock, () -> {
+            ran = FrontearOctopus.underLock(lock, () -> {
                 try {
                     out.set(action.run());
                 } catch (final IOException e) {
@@ -475,7 +475,7 @@ final class Machines implements MachinesPort {
         }
         if (!ran) {
             throw new IOException("the machines' lock stays held [lock=" + lock + ", waited="
-                    + FrontearFabric.LOCK_WITHIN.toSeconds() + " s]");
+                    + FrontearOctopus.LOCK_WITHIN.toSeconds() + " s]");
         }
         if (failed.get() != null) {
             throw failed.get();

@@ -17,13 +17,13 @@ import static org.awaitility.Awaitility.await;
 /// CONNECT and the session over TCP: what CONNACK states and declines, the client ids and connects the broker
 /// refuses with their reason codes, keep alive, ping, takeover, Clean Start, and sessions that outlive their
 /// connection with a bounded queue of QoS 1 messages until their expiry.
-class BrokerConnectTest {
+class GatewayConnectTest {
 
-    private TestBroker test;
+    private TestGateway test;
 
     @BeforeEach
     void start() throws IOException {
-        test = TestBroker.start();
+        test = TestGateway.start();
     }
 
     @AfterEach
@@ -39,8 +39,8 @@ class BrokerConnectTest {
             final Packet.ConnAck a = c.read(Packet.ConnAck.class);
             assertThat(a.reasonCode()).isEqualTo(Packet.SUCCESS);
             assertThat(a.sessionPresent()).isFalse();
-            assertThat(a.receiveMaximum()).isEqualTo(TestBroker.RECEIVE_MAXIMUM);
-            assertThat(a.maximumPacketSize()).isEqualTo(TestBroker.MAXIMUM_PACKET_SIZE);
+            assertThat(a.receiveMaximum()).isEqualTo(TestGateway.RECEIVE_MAXIMUM);
+            assertThat(a.maximumPacketSize()).isEqualTo(TestGateway.MAXIMUM_PACKET_SIZE);
             assertThat(a.topicAliasMaximum()).isZero();
             assertThat(a.assignedClientId()).isNull();
             assertThat(a.capabilities()).isEqualTo(new Packet.Capabilities(1, true, true, false, false));
@@ -60,7 +60,7 @@ class BrokerConnectTest {
     /// A client id that starts with `$`, or that cannot end a presence topic (a wildcard in it), is refused with
     /// 0x85 and the connection closed.
     @Test
-    void aClientIdTheBrokerCannotNameIsRefused() throws IOException {
+    void aClientIdTheGatewayCannotNameIsRefused() throws IOException {
         for (final String id : List.of("$link/x", "a/+", "a/#")) {
             try (RawClient c = RawClient.open(test.port(), RawClient.connect(id, true, 0))) {
                 assertThat(c.read(Packet.ConnAck.class).reasonCode()).as(id).isEqualTo(Packet.CLIENT_ID_NOT_VALID);
@@ -101,7 +101,7 @@ class BrokerConnectTest {
         try (RawClient c = RawClient.open(test.port(), new Packet.Connect("a", true, 0, 0, 10, 1_000, will))) {
             assertThat(c.read(Packet.ConnAck.class).reasonCode()).isEqualTo(Packet.NOT_AUTHORIZED);
         }
-        assertThat(test.broker.stats().sessions()).isZero();
+        assertThat(test.gateway.stats().sessions()).isZero();
     }
 
     /// Past its session limit the broker refuses a new client with 0x97 Quota Exceeded; a client whose session it
@@ -109,7 +109,7 @@ class BrokerConnectTest {
     @Test
     void sessionsPastTheLimitAreRefused() throws IOException {
         test.close();
-        test = TestBroker.start(2);
+        test = TestGateway.start(2);
         try (RawClient a = RawClient.connected(test.port(), "a");
                 RawClient b = RawClient.connected(test.port(), "b");
                 RawClient c = RawClient.open(test.port(), RawClient.connect("c", true, 0))) {
@@ -216,14 +216,14 @@ class BrokerConnectTest {
     void aFullQueueDropsTheNewestAndCountsIt() throws IOException {
         offlineSubscriber("a");
         try (RawClient p = RawClient.connected(test.port(), "p")) {
-            for (int i = 0; i < TestBroker.MAX_QUEUED + 2; i++) {
+            for (int i = 0; i < TestGateway.MAX_QUEUED + 2; i++) {
                 assertThat(p.publish(RawClient.qos1("t", Integer.toString(i)))).isEqualTo(Packet.SUCCESS);
             }
         }
-        assertThat(test.broker.stats().droppedFull()).isEqualTo(2);
+        assertThat(test.gateway.stats().droppedFull()).isEqualTo(2);
         try (RawClient a = RawClient.open(test.port(), RawClient.connect("a", false, 60))) {
             a.read(Packet.ConnAck.class);
-            for (int i = 0; i < TestBroker.MAX_QUEUED; i++) {
+            for (int i = 0; i < TestGateway.MAX_QUEUED; i++) {
                 assertThat(a.receive().payload()).isEqualTo(Integer.toString(i).getBytes(StandardCharsets.UTF_8));
             }
             assertThat(a.ping()).isEmpty();
@@ -237,9 +237,9 @@ class BrokerConnectTest {
             test.disconnect(a, "a");
         }
         test.clock.advance(Duration.ofSeconds(4));
-        assertThat(test.broker.stats().sessions()).isEqualTo(1);
+        assertThat(test.gateway.stats().sessions()).isEqualTo(1);
         test.clock.advance(Duration.ofSeconds(1));
-        await().atMost(TestBroker.WAIT).until(() -> test.broker.stats().sessions() == 0);
+        await().atMost(TestGateway.WAIT).until(() -> test.gateway.stats().sessions() == 0);
         try (RawClient a = RawClient.open(test.port(), RawClient.connect("a", false, 5))) {
             assertThat(a.read(Packet.ConnAck.class).sessionPresent()).isFalse();
         }
@@ -249,11 +249,11 @@ class BrokerConnectTest {
     @Test
     void sessionExpiryZeroEndsTheSessionWithTheConnection() throws IOException {
         try (RawClient a = RawClient.connected(test.port(), "a")) {
-            assertThat(test.broker.stats().sessions()).isEqualTo(1);
+            assertThat(test.gateway.stats().sessions()).isEqualTo(1);
             a.send(new Packet.Disconnect(Packet.SUCCESS, null));
             a.untilClosed();
         }
-        await().atMost(TestBroker.WAIT).until(() -> test.broker.stats().sessions() == 0);
+        await().atMost(TestGateway.WAIT).until(() -> test.gateway.stats().sessions() == 0);
     }
 
     /// A client `id` with a 60 s session subscribed to `t` at QoS 1, then disconnected.

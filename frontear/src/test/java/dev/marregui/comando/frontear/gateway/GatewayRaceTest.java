@@ -22,7 +22,7 @@ import static org.awaitility.Awaitility.await;
 
 /// Races the broker must win every time, each hunted by repeating it: a client's presence after a drop and an
 /// immediate reconnect, and the code a publish gets while its only subscriber comes and goes.
-class BrokerRaceTest {
+class GatewayRaceTest {
 
     // sessions enough for the presence test's subscribers, its client and a sweep's markers
     private static final int SESSIONS = 128;
@@ -39,7 +39,7 @@ class BrokerRaceTest {
     @Test
     void presenceIsOnlineAfterADropAndAnImmediateReconnect() throws IOException {
         final String presence = Names.PRESENCE + "x";
-        try (TestBroker test = TestBroker.start(SESSIONS)) {
+        try (TestGateway test = TestGateway.start(SESSIONS)) {
             final List<RawClient> subscribers = new ArrayList<>();
             try {
                 for (int i = 0; i < SUBSCRIBERS; i++) {
@@ -57,12 +57,12 @@ class BrokerRaceTest {
                         for (final RawClient s : subscribers) {
                             s.ping();
                         }
-                        await("presence in round " + round).during(SETTLED).atMost(TestBroker.WAIT)
-                                .until(() -> !test.broker.retained(presence, 1).isEmpty());
+                        await("presence in round " + round).during(SETTLED).atMost(TestGateway.WAIT)
+                                .until(() -> !test.gateway.retained(presence, 1).isEmpty());
                         b.send(new Packet.Disconnect(Packet.SUCCESS, null));
                         b.untilClosed();
                     }
-                    await().atMost(TestBroker.WAIT).until(() -> test.broker.retained(presence, 1).isEmpty());
+                    await().atMost(TestGateway.WAIT).until(() -> test.gateway.retained(presence, 1).isEmpty());
                 }
             } finally {
                 for (final RawClient s : subscribers) {
@@ -83,26 +83,26 @@ class BrokerRaceTest {
         };
         final AtomicBoolean stop = new AtomicBoolean();
         final CountDownLatch started = new CountDownLatch(1);
-        try (TestBroker test = TestBroker.start()) {
+        try (TestGateway test = TestGateway.start()) {
             final Thread churn = Thread.ofVirtual().name("broker-race-test-churn").start(() -> {
                 started.countDown();
                 while (!stop.get()) {
-                    test.broker.subscribe("x", "t", 1, false, counting);
-                    test.broker.unsubscribeAll("x");
+                    test.gateway.subscribe("x", "t", 1, false, counting);
+                    test.gateway.unsubscribeAll("x");
                 }
             });
             int acknowledged = 0;
             try {
-                assertThat(started.await(TestBroker.WAIT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+                assertThat(started.await(TestGateway.WAIT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
                 for (int i = 0; i < PUBLISHES; i++) {
-                    if (code(test.broker.publish(new Packet.Publish("t", new byte[] {1}, 1, false, false, 0, null,
+                    if (code(test.gateway.publish(new Packet.Publish("t", new byte[] {1}, 1, false, false, 0, null,
                             null), "test")) == Packet.SUCCESS) {
                         acknowledged++;
                     }
                 }
             } finally {
                 stop.set(true);
-                assertThat(churn.join(TestBroker.WAIT)).isTrue();
+                assertThat(churn.join(TestGateway.WAIT)).isTrue();
             }
             assertThat(acknowledged).isEqualTo(delivered.get());
         }
@@ -110,6 +110,6 @@ class BrokerRaceTest {
 
     private static int code(final CompletableFuture<Integer> publish) throws InterruptedException,
             ExecutionException, TimeoutException {
-        return publish.get(TestBroker.WAIT.toMillis(), TimeUnit.MILLISECONDS);
+        return publish.get(TestGateway.WAIT.toMillis(), TimeUnit.MILLISECONDS);
     }
 }

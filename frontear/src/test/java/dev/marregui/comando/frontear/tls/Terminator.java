@@ -25,7 +25,7 @@ public final class Terminator implements AutoCloseable {
     private static final Duration WAIT = Duration.ofSeconds(10);
 
     private final SSLServerSocket listening;
-    private final int brokerPort;
+    private final int gatewayPort;
     private final ExecutorService accepting = Threads.strand("tls-terminator-accept");
     private final List<ExecutorService> pumps = new CopyOnWriteArrayList<>();
     private final List<Socket> open = new CopyOnWriteArrayList<>();
@@ -33,9 +33,9 @@ public final class Terminator implements AutoCloseable {
     private final List<String> peers = new CopyOnWriteArrayList<>();
     private final List<IOException> failures = new CopyOnWriteArrayList<>();
 
-    /// A terminator with `context`'s key and pins in front of the broker at `brokerPort`, accepting at once.
-    public Terminator(final SSLContext context, final int brokerPort) throws IOException {
-        this.brokerPort = brokerPort;
+    /// A terminator with `context`'s key and pins in front of the broker at `gatewayPort`, accepting at once.
+    public Terminator(final SSLContext context, final int gatewayPort) throws IOException {
+        this.gatewayPort = gatewayPort;
         try {
             listening = (SSLServerSocket) context.getServerSocketFactory().createServerSocket(0, 50,
                     InetAddress.getLoopbackAddress());
@@ -99,12 +99,12 @@ public final class Terminator implements AutoCloseable {
                 protocols.add(client.getSession().getProtocol());
                 peers.add(MachineKey.fingerprint(
                         ((X509Certificate) client.getSession().getPeerCertificates()[0]).getPublicKey()));
-                final Socket broker = new Socket();
-                open.add(broker);
-                broker.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), brokerPort),
+                final Socket gateway = new Socket();
+                open.add(gateway);
+                gateway.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), gatewayPort),
                         (int) WAIT.toMillis());
-                pump(client, broker, "tls-terminator-to-broker");
-                pump(broker, client, "tls-terminator-to-client");
+                pump(client, gateway, "tls-terminator-to-broker");
+                pump(gateway, client, "tls-terminator-to-client");
             } catch (final IOException e) {
                 failures.add(e);
                 quietly(client);

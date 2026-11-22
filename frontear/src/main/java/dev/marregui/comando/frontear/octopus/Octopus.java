@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Set;
 
 /** The links of a broker to its peers, changed while they run. */
-public interface Mesh {
+public interface Octopus {
 
     /** Adds the link {@code spec} names, or replaces the one with its id; refuses a value out of range. */
     void put(LinkSpec spec);

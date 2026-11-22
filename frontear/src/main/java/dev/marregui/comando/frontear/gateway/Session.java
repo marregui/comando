@@ -24,7 +24,7 @@ final class Session {
     static final long NEVER = 0xFFFF_FFFFL;
 
     final String clientId;
-    private final Broker broker;
+    private final Gateway gateway;
     private final Object lock = new Object();
     // the rest is guarded by lock
     // the QoS 1 messages sent and not acknowledged, by packet id in the order sent, as they were before their send
@@ -45,9 +45,9 @@ final class Session {
     private long pendingWillDueMillis;
     private int nextPacketId = 1;
 
-    Session(final String clientId, final Broker broker) {
+    Session(final String clientId, final Gateway gateway) {
         this.clientId = clientId;
-        this.broker = broker;
+        this.gateway = gateway;
     }
 
     /**
@@ -82,7 +82,7 @@ final class Session {
                 return false;
             }
             connection = null;
-            offlineSinceMillis = broker.nowMillis();
+            offlineSinceMillis = gateway.nowMillis();
             final Packet.Publish w = will;
             will = null;
             if (publishWill && w != null) {
@@ -194,11 +194,11 @@ final class Session {
                 return;
             }
             final long bytes = message.publish().weight();
-            final BrokerOptions options = broker.options();
+            final GatewayOptions options = gateway.options();
             if (heldBytes + bytes > options.maxQueuedBytes() || queue.size() >= options.maxQueued()) {
                 deleteExpired();
                 if (heldBytes + bytes > options.maxQueuedBytes()) {
-                    broker.droppedFull.increment();
+                    gateway.droppedFull.increment();
                     return;
                 }
             }
@@ -206,7 +206,7 @@ final class Session {
                 heldBytes += bytes;
                 sendNow(message);
             } else if (queue.size() >= options.maxQueued()) {
-                broker.droppedFull.increment();
+                gateway.droppedFull.increment();
             } else {
                 heldBytes += bytes;
                 queue.add(message);
@@ -265,14 +265,14 @@ final class Session {
 
     /** Deletes the queued messages past their expiry, counted (§3.3.2.3.3). Under lock. */
     private void deleteExpired() {
-        final long now = broker.nowMillis();
+        final long now = gateway.nowMillis();
         final Iterator<Queued> it = queue.iterator();
         while (it.hasNext()) {
             final Queued q = it.next();
             if (remainingExpiry(q, now) == 0) {
                 it.remove();
                 heldBytes -= q.publish().weight();
-                broker.droppedExpired.increment();
+                gateway.droppedExpired.increment();
             }
         }
     }
@@ -304,9 +304,9 @@ final class Session {
         final Packet.Publish p = message.publish();
         Packet.Meta meta = p.meta();
         if (meta.messageExpirySeconds() >= 0) {
-            final long remaining = remainingExpiry(message, broker.nowMillis());
+            final long remaining = remainingExpiry(message, gateway.nowMillis());
             if (remaining == 0) {
-                broker.droppedExpired.increment();
+                gateway.droppedExpired.increment();
                 return null;
             }
             meta = meta.withMessageExpiry(remaining);
@@ -325,7 +325,7 @@ final class Session {
         } catch (final MqttException _) {
             // a message the broker read fits a packet; one too long to write is dropped as one too large to send
         }
-        broker.droppedOversize.increment();
+        gateway.droppedOversize.increment();
         return null;
     }
 

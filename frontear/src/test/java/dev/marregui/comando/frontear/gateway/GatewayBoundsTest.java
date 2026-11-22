@@ -22,7 +22,7 @@ import static org.awaitility.Awaitility.await;
 /// bytes, the retained store in count and bytes, an offline session's queue in bytes, the filters of a SUBSCRIBE and
 /// of a session, and the depth of a topic or a filter; each refusal with its reason code and counted in the stats.
 /// And a connection whose reader fails with an `Error` ends, so no client is left on a reader that stopped.
-class BrokerBoundsTest {
+class GatewayBoundsTest {
 
     // large enough that no test reaches it unless it means to
     private static final long LOOSE_BYTES = 64L * 1024 * 1024;
@@ -34,7 +34,7 @@ class BrokerBoundsTest {
     @Test
     void aSilentSubscribersBacklogEndsItsConnectionWith0x97() throws IOException {
         final long backlog = 64 * 1024;
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(LOOSE_COUNT, LOOSE_BYTES, backlog, LOOSE_COUNT,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, backlog, LOOSE_COUNT,
                 LOOSE_BYTES, LOOSE_LEVELS));
                 RawClient silent = RawClient.connected(test.port(), new Packet.Connect("silent", true, 0, 0, 65_535,
                         Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null));
@@ -44,12 +44,12 @@ class BrokerBoundsTest {
             // 32 MiB: past what the loopback socket's buffers take before the writer waits on them
             final int limit = 4_096;
             int published = 0;
-            while (test.broker.stats().backlogDisconnects() == 0 && published < limit) {
+            while (test.gateway.stats().backlogDisconnects() == 0 && published < limit) {
                 published++;
                 assertThat(p.publish(new Packet.Publish("t", payload, 1, false, false, 1, null, null)))
                         .isEqualTo(Packet.SUCCESS);
             }
-            assertThat(test.broker.stats().backlogDisconnects()).isEqualTo(1);
+            assertThat(test.gateway.stats().backlogDisconnects()).isEqualTo(1);
             final List<Packet> got = silent.untilClosed();
             assertThat(got).last().isEqualTo(new Packet.Disconnect(Packet.QUOTA_EXCEEDED, null));
             assertThat(got.size() - 1).isLessThan(published);
@@ -62,7 +62,7 @@ class BrokerBoundsTest {
     /// holds one of the four places.
     @Test
     void theRetainedStoreIsBoundedInCount() throws IOException {
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES, 4,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES, 4,
                 LOOSE_BYTES, LOOSE_LEVELS));
                 RawClient p = RawClient.connected(test.port(), "p")) {
             awaitPresence(test, "p");
@@ -73,10 +73,10 @@ class BrokerBoundsTest {
             assertThat(p.publish(retained("r/1", 2))).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
             assertThat(p.publish(retained("r/2", 0))).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
             assertThat(p.publish(retained("r/4", 1))).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
-            final Broker.Stats stats = test.broker.stats();
+            final Gateway.Stats stats = test.gateway.stats();
             assertThat(stats.retained()).isEqualTo(4);
             assertThat(stats.refusedRetained()).isEqualTo(1);
-            assertThat(test.broker.retained("r/4", 1)).hasSize(1);
+            assertThat(test.gateway.retained("r/4", 1)).hasSize(1);
         }
     }
 
@@ -85,11 +85,11 @@ class BrokerBoundsTest {
     @Test
     void theRetainedStoreIsBoundedInBytes() throws IOException {
         final long bound = 2_500;
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
                 LOOSE_COUNT, bound, LOOSE_LEVELS));
                 RawClient p = RawClient.connected(test.port(), "p")) {
             awaitPresence(test, "p");
-            final long presence = test.broker.stats().retainedBytes();
+            final long presence = test.gateway.stats().retainedBytes();
             final long small = retained("r/a", 1_000).weight();
             final long large = retained("r/a", 1_500).weight();
             // the sizes below land on the side of the bound each line expects
@@ -98,11 +98,11 @@ class BrokerBoundsTest {
             assertThat(p.publish(retained("r/a", 1_000))).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
             assertThat(p.publish(retained("r/b", 1_000))).isEqualTo(Packet.QUOTA_EXCEEDED);
             assertThat(p.publish(retained("r/a", 1_500))).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
-            final Broker.Stats stats = test.broker.stats();
+            final Gateway.Stats stats = test.gateway.stats();
             assertThat(stats.retained()).isEqualTo(2);
             assertThat(stats.retainedBytes()).isEqualTo(presence + large);
             assertThat(stats.refusedRetained()).isEqualTo(1);
-            assertThat(test.broker.retained("r/b", 1)).isEmpty();
+            assertThat(test.gateway.retained("r/b", 1)).isEmpty();
         }
     }
 
@@ -113,7 +113,7 @@ class BrokerBoundsTest {
         final Packet.Publish message = new Packet.Publish("t", new byte[300], 1, false, false, 1, null, null);
         // three of the ten fit
         final long bound = 3 * message.weight();
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(100, bound, LOOSE_BYTES, LOOSE_COUNT,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(100, bound, LOOSE_BYTES, LOOSE_COUNT,
                 LOOSE_BYTES, LOOSE_LEVELS))) {
             try (RawClient q = RawClient.connected(test.port(), RawClient.connect("q", true, 600))) {
                 assertThat(q.subscribe(new Packet.Subscription("t", 1))).containsExactly(1);
@@ -125,7 +125,7 @@ class BrokerBoundsTest {
                     assertThat(p.publish(message)).isEqualTo(Packet.SUCCESS);
                 }
             }
-            final Broker.Stats stats = test.broker.stats();
+            final Gateway.Stats stats = test.gateway.stats();
             assertThat(stats.droppedFull()).isEqualTo(7);
             assertThat(stats.largestSessionBytes()).isEqualTo(bound);
             try (RawClient q = RawClient.open(test.port(), RawClient.connect("q", false, 600))) {
@@ -141,11 +141,11 @@ class BrokerBoundsTest {
     @Test
     void theRetainedStoreCountsUserProperties() throws IOException {
         final long bound = 64 * 1024;
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
                 LOOSE_COUNT, bound, LOOSE_LEVELS));
                 RawClient p = RawClient.connected(test.port(), "p")) {
             awaitPresence(test, "p");
-            final long presence = test.broker.stats().retainedBytes();
+            final long presence = test.gateway.stats().retainedBytes();
             assertThat(p.publish(withProperties(retained("r/empty", 1), 5_000, ""))).isEqualTo(Packet.QUOTA_EXCEEDED);
             final String value = "v".repeat(8_000);
             int accepted = 0;
@@ -157,7 +157,7 @@ class BrokerBoundsTest {
             }
             final long weight = withProperties(retained("r/00", 1), 4, value).weight();
             assertThat(accepted).isPositive().isEqualTo((int) ((bound - presence) / weight));
-            final Broker.Stats stats = test.broker.stats();
+            final Gateway.Stats stats = test.gateway.stats();
             assertThat(stats.retainedBytes()).isEqualTo(presence + accepted * weight).isLessThanOrEqualTo(bound);
             assertThat(stats.refusedRetained()).isEqualTo(1 + 20 - accepted);
         }
@@ -170,7 +170,7 @@ class BrokerBoundsTest {
         final long bound = 64 * 1024;
         final Packet.Publish message = withProperties(new Packet.Publish("t", new byte[1], 1, false, false, 1, null,
                 null), 400, "");
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(100, bound, LOOSE_BYTES, LOOSE_COUNT,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(100, bound, LOOSE_BYTES, LOOSE_COUNT,
                 LOOSE_BYTES, LOOSE_LEVELS))) {
             try (RawClient q = RawClient.connected(test.port(), RawClient.connect("q", true, 600))) {
                 assertThat(q.subscribe(new Packet.Subscription("t", 1))).containsExactly(1);
@@ -183,7 +183,7 @@ class BrokerBoundsTest {
                 }
             }
             final int fit = (int) (bound / message.weight());
-            final Broker.Stats stats = test.broker.stats();
+            final Gateway.Stats stats = test.gateway.stats();
             assertThat(fit).isPositive().isLessThan(10);
             assertThat(stats.droppedFull()).isEqualTo(10 - fit);
             assertThat(stats.largestSessionBytes()).isEqualTo(fit * message.weight());
@@ -204,13 +204,13 @@ class BrokerBoundsTest {
         for (int i = 0; i < pings.length; i += 2) {
             pings[i] = (byte) 0xC0;
         }
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(LOOSE_COUNT, LOOSE_BYTES, backlog, LOOSE_COUNT,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, backlog, LOOSE_COUNT,
                 LOOSE_BYTES, LOOSE_LEVELS));
                 Socket flood = new Socket()) {
             // a small window, so the broker's PINGRESPs wait on its writer rather than in this socket's buffer
             flood.setReceiveBufferSize(1024);
             flood.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), test.port()));
-            flood.setSoTimeout((int) TestBroker.WAIT.toMillis());
+            flood.setSoTimeout((int) TestGateway.WAIT.toMillis());
             final OutputStream out = flood.getOutputStream();
             out.write(Codec.encode(RawClient.connect("flood", true, 0)));
             final InputStream in = flood.getInputStream();
@@ -219,13 +219,13 @@ class BrokerBoundsTest {
             // fewer bytes than the bound: each PINGREQ is answered by a PINGRESP of the same 2 bytes
             final long chunks = backlog / pings.length - 1;
             try {
-                for (long c = 0; c < chunks && test.broker.stats().backlogDisconnects() == 0; c++) {
+                for (long c = 0; c < chunks && test.gateway.stats().backlogDisconnects() == 0; c++) {
                     out.write(pings);
                 }
             } catch (final IOException _) {
                 // the broker ended the connection while the flood was still writing
             }
-            await().atMost(TestBroker.WAIT).until(() -> test.broker.stats().backlogDisconnects() == 1);
+            await().atMost(TestGateway.WAIT).until(() -> test.gateway.stats().backlogDisconnects() == 1);
         }
     }
 
@@ -234,7 +234,7 @@ class BrokerBoundsTest {
     /// is granted again at its cap, and the session receives on what was granted only.
     @Test
     void filtersPastTheSubscriptionCapsAreRefusedWith0x97() throws IOException {
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
                 LOOSE_COUNT, LOOSE_BYTES, LOOSE_LEVELS, 4, 6));
                 RawClient c = RawClient.connected(test.port(), "c");
                 RawClient p = RawClient.connected(test.port(), "p")) {
@@ -242,7 +242,7 @@ class BrokerBoundsTest {
             assertThat(c.subscribe(filters("a", 6))).containsExactly(0, 0, 0, 0, refused, refused);
             assertThat(c.subscribe(filters("b", 3))).containsExactly(0, 0, refused);
             assertThat(c.subscribe(new Packet.Subscription("a/0", 1))).containsExactly(1);
-            assertThat(test.broker.stats().refusedSubscriptions()).isEqualTo(3);
+            assertThat(test.gateway.stats().refusedSubscriptions()).isEqualTo(3);
             assertThat(p.publish(RawClient.qos1("a/4", "refused"))).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
             assertThat(p.publish(RawClient.qos1("b/2", "refused"))).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
             assertThat(p.publish(RawClient.qos1("b/1", "granted"))).isEqualTo(Packet.SUCCESS);
@@ -255,20 +255,20 @@ class BrokerBoundsTest {
     /// adds none, a refused one adds none, and a session that ends no longer counts.
     @Test
     void theStatsShowTheMostSubscriptionsASessionHolds() throws IOException {
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
                 LOOSE_COUNT, LOOSE_BYTES, LOOSE_LEVELS, 10, 5));
                 RawClient small = RawClient.connected(test.port(), "small")) {
-            assertThat(test.broker.stats().largestSessionSubscriptions()).isZero();
+            assertThat(test.gateway.stats().largestSessionSubscriptions()).isZero();
             assertThat(small.subscribe(filters("s", 2))).containsExactly(0, 0);
             try (RawClient large = RawClient.connected(test.port(), "large")) {
                 assertThat(large.subscribe(filters("l", 4))).containsExactly(0, 0, 0, 0);
                 assertThat(large.subscribe(new Packet.Subscription("l/0", 1))).containsExactly(1);
-                assertThat(test.broker.stats().largestSessionSubscriptions()).isEqualTo(4);
+                assertThat(test.gateway.stats().largestSessionSubscriptions()).isEqualTo(4);
                 assertThat(large.subscribe(filters("m", 2))).containsExactly(0, Packet.QUOTA_EXCEEDED);
-                assertThat(test.broker.stats().largestSessionSubscriptions()).isEqualTo(5);
+                assertThat(test.gateway.stats().largestSessionSubscriptions()).isEqualTo(5);
             }
-            await().atMost(TestBroker.WAIT).until(() -> test.broker.stats().sessions() == 1);
-            assertThat(test.broker.stats().largestSessionSubscriptions()).isEqualTo(2);
+            await().atMost(TestGateway.WAIT).until(() -> test.gateway.stats().sessions() == 1);
+            assertThat(test.gateway.stats().largestSessionSubscriptions()).isEqualTo(2);
         }
     }
 
@@ -276,7 +276,7 @@ class BrokerBoundsTest {
     /// filter, PUBACK 0x90 for the topic, CONNACK 0x90 for a will's topic, each counted; the connection stays up.
     @Test
     void aTopicOrFilterDeeperThanTheBoundIsRefused() throws IOException {
-        try (TestBroker test = TestBroker.start(new TestBroker.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
+        try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, LOOSE_BYTES,
                 LOOSE_COUNT, LOOSE_BYTES, 4));
                 RawClient c = RawClient.connected(test.port(), "c");
                 RawClient s = RawClient.connected(test.port(), "s")) {
@@ -292,7 +292,7 @@ class BrokerBoundsTest {
                     Packet.DEFAULT_RECEIVE_MAXIMUM, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, will))) {
                 assertThat(w.read(Packet.ConnAck.class).reasonCode()).isEqualTo(Packet.TOPIC_NAME_INVALID);
             }
-            assertThat(test.broker.stats().refusedTopics()).isEqualTo(3);
+            assertThat(test.gateway.stats().refusedTopics()).isEqualTo(3);
             assertThat(c.ping()).isEmpty();
         }
     }
@@ -302,7 +302,7 @@ class BrokerBoundsTest {
     @Test
     void aFilterAndTopicOf65000LevelsAreAnswered() throws IOException {
         final String deep = "/".repeat(65_000);
-        try (TestBroker test = TestBroker.start();
+        try (TestGateway test = TestGateway.start();
                 RawClient c = RawClient.connected(test.port(), "c")) {
             assertThat(c.subscribe(new Packet.Subscription(deep, 0))).containsExactly(Packet.TOPIC_FILTER_INVALID);
             assertThat(c.publish(new Packet.Publish(deep, new byte[1], 1, false, false, 1, null, null)))
@@ -315,9 +315,9 @@ class BrokerBoundsTest {
     /// than keeping a connection whose reader is gone.
     @Test
     void aReaderThatFailsWithAnErrorEndsItsConnection() throws IOException {
-        try (TestBroker test = TestBroker.start();
+        try (TestGateway test = TestGateway.start();
                 RawClient c = RawClient.connected(test.port(), "c")) {
-            test.broker.gate(new Gate() {
+            test.gateway.gate(new Gate() {
                 @Override
                 public boolean mayPublish(final String clientId, final String topic) {
                     return true;
@@ -333,8 +333,8 @@ class BrokerBoundsTest {
         }
     }
 
-    private static void awaitPresence(final TestBroker test, final String clientId) {
-        await().atMost(TestBroker.WAIT).until(() -> !test.broker.retained(Names.PRESENCE + clientId, 1).isEmpty());
+    private static void awaitPresence(final TestGateway test, final String clientId) {
+        await().atMost(TestGateway.WAIT).until(() -> !test.gateway.retained(Names.PRESENCE + clientId, 1).isEmpty());
     }
 
     private static Packet.Publish retained(final String topic, final int bytes) {

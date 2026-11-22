@@ -271,12 +271,12 @@ final class Commands {
             cmd("server.stop", "Stop the machine's cdb", null, () -> deps.server().toggle(),
                     () -> deps.server().isRunning() && !deps.server().busy());
         }
-        if (deps.fabric() != null) {
+        if (deps.octopus() != null) {
             // disabled while a start or stop is under way: the button greys out and its tooltip says which
-            cmd("frontear.start", "Start frontear", null, () -> deps.fabric().toggle(),
-                    () -> !deps.fabric().isRunning() && !deps.fabric().busy());
-            cmd("frontear.stop", "Stop frontear", null, () -> deps.fabric().toggle(),
-                    () -> deps.fabric().isRunning() && !deps.fabric().busy());
+            cmd("frontear.start", "Start frontear", null, () -> deps.octopus().toggle(),
+                    () -> !deps.octopus().isRunning() && !deps.octopus().busy());
+            cmd("frontear.stop", "Stop frontear", null, () -> deps.octopus().toggle(),
+                    () -> deps.octopus().isRunning() && !deps.octopus().busy());
             cmd("frontear.machines", MachinesDialog.TITLE + "…", null, () -> ui.openMachines(""));
         }
         // panel: its results

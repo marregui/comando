@@ -452,7 +452,7 @@ class PeersTest {
     /// Forgetting an instance that left tells the fabric, so its link and registry entry go too; an instance present
     /// is not forgotten, and the fabric is not told.
     @Test
-    void forgettingAnInstanceTellsTheFabric() throws Exception {
+    void forgettingAnInstanceTellsTheOctopus() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
         final Node b = node("b", Peers.ANSWER_WITHIN);
         final List<String> forgotten = new CopyOnWriteArrayList<>();
@@ -769,10 +769,10 @@ class PeersTest {
         final Node mainA = node(a, "", _ -> null);
         final byte[] p = "{\"schema\":1,\"name\":\"comando · z\",\"slug\":\"z\",\"version\":\"2.0.0\",\"sessions\":[]}"
                 .getBytes(StandardCharsets.UTF_8);
-        a.deliver(new PeerBroker.Message(Peers.presenceTopic("b", "z"), p, null, null, "@c"), false);
-        a.deliver(new PeerBroker.Message(Peers.presenceTopic("b", "z"), p, null, null), false);
+        a.deliver(new PeerGateway.Message(Peers.presenceTopic("b", "z"), p, null, null, "@c"), false);
+        a.deliver(new PeerGateway.Message(Peers.presenceTopic("b", "z"), p, null, null), false);
         assertThat(call(mainA, "instances_list", "{}").text()).doesNotContain("z@b");
-        a.deliver(new PeerBroker.Message(Peers.presenceTopic("b", "z"), p, null, null, "@b"), false);
+        a.deliver(new PeerGateway.Message(Peers.presenceTopic("b", "z"), p, null, null, "@b"), false);
         assertThat(call(mainA, "instances_list", "{}").text()).contains("(instance z@b)");
     }
 
@@ -869,8 +869,8 @@ class PeersTest {
         final byte[] correlation = id.group(1).getBytes(StandardCharsets.UTF_8);
         final byte[] forged = ("{\"schema\":1,\"status\":\"ok\",\"text\":\"forged\",\"instance\":\"w@b\","
                 + "\"session\":\"\"}").getBytes(StandardCharsets.UTF_8);
-        a.deliver(new PeerBroker.Message(Peers.replyTopic("a", "x"), forged, null, correlation, "@c"), false);
-        a.deliver(new PeerBroker.Message(Peers.replyTopic("a", "x"), forged, null, correlation), false);
+        a.deliver(new PeerGateway.Message(Peers.replyTopic("a", "x"), forged, null, correlation, "@c"), false);
+        a.deliver(new PeerGateway.Message(Peers.replyTopic("a", "x"), forged, null, correlation), false);
 
         w.window.recorded.await(Intent.PromptSession.class, WAIT);
         w.window.turn("consult-x@a", "X is a broker.");
@@ -1076,7 +1076,7 @@ class PeersTest {
                 .contains("(instance s0@b)", "(instance t@c)");
         assertThat(mainA.peers.droppedPresences()).isEqualTo(1);
 
-        a.deliver(new PeerBroker.Message(Peers.presenceTopic("b", "s0"), new byte[0], null, null, "@b"), false);
+        a.deliver(new PeerGateway.Message(Peers.presenceTopic("b", "s0"), new byte[0], null, null, "@b"), false);
         remotePresence(a, "b", "s64");
         assertThat(call(mainA, "instances_list", "{}").text()).as("room once one left").contains("(instance s64@b)")
                 .doesNotContain("(instance s0@b)");
@@ -1137,7 +1137,7 @@ class PeersTest {
     private static void remotePresence(final Bus on, final String machine, final String slug) {
         final byte[] p = ("{\"schema\":1,\"name\":\"comando · " + slug + "\",\"slug\":\"" + slug + "\","
                 + "\"version\":\"2.0.0\",\"sessions\":[]}").getBytes(StandardCharsets.UTF_8);
-        on.deliver(new PeerBroker.Message(Peers.presenceTopic(machine, slug), p, null, null,
+        on.deliver(new PeerGateway.Message(Peers.presenceTopic(machine, slug), p, null, null,
                 InstanceName.origin(machine)), false);
     }
 
@@ -1213,7 +1213,7 @@ class PeersTest {
     ) {
         final byte[] q = ("{\"schema\":1,\"from\":\"" + from + "\",\"name\":\"comando\",\"session\":\"work\","
                 + "\"text\":\"q\"}").getBytes(StandardCharsets.UTF_8);
-        on.deliver(new PeerBroker.Message(topic, q, replyTo, correlation.getBytes(StandardCharsets.UTF_8), origin),
+        on.deliver(new PeerGateway.Message(topic, q, replyTo, correlation.getBytes(StandardCharsets.UTF_8), origin),
                 false);
     }
 
@@ -1364,7 +1364,7 @@ class PeersTest {
     }
 
     /** A message a link was asked to publish, and its expiry in seconds, 0 for none. */
-    private record Sent(PeerBroker.Message message, long expirySeconds) {
+    private record Sent(PeerGateway.Message message, long expirySeconds) {
     }
 
     /** The window and reducer as far as the tests need them: a session with its panel, a prompt shown and counted. */
@@ -1443,18 +1443,18 @@ class PeersTest {
         }
 
         void publish(final String topic, final byte[] payload, final boolean retain, final String responseTopic, final byte[] correlation) {
-            deliver(new PeerBroker.Message(topic, payload, responseTopic, correlation), retain);
+            deliver(new PeerGateway.Message(topic, payload, responseTopic, correlation), retain);
             if (!machine.isEmpty() && topic.startsWith(Peers.MACHINES)
                     && !topic.startsWith(Peers.MACHINES + Peers.LOCAL + '/')) {
                 for (final Bus o : others) {
-                    o.deliver(new PeerBroker.Message(topic, payload, responseTopic, correlation, '@' + machine),
+                    o.deliver(new PeerGateway.Message(topic, payload, responseTopic, correlation, '@' + machine),
                             retain);
                 }
             }
         }
 
         /** Keeps {@code m} when retained and delivers it to each link of this bus, as it is, its origin included. */
-        void deliver(final PeerBroker.Message m, final boolean retain) {
+        void deliver(final PeerGateway.Message m, final boolean retain) {
             if (retain) {
                 synchronized (retained) {
                     if (m.payload().length == 0) {
@@ -1471,10 +1471,10 @@ class PeersTest {
             }
         }
 
-        List<PeerBroker.Message> retained(final String filter) {
+        List<PeerGateway.Message> retained(final String filter) {
             synchronized (retained) {
                 return retained.entrySet().stream().filter(e -> matches(filter, e.getKey()))
-                        .map(e -> new PeerBroker.Message(e.getKey(), e.getValue(), null, null,
+                        .map(e -> new PeerGateway.Message(e.getKey(), e.getValue(), null, null,
                                 retainedOrigins.get(e.getKey()))).toList();
             }
         }
@@ -1494,7 +1494,7 @@ class PeersTest {
         }
     }
 
-    private static final class Link implements PeerBroker {
+    private static final class Link implements PeerGateway {
         private final Bus bus;
         private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
         private final Map<String, Consumer<Message>> subscriptions = new LinkedHashMap<>();
@@ -1568,7 +1568,7 @@ class PeersTest {
                 final byte[] correlation,
                 final long expirySeconds
         ) {
-            sent.add(new Sent(new PeerBroker.Message(topic, payload, responseTopic, correlation), expirySeconds));
+            sent.add(new Sent(new PeerGateway.Message(topic, payload, responseTopic, correlation), expirySeconds));
             if (!up) {
                 return CompletableFuture.failedFuture(new IllegalStateException("not connected"));
             }

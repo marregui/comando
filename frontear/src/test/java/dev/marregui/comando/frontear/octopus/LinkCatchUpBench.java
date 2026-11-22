@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
-import dev.marregui.comando.frontear.gateway.Broker;
-import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.Gateway;
+import dev.marregui.comando.frontear.gateway.GatewayOptions;
 import dev.marregui.comando.frontear.gateway.InternalSubscriber;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.PublishRecord;
@@ -58,8 +58,8 @@ class LinkCatchUpBench {
         drain("frontear-4096", FRONTEAR_SEGMENTS, 4096, 25_000);
     }
 
-    private static Broker broker() throws IOException {
-        return Broker.start(BrokerOptions.defaults(new InetSocketAddress(HOST, 0)));
+    private static Gateway gateway() throws IOException {
+        return Gateway.start(GatewayOptions.defaults(new InetSocketAddress(HOST, 0)));
     }
 
     private void drain(final String name, final LogOptions options, final int payloadBytes, final int count)
@@ -80,7 +80,7 @@ class LinkCatchUpBench {
             assertThat(log.tail()).isEqualTo(count);
         }
         final long preloadNanos = System.nanoTime() - preloadStart;
-        try (Broker a = broker(); Broker b = broker(); Links links = new Links(a, "A", dataDir, options)) {
+        try (Gateway a = gateway(); Gateway b = gateway(); Links links = new Links(a, "A", dataDir, options)) {
             final Counter counter = new Counter(count);
             b.subscribe("bench", TOPIC, 1, false, counter);
             links.put(new LinkSpec("ab", HOST, b.port(), Set.of("t/#"), Set.of(), 4));

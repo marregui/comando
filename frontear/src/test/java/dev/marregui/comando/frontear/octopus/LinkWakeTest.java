@@ -16,8 +16,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import dev.marregui.comando.frontear.gateway.Broker;
-import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.Gateway;
+import dev.marregui.comando.frontear.gateway.GatewayOptions;
 import dev.marregui.comando.frontear.gateway.InternalSubscriber;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.store.LogOptions;
@@ -63,7 +63,7 @@ class LinkWakeTest {
         final Watch watchA = new Watch(WATCH_SLOTS);
         watchA.on(true);
         final AtomicLong peerLinkAtNanos = new AtomicLong();
-        try (Broker a = Broker.start(options(0), watchA, "a");
+        try (Gateway a = Gateway.start(options(0), watchA, "a");
                 Links linksA = new Links(a, "a", dir.resolve("a"), LOG, watchA)) {
             a.addConnectListener(id -> {
                 if ("b~a".equals(id)) {
@@ -71,7 +71,7 @@ class LinkWakeTest {
                 }
             });
             final int portB;
-            try (Broker b = Broker.start(options(0), new Watch(WATCH_SLOTS), "b")) {
+            try (Gateway b = Gateway.start(options(0), new Watch(WATCH_SLOTS), "b")) {
                 portB = b.port();
                 linksA.put(new LinkSpec("b", "127.0.0.1", portB, Set.of("t/#"), Set.of(), 4));
                 await().atMost(WAIT).until(() -> connected(linksA, "b"));
@@ -86,7 +86,7 @@ class LinkWakeTest {
                     .isNull();
             assertThat(connected(linksA, "b")).isFalse();
             final Counter arrived = new Counter();
-            try (Broker b = Broker.start(options(portB), new Watch(WATCH_SLOTS), "b")) {
+            try (Gateway b = Gateway.start(options(portB), new Watch(WATCH_SLOTS), "b")) {
                 b.subscribe("probe", "t/#", 1, false, arrived);
                 try (Links linksB = new Links(b, "b", dir.resolve("b"), LOG)) {
                     linksB.put(new LinkSpec("a", "127.0.0.1", a.port(), Set.of(), Set.of(), 4));
@@ -106,8 +106,8 @@ class LinkWakeTest {
     void aLinkHeldByARunningNodeIsTriedAgainByTheFirstBackoff(@TempDir final Path dir) throws Exception {
         final Watch watchA = new Watch(WATCH_SLOTS);
         watchA.on(true);
-        try (Broker b = Broker.start(options(0), new Watch(WATCH_SLOTS), "b", true);
-                Broker a = Broker.start(options(0), watchA, "a");
+        try (Gateway b = Gateway.start(options(0), new Watch(WATCH_SLOTS), "b", true);
+                Gateway a = Gateway.start(options(0), watchA, "a");
                 Links linksA = new Links(a, "a", dir, LOG, watchA)) {
             linksA.put(new LinkSpec("b", "127.0.0.1", b.port(), Set.of("t/#"), Set.of(), 4));
             await().atMost(HELD_REFUSALS_WITHIN).until(() -> downs(watchA, "b") >= HELD_REFUSALS);
@@ -117,8 +117,8 @@ class LinkWakeTest {
         }
     }
 
-    private static BrokerOptions options(final int port) {
-        return BrokerOptions.defaults(new InetSocketAddress("127.0.0.1", port));
+    private static GatewayOptions options(final int port) {
+        return GatewayOptions.defaults(new InetSocketAddress("127.0.0.1", port));
     }
 
     private static boolean connected(final Links links, final String id) {

@@ -24,7 +24,7 @@ import static org.awaitility.Awaitility.await;
 /// A broker on a free loopback port for one test, timed by a clock the test moves by hand: message expiry, will
 /// delay and session expiry fall due when the test says, never by waiting. Its limits are small, so a test reaches
 /// them in a few packets.
-final class TestBroker implements AutoCloseable {
+final class TestGateway implements AutoCloseable {
 
     /// How long a test waits for something the broker does on its own threads.
     static final Duration WAIT = Duration.ofSeconds(10);
@@ -38,47 +38,47 @@ final class TestBroker implements AutoCloseable {
     private static final String PRESENCE_WATCH = "test-presence-clears";
 
     final Clock clock = new Clock();
-    final Broker broker;
+    final Gateway gateway;
     private final Map<String, AtomicInteger> presenceClears = new ConcurrentHashMap<>();
 
-    private TestBroker(final int maxSessions) throws IOException {
-        broker = Broker.start(new BrokerOptions(loopback(), RECEIVE_MAXIMUM, MAXIMUM_PACKET_SIZE, maxSessions, clock,
+    private TestGateway(final int maxSessions) throws IOException {
+        gateway = Gateway.start(new GatewayOptions(loopback(), RECEIVE_MAXIMUM, MAXIMUM_PACKET_SIZE, maxSessions, clock,
                 MAX_QUEUED));
     }
 
-    private TestBroker(final Bounds b) throws IOException {
-        broker = Broker.start(new BrokerOptions(loopback(), RECEIVE_MAXIMUM, MAXIMUM_PACKET_SIZE, 16, clock,
+    private TestGateway(final Bounds b) throws IOException {
+        gateway = Gateway.start(new GatewayOptions(loopback(), RECEIVE_MAXIMUM, MAXIMUM_PACKET_SIZE, 16, clock,
                 b.maxQueued(), b.maxQueuedBytes(), b.maxBacklogBytes(), b.maxRetained(), b.maxRetainedBytes(),
                 b.maxTopicLevels(), b.maxFiltersPerSubscribe(), b.maxSubscriptions()));
     }
 
     @Override
     public void close() {
-        broker.close();
+        gateway.close();
     }
 
     /// A broker that keeps up to 16 sessions.
-    static TestBroker start() throws IOException {
-        return new TestBroker(16);
+    static TestGateway start() throws IOException {
+        return new TestGateway(16);
     }
 
     /// A broker that keeps up to `maxSessions` sessions.
-    static TestBroker start(final int maxSessions) throws IOException {
-        return new TestBroker(maxSessions);
+    static TestGateway start(final int maxSessions) throws IOException {
+        return new TestGateway(maxSessions);
     }
 
     /// A broker that keeps up to 16 sessions, with the bounds `b` sets.
-    static TestBroker start(final Bounds b) throws IOException {
-        return new TestBroker(b);
+    static TestGateway start(final Bounds b) throws IOException {
+        return new TestGateway(b);
     }
 
     int port() {
-        return broker.port();
+        return gateway.port();
     }
 
     /// Publishes `message` through the broker as `origin` and returns its code, waiting at most [#WAIT] for it.
     int publish(final Packet.Publish message, final String origin) {
-        return broker.publish(message, origin).orTimeout(WAIT.toMillis(), TimeUnit.MILLISECONDS).join();
+        return gateway.publish(message, origin).orTimeout(WAIT.toMillis(), TimeUnit.MILLISECONDS).join();
     }
 
     /// Returns once every sweep that could see the clock as it is now has finished, its publishes included: a sweep
@@ -86,13 +86,13 @@ final class TestBroker implements AutoCloseable {
     /// sweep that started after that one finished.
     void sweepsDone() throws IOException {
         for (int i = 0; i < 2; i++) {
-            final int before = broker.stats().sessions();
+            final int before = gateway.stats().sessions();
             final String marker = "sweep-marker-" + i;
             try (RawClient m = RawClient.connected(port(), RawClient.connect(marker, true, 1))) {
                 disconnect(m, marker);
             }
             clock.advance(Duration.ofSeconds(2));
-            await().atMost(WAIT).until(() -> broker.stats().sessions() == before);
+            await().atMost(WAIT).until(() -> gateway.stats().sessions() == before);
         }
     }
 
@@ -102,7 +102,7 @@ final class TestBroker implements AutoCloseable {
     /// client's presence after that record, so this waits for the clear.
     void disconnect(final RawClient client, final String clientId) throws IOException {
         // a subscription again on the same filter replaces it, so every call may make sure the watcher is there
-        broker.subscribe(PRESENCE_WATCH, Names.PRESENCE + "+", 1, false, (message, _) -> {
+        gateway.subscribe(PRESENCE_WATCH, Names.PRESENCE + "+", 1, false, (message, _) -> {
             if (message.payload().length == 0) {
                 presenceClears.computeIfAbsent(message.topic().substring(Names.PRESENCE.length()),
                         _ -> new AtomicInteger()).incrementAndGet();
@@ -124,7 +124,7 @@ final class TestBroker implements AutoCloseable {
         return new InetSocketAddress(InetAddress.getLoopbackAddress(), 0);
     }
 
-    /// The bounds of [BrokerOptions] a test sets small, so it reaches the one it tests in a few packets.
+    /// The bounds of [GatewayOptions] a test sets small, so it reaches the one it tests in a few packets.
     record Bounds(int maxQueued, long maxQueuedBytes, long maxBacklogBytes, int maxRetained, long maxRetainedBytes,
             int maxTopicLevels, int maxFiltersPerSubscribe, int maxSubscriptions) {
 

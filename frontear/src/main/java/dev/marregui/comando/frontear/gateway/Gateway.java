@@ -59,7 +59,7 @@ import dev.marregui.comando.frontear.watch.Watch;
  * connection's late end never clears the presence of the one that took its session over. Until a {@link Gate} is
  * installed, no client may publish or subscribe under {@code $frontear/}.
  * <p>
- * Bounds: what a client can make the broker hold is bounded by {@link BrokerOptions}, each bound's usage in
+ * Bounds: what a client can make the broker hold is bounded by {@link GatewayOptions}, each bound's usage in
  * {@link #stats()}: a session's bytes, a connection's unsent bytes, the retained messages and their bytes, the levels
  * of a topic, and the filters of a SUBSCRIBE and of a session. A message's bytes are what holding it costs,
  * {@link Packet.Publish#weight()}, its user properties and the objects around it included.
@@ -80,15 +80,15 @@ import dev.marregui.comando.frontear.watch.Watch;
  * {@code <slug>@<machine>~<node>}, so two machines' links to one node, or a remote link and a local one, never take
  * each other's session over, and its arrivals are those of this node's link {@code <slug>@<machine>}.
  */
-public final class Broker implements AutoCloseable {
+public final class Gateway implements AutoCloseable {
 
-    private static final System.Logger LOG = System.getLogger(Broker.class.getName());
+    private static final System.Logger LOG = System.getLogger(Gateway.class.getName());
 
     /** The highest QoS the broker grants and accepts (§3.2.2.3.4). */
     static final int MAXIMUM_QOS = 1;
     /** The prefix of a shared subscription's filter (§4.8.2), which the broker refuses with 0x9E. */
     static final String SHARED = "$share/";
-    private static final String BROKER_ORIGIN = "$frontear";
+    private static final String GATEWAY_ORIGIN = "$frontear";
     private static final String CLIENT_KEY = "c/";
     private static final String INTERNAL_KEY = "i/";
     private static final String ASSIGNED_PREFIX = "frontear-";
@@ -121,7 +121,7 @@ public final class Broker implements AutoCloseable {
     private final Failures refusedRemote = new Failures("remote connection refused, the listener holds its most");
     // numbers the connections of both listeners, so the names of their strands stay apart; taken by the accept strands
     private final AtomicInteger numbered = new AtomicInteger();
-    private final BrokerOptions options;
+    private final GatewayOptions options;
     private final ServerSocket server;
     private final int port;
     private final String owner;
@@ -176,7 +176,7 @@ public final class Broker implements AutoCloseable {
     // listener or none
     private volatile Remote remote;
 
-    private Broker(final BrokerOptions options, final ServerSocket server, final Watch watch, final String node,
+    private Gateway(final GatewayOptions options, final ServerSocket server, final Watch watch, final String node,
             final boolean holdLinks) {
         this.options = options;
         this.watch = watch;
@@ -192,12 +192,12 @@ public final class Broker implements AutoCloseable {
     }
 
     /** Binds {@code options.bind()} and starts accepting clients. */
-    public static Broker start(final BrokerOptions options) throws IOException {
+    public static Gateway start(final GatewayOptions options) throws IOException {
         return start(options, new Watch(1));
     }
 
     /** As above, keeping what it routes in {@code watch} while that is on. */
-    public static Broker start(final BrokerOptions options, final Watch watch) throws IOException {
+    public static Gateway start(final GatewayOptions options, final Watch watch) throws IOException {
         return open(options, Objects.requireNonNull(watch, "watch"), null, false);
     }
 
@@ -206,7 +206,7 @@ public final class Broker implements AutoCloseable {
      * and whose part after the last {@code ~} is not {@code node} is refused 0x85, so a link aimed at another node's
      * port delivers nothing to this one.
      */
-    public static Broker start(final BrokerOptions options, final Watch watch, final String node) throws IOException {
+    public static Gateway start(final GatewayOptions options, final Watch watch, final String node) throws IOException {
         return start(options, watch, node, false);
     }
 
@@ -215,12 +215,12 @@ public final class Broker implements AutoCloseable {
      * {@link #openLinks()}, so a link that queued for this node while it was down drains only once the host's own
      * subscribers are in place: a message it carried before would reach none of them.
      */
-    public static Broker start(final BrokerOptions options, final Watch watch, final String node,
+    public static Gateway start(final GatewayOptions options, final Watch watch, final String node,
             final boolean holdLinks) throws IOException {
         return open(options, Objects.requireNonNull(watch, "watch"), Objects.requireNonNull(node, "node"), holdLinks);
     }
 
-    private static Broker open(final BrokerOptions options, final Watch watch, final String node,
+    private static Gateway open(final GatewayOptions options, final Watch watch, final String node,
             final boolean holdLinks) throws IOException {
         Objects.requireNonNull(options, "options");
         final ServerSocket server = new ServerSocket();
@@ -230,13 +230,13 @@ public final class Broker implements AutoCloseable {
             server.close();
             throw e;
         }
-        final Broker broker = new Broker(options, server, watch, node, holdLinks);
-        broker.acceptor.execute(broker::acceptLoop);
-        broker.sweeper.scheduleAtFixedRate(broker::sweep, SWEEP_MILLIS, SWEEP_MILLIS, TimeUnit.MILLISECONDS);
-        LOG.log(System.Logger.Level.INFO, "broker started [port=" + broker.port + ", receiveMaximum="
+        final Gateway gateway = new Gateway(options, server, watch, node, holdLinks);
+        gateway.acceptor.execute(gateway::acceptLoop);
+        gateway.sweeper.scheduleAtFixedRate(gateway::sweep, SWEEP_MILLIS, SWEEP_MILLIS, TimeUnit.MILLISECONDS);
+        LOG.log(System.Logger.Level.INFO, "broker started [port=" + gateway.port + ", receiveMaximum="
                 + options.receiveMaximum() + ", maximumPacketSize=" + options.maximumPacketSize() + ", maxSessions="
                 + options.maxSessions() + ", node=" + node + ", linksHeld=" + holdLinks + ']');
-        return broker;
+        return gateway;
     }
 
     /** The port the broker listens on. */
@@ -535,7 +535,7 @@ public final class Broker implements AutoCloseable {
         LOG.log(System.Logger.Level.INFO, "broker closed [port=" + port + ", connections=" + all.size() + ']');
     }
 
-    BrokerOptions options() {
+    GatewayOptions options() {
         return options;
     }
 
@@ -648,7 +648,7 @@ public final class Broker implements AutoCloseable {
             s.attach(conn, c, Connection.encode(new Packet.ConnAck(present, Packet.SUCCESS, options.receiveMaximum(),
                     options.maximumPacketSize(), 0, Packet.NO_SERVER_KEEP_ALIVE, assigned, null, CAPABILITIES)));
             deferred.add(new Deferred(new Packet.Publish(Names.PRESENCE + id, ONLINE, 1, true, false, 0, null, null,
-                    ONLINE_META), BROKER_ORIGIN, false));
+                    ONLINE_META), GATEWAY_ORIGIN, false));
             later(deferred);
         }
         LOG.log(System.Logger.Level.DEBUG, "client connected [client=" + id + ", connection=" + conn.number
@@ -942,7 +942,7 @@ public final class Broker implements AutoCloseable {
             endSession(s, deferred);
         }
         deferred.add(new Deferred(new Packet.Publish(Names.PRESENCE + s.clientId, new byte[0], 1, true, false, 0, null,
-                null), BROKER_ORIGIN, false));
+                null), GATEWAY_ORIGIN, false));
         LOG.log(System.Logger.Level.DEBUG, "client disconnected [client=" + s.clientId + ", connection="
                 + conn.number + ", will=" + !wills.isEmpty() + ']');
         return true;
@@ -1133,7 +1133,7 @@ public final class Broker implements AutoCloseable {
      * What the broker holds and what it dropped: QoS 1 messages past a session's bounds ({@code droppedFull}),
      * messages past their expiry ({@code droppedExpired}), messages larger than a client's maximum packet size
      * ({@code droppedOversize}), and internal subscribers that failed a delivery. Beside each byte bound of
-     * {@link BrokerOptions}, its usage: the retained messages' bytes and the retained publishes refused past the
+     * {@link GatewayOptions}, its usage: the retained messages' bytes and the retained publishes refused past the
      * store's bounds, the publishes, wills and subscriptions refused for their depth, the subscriptions refused past
      * the filters of one SUBSCRIBE or of one session, the most subscriptions a session holds now (against
      * {@code maxSubscriptions}), the most bytes a session holds and a connection has unsent now, and the connections

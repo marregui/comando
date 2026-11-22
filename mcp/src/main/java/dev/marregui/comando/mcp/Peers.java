@@ -158,7 +158,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     static final int QUESTION_CHARS = 4_000;
     /** How long a new consult session may take to appear in the state after it was asked for. */
     private static final Duration MAKE_WITHIN = Duration.ofSeconds(5);
-    static final String FABRIC_DOWN = "this instance is not connected to frontear, so it reaches no other instance: "
+    static final String OCTOPUS_DOWN = "this instance is not connected to frontear, so it reaches no other instance: "
             + "start frontear with its toggle at the top of the workspace, right of cdb's; "
             + "presence resumes within seconds once it runs";
     /**
@@ -277,7 +277,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private record Asked(String peer, String peerName, String target, CompletableFuture<Reply> reply, long sentNanos) {
     }
 
-    private final PeerBroker broker;
+    private final PeerGateway gateway;
     private final Me me;
     private final IntentSink sink;
     private final Supplier<AppState> state;
@@ -371,24 +371,49 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private long cutSentNanos;
 
     /**
-     * Peers through {@code broker} for instance {@code me}; consult sessions are made in {@code workDir}, and
+     * Peers through {@code gateway} for instance {@code me}; consult sessions are made in {@code workDir}, and
      * {@code agentsFile} says which peers are refused.
      */
-    public Peers(final PeerBroker broker, final Me me, final IntentSink sink, final Supplier<AppState> state, final TranscriptRegistry transcripts, final String workDir,
-                 final Path agentsFile) {
-        this(broker, me, sink, state, transcripts, workDir, agentsFile, ANSWER_WITHIN);
+    public Peers(
+            final PeerGateway gateway,
+            final Me me,
+            final IntentSink sink,
+            final Supplier<AppState> state,
+            final TranscriptRegistry transcripts,
+            final String workDir,
+            final Path agentsFile
+    ) {
+        this(gateway, me, sink, state, transcripts, workDir, agentsFile, ANSWER_WITHIN);
     }
 
     /** As above, with the bound on a consult turn given; for tests. */
-    Peers(final PeerBroker broker, final Me me, final IntentSink sink, final Supplier<AppState> state, final TranscriptRegistry transcripts, final String workDir, final Path agentsFile,
-          final Duration answerWithin) {
-        this(broker, me, sink, state, transcripts, workDir, agentsFile, answerWithin, answerWithin.plus(SEND_WITHIN).plus(EXPIRE_AFTER));
+    Peers(
+            final PeerGateway gateway,
+            final Me me,
+            final IntentSink sink,
+            final Supplier<AppState> state,
+            final TranscriptRegistry transcripts,
+            final String workDir,
+            final Path agentsFile,
+            final Duration answerWithin
+    ) {
+        this(gateway, me, sink, state, transcripts, workDir, agentsFile, answerWithin,
+                answerWithin.plus(SEND_WITHIN).plus(EXPIRE_AFTER));
     }
 
     /** As above, with how long a question asked waits for its reply given too; for tests. */
-    Peers(final PeerBroker broker, final Me me, final IntentSink sink, final Supplier<AppState> state, final TranscriptRegistry transcripts, final String workDir, final Path agentsFile,
-          final Duration answerWithin, final Duration expireWithin) {
-        this(broker, me, sink, state, transcripts, workDir, agentsFile, answerWithin, expireWithin, REMOTE_EXPIRY,
+    Peers(
+            final PeerGateway gateway,
+            final Me me,
+            final IntentSink sink,
+            final Supplier<AppState> state,
+            final TranscriptRegistry transcripts,
+            final String workDir,
+            final Path agentsFile,
+            final Duration answerWithin,
+            final Duration expireWithin
+    ) {
+        this(gateway, me, sink, state, transcripts, workDir, agentsFile, answerWithin, expireWithin, REMOTE_EXPIRY,
                 REMOTE_EVERY);
     }
 
@@ -398,7 +423,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
      */
     @TestOnly
     Peers(
-            final PeerBroker broker,
+            final PeerGateway gateway,
             final Me me,
             final IntentSink sink,
             final Supplier<AppState> state,
@@ -410,7 +435,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             final Duration presentFor,
             final Duration resendEvery
     ) {
-        this.broker = broker;
+        this.gateway = gateway;
         this.me = me;
         this.sink = sink;
         this.state = state;
@@ -469,10 +494,10 @@ public final class Peers implements AutoCloseable, InstancesPort {
             first = subscribed.size() == 1;
         }
         if (first) {
-            broker.subscribe(MACHINES + "+/instance/+/presence", this::remotePresence);
+            gateway.subscribe(MACHINES + "+/instance/+/presence", this::remotePresence);
         }
-        broker.subscribe(inboxTopic(m, me.slug()), this::inbox);
-        broker.subscribe(replyTopic(m, me.slug()), this::reply);
+        gateway.subscribe(inboxTopic(m, me.slug()), this::inbox);
+        gateway.subscribe(replyTopic(m, me.slug()), this::reply);
     }
 
     /** The questions from other machines dropped since start; the {@code machines} tool shows them. */
@@ -597,11 +622,11 @@ public final class Peers implements AutoCloseable, InstancesPort {
      * changes nothing, and a presence is retained state that the next one replaces.
      */
     public void start() {
-        broker.will(presenceTopic(me.slug()), new byte[0], true);
-        broker.onConnected(this::connected);
-        broker.subscribe(TOPICS + "+/presence", this::presence);
-        broker.subscribe(inboxTopic(me.slug()), this::inbox);
-        broker.subscribe(replyTopic(me.slug()), this::reply);
+        gateway.will(presenceTopic(me.slug()), new byte[0], true);
+        gateway.onConnected(this::connected);
+        gateway.subscribe(TOPICS + "+/presence", this::presence);
+        gateway.subscribe(inboxTopic(me.slug()), this::inbox);
+        gateway.subscribe(replyTopic(me.slug()), this::reply);
         synchronized (machineLock) {
             running = true;
         }
@@ -673,7 +698,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         try {
             expire();
             show();
-            if (closed || !broker.connected()) {
+            if (closed || !gateway.connected()) {
                 return;
             }
             // the presence is built, compared and handed to the broker under one lock, so two ticks on different
@@ -682,7 +707,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 final String now = presenceJson();
                 if (!now.equals(lastPresence)) {
                     lastPresence = now;
-                    sent(broker.publish(presenceTopic(me.slug()), now.getBytes(StandardCharsets.UTF_8), true, null,
+                    sent(gateway.publish(presenceTopic(me.slug()), now.getBytes(StandardCharsets.UTF_8), true, null,
                             null));
                 }
                 cutTick();
@@ -702,7 +727,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         final String m = machine;
         final String topic = m.isEmpty() ? "" : presenceTopic(m, me.slug());
         if (!cutTopic.isEmpty() && !cutTopic.equals(topic)) {
-            sent(broker.publish(cutTopic, new byte[0], true, null, null));
+            sent(gateway.publish(cutTopic, new byte[0], true, null, null));
             cutTopic = "";
             lastCut = null;
         }
@@ -717,7 +742,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         lastCut = now;
         cutTopic = topic;
         cutSentNanos = at;
-        sent(broker.publish(topic, now.getBytes(StandardCharsets.UTF_8), true, null, null,
+        sent(gateway.publish(topic, now.getBytes(StandardCharsets.UTF_8), true, null, null,
                 REMOTE_EXPIRY.toSeconds()));
     }
 
@@ -850,7 +875,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 p.path(HOST_KEY).asBoolean(p.path(OLD_HOST_KEY).asBoolean(false)));
     }
 
-    private void presence(final PeerBroker.Message m) {
+    private void presence(final PeerGateway.Message m) {
         final String slug = between(m.topic(), TOPICS, "/presence");
         if (slug.isEmpty()) {
             return;
@@ -892,7 +917,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
      * it, is not its topic's machine is dropped. It is neither remembered nor linked to: the gateway's link to its
      * machine carries it.
      */
-    private void remotePresence(final PeerBroker.Message m) {
+    private void remotePresence(final PeerGateway.Message m) {
         final String[] t = m.topic().split("/", -1);
         if (t.length != 6 || !"instance".equals(t[3]) || !"presence".equals(t[5])) {
             return;
@@ -977,7 +1002,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
     }
 
-    private void inbox(final PeerBroker.Message m) {
+    private void inbox(final PeerGateway.Message m) {
         if (m.responseTopic() == null || m.correlation() == null) {
             LOG.log(System.Logger.Level.DEBUG, "a question without a response topic or correlation data, dropped [topic=" + m.topic() + ']');
             return;
@@ -1060,7 +1085,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
      * there. It is named by its id, as its payload's name is not checked; its main is the overseer only when its
      * machine is granted the overseer's authority, and every other asker's question is answered in plan mode.
      */
-    private Asker remoteAsker(final PeerBroker.Message m, final JsonNode q) {
+    private Asker remoteAsker(final PeerGateway.Message m, final JsonNode q) {
         final String here = machine;
         final String origin = m.origin();
         final String there = InstanceName.machineOfOrigin(origin);
@@ -1303,12 +1328,13 @@ public final class Peers implements AutoCloseable, InstancesPort {
         p.put("text", r.text());
         p.put("instance", r.instance());
         p.put("session", r.session());
-        broker.publish(topic, p.toString().getBytes(StandardCharsets.UTF_8), false, null, correlation).whenComplete((v, e) -> {
-            if (e != null) {
-                LOG.log(System.Logger.Level.WARNING, "a reply was not sent [id="
-                        + new String(correlation, StandardCharsets.UTF_8) + ", topic=" + topic + ']', e);
-            }
-        });
+        gateway.publish(topic, p.toString().getBytes(StandardCharsets.UTF_8), false, null, correlation)
+                .whenComplete((v, e) -> {
+                    if (e != null) {
+                        LOG.log(System.Logger.Level.WARNING, "a reply was not sent [id="
+                                + new String(correlation, StandardCharsets.UTF_8) + ", topic=" + topic + ']', e);
+                    }
+                });
     }
 
     /**
@@ -1338,7 +1364,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
     }
 
-    private void reply(final PeerBroker.Message m) {
+    private void reply(final PeerGateway.Message m) {
         if (m.correlation() == null) {
             return;
         }
@@ -1365,8 +1391,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /** {@code instances_list}: the other instances present on frontear, of this machine and of the paired ones. */
     McpTools.Outcome list() {
-        if (!broker.connected()) {
-            return McpTools.Outcome.fail(FABRIC_DOWN);
+        if (!gateway.connected()) {
+            return McpTools.Outcome.fail(OCTOPUS_DOWN);
         }
         final List<Peer> others = new ArrayList<>(others());
         final List<Peer> away = remotesPresent();
@@ -1443,8 +1469,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (to.isEmpty() || text.isEmpty()) {
             return McpTools.Outcome.fail("instance and text are required");
         }
-        if (!broker.connected()) {
-            return McpTools.Outcome.fail(FABRIC_DOWN);
+        if (!gateway.connected()) {
+            return McpTools.Outcome.fail(OCTOPUS_DOWN);
         }
         final Target found = target(to);
         if (found.peer() == null) {
@@ -1492,7 +1518,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             // the question lives as long as this instance waits for its reply, so none is answered after it gave up
             final long expirySeconds = Math.max(1L, (expireWithin.toMillis() + 999L) / 1000L);
             try {
-                broker.publish(inbox, q.toString().getBytes(StandardCharsets.UTF_8), false, replyTo,
+                gateway.publish(inbox, q.toString().getBytes(StandardCharsets.UTF_8), false, replyTo,
                         id.getBytes(StandardCharsets.UTF_8), expirySeconds)
                         .get(SEND_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
                 LOG.log(System.Logger.Level.INFO, "question sent [id=" + id + ", instance=" + p.slug() + ", session="
@@ -1792,7 +1818,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /** The instances and questions as the window shows them now. */
     InstancesState instances() {
-        final boolean connected = !closed && broker.connected();
+        final boolean connected = !closed && gateway.connected();
         // with the link down, no presence is current: every instance is shown as last seen
         final List<Peer> present = connected ? others() : List.of();
         final Set<String> here = new HashSet<>(present.stream().map(Peer::slug).toList());
@@ -1872,17 +1898,18 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 writeSeen();
             }
         }
-        if (broker.connected()) {
+        if (gateway.connected()) {
             final String cut;
             synchronized (presenceLock) {
                 cut = cutTopic;
             }
             try {
                 if (!cut.isEmpty()) {
-                    broker.publish(cut, new byte[0], true, null, null)
+                    gateway.publish(cut, new byte[0], true, null, null)
                             .get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
                 }
-                broker.publish(presenceTopic(me.slug()), new byte[0], true, null, null).get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
+                gateway.publish(presenceTopic(me.slug()), new byte[0], true, null, null)
+                        .get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
             } catch (final ExecutionException | TimeoutException e) {
                 LOG.log(System.Logger.Level.WARNING, "presence not cleared at close", e);
             } catch (final InterruptedException e) {

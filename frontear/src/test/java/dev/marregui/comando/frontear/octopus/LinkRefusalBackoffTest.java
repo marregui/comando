@@ -16,8 +16,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import dev.marregui.comando.frontear.gateway.Broker;
-import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.Gateway;
+import dev.marregui.comando.frontear.gateway.GatewayOptions;
 import dev.marregui.comando.frontear.gateway.InternalSubscriber;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.store.LogOptions;
@@ -38,7 +38,7 @@ class LinkRefusalBackoffTest {
     @Test
     void aWindowRefusedTogetherBacksOffByRoundsNotByMessages(@TempDir final Path dir) throws Exception {
         final int k = 8;
-        try (Broker a = broker(); Broker b = broker(); Links links = new Links(a, "A", dir, LOG)) {
+        try (Gateway a = gateway(); Gateway b = gateway(); Links links = new Links(a, "A", dir, LOG)) {
             final RefuseFirst gate = new RefuseFirst(k + 1);
             b.subscribe("gate", "t/#", 1, false, gate);
             links.put(new LinkSpec("ab", "127.0.0.1", b.port(), Set.of("t/#"), Set.of(), 4));
@@ -53,8 +53,8 @@ class LinkRefusalBackoffTest {
         }
     }
 
-    private static Broker broker() throws IOException {
-        return Broker.start(BrokerOptions.defaults(new InetSocketAddress("127.0.0.1", 0)));
+    private static Gateway gateway() throws IOException {
+        return Gateway.start(GatewayOptions.defaults(new InetSocketAddress("127.0.0.1", 0)));
     }
 
     /// Refuses the first `k` messages with 0x97 and takes the rest.

@@ -131,7 +131,7 @@ public final class App implements AutoCloseable {
     private final RootLaunch launch;
     private final RootSetup setup;
     /** frontear as the instances' broker, and this instance among them (record 123); null when left out. */
-    private final MqttPeerBroker peerBroker;
+    private final MqttPeerGateway peerGateway;
     private final Peers peers;
     /** Reads the kit's version at start and every {@link #KIT_EVERY}, and the queues every {@link #QUEUES_EVERY}. */
     private final ScheduledExecutorService kitCheck = Threads.timedStrand("kit-check");
@@ -240,15 +240,15 @@ public final class App implements AutoCloseable {
             // the instances' brokers, a node per instance, linked to the others' (record 187); off the peers, a
             // registry of the data root's own, so no toggle of a test or picture tool touches the machine's
             final boolean onPeers = Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"));
-            final FrontearFabric fabric = FrontearFabric.of(config.home(), InstanceName.current(), loop, onPeers);
+            final FrontearOctopus octopus = FrontearOctopus.of(config.home(), InstanceName.current(), loop, onPeers);
             // agents start and stop them as the toggles do (record 121)
-            mcpTools.servers(List.of(fabric, cdb));
+            mcpTools.servers(List.of(octopus, cdb));
             final SessionCatalogue catalogue = new SessionCatalogue(root.projects());
             ui = new ComandoUi(new ComandoUi.Dependencies(
                     loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
-                    cdb, fabric, setup, version, config.home(), config.logDir(), onQuit));
+                    cdb, octopus, setup, version, config.home(), config.logDir(), onQuit));
             // the tabs' topics: one reader, one Haiku process at a time, whatever the number of panels
             ui.topics(own(new ClaudeTopics(config.claudeExecutable(), launch, config.runDir())));
             // the search window's answers: its threads end with the application (record 139)
@@ -260,7 +260,7 @@ public final class App implements AutoCloseable {
             // writes there; the drain closes first, then the sink, both before the fabric (record 187)
             final PacketSink packets = own(onPeers && machineCdb ? new PacketSink(new CdbWriter(cdb))
                     : PacketSink.off());
-            final LabDrain lab = own(new LabDrain(new FrontearSource(fabric::node), SwingUtilities::invokeLater,
+            final LabDrain lab = own(new LabDrain(new FrontearSource(octopus::node), SwingUtilities::invokeLater,
                     packets));
             ui.lab(lab);
             mcpTools.lab(lab);
@@ -274,24 +274,25 @@ public final class App implements AutoCloseable {
             // launch; this instance's presence is cleared, and its link closed, before its node stops
             if (onPeers) {
                 final Peers.Me me = Peers.Me.of(InstanceName.current(), version, Main.roleFile(config.home()));
-                peerBroker = own(new MqttPeerBroker(me.clientId(), fabric::mqttPort, fabric::runningOrHost,
-                        fabric::generation));
+                peerGateway = own(new MqttPeerGateway(me.clientId(), octopus::mqttPort, octopus::runningOrHost,
+                        octopus::generation));
                 // a consult session is made where a new session is: the home folder
-                peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
+                peers = own(new Peers(peerGateway, me, loop, loop::state, transcripts, HomeDir.home(),
+                        config.home().resolve("agents.json")));
                 // the instances seen are remembered in the data root, and the presence says whether this one's node
                 // runs (records 124, 187)
                 peers.dataRoot(config.home());
-                peers.host(fabric::isRunning);
+                peers.host(octopus::isRunning);
                 // a peer whose process is gone is dropped, a link that connects gets this presence again, and a peer
                 // forgotten loses its link and registry entry (record 187)
-                fabric.onPeers(peers::gone, peers::resendPresence);
-                peers.onForget(fabric::forget);
+                octopus.onPeers(peers::gone, peers::resendPresence);
+                peers.onForget(octopus::forget);
                 // the others' links are let in once this instance's peer link has its subscriptions, so a question
                 // queued for it while it was down is not routed to nobody (record 187)
-                peerBroker.onSubscribed(fabric::openLinks);
+                peerGateway.onSubscribed(octopus::openLinks);
                 // a peer first seen gets its link at once, and a question to it waits for that link, as the link is
                 // the only subscriber of its inbox here (record 187)
-                peers.linkTo(fabric::linkTo);
+                peers.linkTo(octopus::linkTo);
                 mcpTools.peers(peers);
                 // the sidebar's Instances tab asks and refuses through it (record 124)
                 ui.instances(peers);
@@ -299,13 +300,13 @@ public final class App implements AutoCloseable {
                 // carries their topics to it; a question from another machine is answered as its grant says
                 // (record 189)
                 final Machines machines = Machines.of();
-                fabric.machines(machines);
+                octopus.machines(machines);
                 peers.machine(machines.self().machine());
                 peers.grants(machines::grantOf);
                 mcpTools.machines(machines);
                 ui.machines(machines);
             } else {
-                peerBroker = null;
+                peerGateway = null;
                 peers = null;
                 // no node, no other machine: the tools and the window say so
                 mcpTools.machines(MachinesPort.NONE);
@@ -315,7 +316,7 @@ public final class App implements AutoCloseable {
             // the kit check uses KitGit, Peers and the window: its strand stops before them
             own(() -> ExecutorStop.now("app", kitCheck));
             // this instance's node stops before the machine's cdb; the others' keep running, their links to it queueing
-            owned.addLast(fabric);
+            owned.addLast(octopus);
             // the machine's cdb is left running: its errands stop last, after the metrics log that writes to it
             owned.addLast(cdb);
             // the window closes last: it stays, greyed and titled "closing…", until everything behind it has closed
@@ -371,7 +372,7 @@ public final class App implements AutoCloseable {
         if (peers != null) {
             // the last will and the subscriptions are set before the first connect
             peers.start();
-            peerBroker.start();
+            peerGateway.start();
         }
     }
 

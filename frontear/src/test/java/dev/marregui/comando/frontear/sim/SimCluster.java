@@ -38,8 +38,8 @@ import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.frontear.Frontear;
 import dev.marregui.comando.frontear.alexander.Signer;
-import dev.marregui.comando.frontear.gateway.Broker;
-import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.Gateway;
+import dev.marregui.comando.frontear.gateway.GatewayOptions;
 import dev.marregui.comando.frontear.octopus.LinkOptions;
 import dev.marregui.comando.frontear.octopus.LinkState;
 import dev.marregui.comando.frontear.protocol.MqttClient;
@@ -82,7 +82,7 @@ final class SimCluster implements AutoCloseable {
     private static final List<List<String>> RECORDERS = List.of(List.of("sim/#", "simb/#"),
             List.of("sim/0", "sim/2", "simb/1"));
     private static final CompletableFuture<Integer> ACCEPTED = CompletableFuture.completedFuture(Packet.SUCCESS);
-    private static final BrokerOptions BOUNDS = BrokerOptions.defaults(new InetSocketAddress(
+    private static final GatewayOptions BOUNDS = GatewayOptions.defaults(new InetSocketAddress(
             InetAddress.getLoopbackAddress(), 0));
     private static final int QUEUE_MAX = LinkOptions.defaults().queueMax();
 
@@ -252,13 +252,13 @@ final class SimCluster implements AutoCloseable {
     }
 
     private void burst(final String node, final int count, final String topic) {
-        final Broker broker = nodes.get(node).frontear.broker();
+        final Gateway gateway = nodes.get(node).frontear.gateway();
         final Set<String> covering = covering(node, topic);
         final long[] seqs = new long[count];
         final List<CompletableFuture<Integer>> acks = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             seqs[i] = ledger.publish(node, topic, covering);
-            acks.add(broker.publish(new Packet.Publish(topic, payload(node, seqs[i]), 1, false, false, 0, null, null),
+            acks.add(gateway.publish(new Packet.Publish(topic, payload(node, seqs[i]), 1, false, false, 0, null, null),
                     "sim-burst-" + node));
         }
         settle(node, seqs, acks, "burst");
@@ -384,7 +384,7 @@ final class SimCluster implements AutoCloseable {
         });
         for (final Planned p : links.values()) {
             final Node near = nodes.get(p.link.from());
-            final Broker far = nodes.get(p.link.to()).frontear.broker();
+            final Gateway far = nodes.get(p.link.to()).frontear.gateway();
             for (final String f : p.in) {
                 final String payload = PROBE + p.link.id() + ' ' + f;
                 final String seen = LINK_ORIGIN + p.link.id() + ' ' + payload;
@@ -461,7 +461,7 @@ final class SimCluster implements AutoCloseable {
             }
             final long expected = 3 + links.values().stream().filter(p -> p.present && p.link.to().equals(n.name))
                     .count();
-            final int connections = n.frontear.broker().stats().connections();
+            final int connections = n.frontear.gateway().stats().connections();
             if (connections != expected) {
                 b.append(n.name).append(" connections=").append(connections).append("/").append(expected).append(' ');
             }
@@ -473,7 +473,7 @@ final class SimCluster implements AutoCloseable {
     private void sample(final String when) {
         markOverflowed();
         for (final Node n : nodes.values()) {
-            final Broker.Stats s = n.frontear.broker().stats();
+            final Gateway.Stats s = n.frontear.gateway().stats();
             bound(when, n.name, "sessions", s.sessions(), BOUNDS.maxSessions());
             bound(when, n.name, "retained", s.retained(), BOUNDS.maxRetained());
             bound(when, n.name, "retainedBytes", s.retainedBytes(), BOUNDS.maxRetainedBytes());
@@ -500,7 +500,7 @@ final class SimCluster implements AutoCloseable {
     /// Leaves out of the checks a client subscriber on a node whose sessions dropped messages past their bound.
     private void markOverflowed() {
         for (final Node n : nodes.values()) {
-            if (n.frontear.broker().stats().droppedFull() > 0) {
+            if (n.frontear.gateway().stats().droppedFull() > 0) {
                 n.client.unchecked();
             }
         }
@@ -615,11 +615,11 @@ final class SimCluster implements AutoCloseable {
             frontear = Frontear.start(name, 0, dir.resolve(name), trusted, InstantSource.system());
             for (final Ledger.Sink r : recorders) {
                 for (final String f : r.filters()) {
-                    frontear.broker().subscribe("sim-" + r, f, 1, false, (m, _) -> record(r, m));
+                    frontear.gateway().subscribe("sim-" + r, f, 1, false, (m, _) -> record(r, m));
                 }
             }
             if (schedule.check() == Schedule.Check.EXACT) {
-                frontear.broker().subscribe("sim-" + name + "/probes", "#", 1, false, (m, origin) -> {
+                frontear.gateway().subscribe("sim-" + name + "/probes", "#", 1, false, (m, origin) -> {
                     if (probe(m)) {
                         probes.add(origin + ' ' + new String(m.payload(), StandardCharsets.US_ASCII));
                     }

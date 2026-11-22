@@ -21,13 +21,13 @@ import static org.awaitility.Awaitility.await;
 /// the broker declines with their reason codes, the subscription options, retained messages, message expiry, the
 /// properties passed through, both sides' Receive Maximum and Maximum Packet Size, redelivery, and PUBACK after the
 /// internal subscribers with the worst of their codes.
-class BrokerPublishTest {
+class GatewayPublishTest {
 
-    private TestBroker test;
+    private TestGateway test;
 
     @BeforeEach
     void start() throws IOException {
-        test = TestBroker.start();
+        test = TestGateway.start();
     }
 
     @AfterEach
@@ -170,12 +170,12 @@ class BrokerPublishTest {
     void anEmptyRetainedMessageClearsTheTopic() throws IOException {
         try (RawClient p = RawClient.connected(test.port(), "p")) {
             // the client's own presence is retained too, published on the broker's presence strand after CONNACK
-            await().atMost(TestBroker.WAIT).until(() -> test.broker.stats().retained() == 1);
+            await().atMost(TestGateway.WAIT).until(() -> test.gateway.stats().retained() == 1);
             final int before = 1;
             p.publish(new Packet.Publish("r", new byte[] {1}, 1, true, false, 1, null, null));
-            assertThat(test.broker.stats().retained()).isEqualTo(before + 1);
+            assertThat(test.gateway.stats().retained()).isEqualTo(before + 1);
             p.publish(new Packet.Publish("r", new byte[0], 1, true, false, 1, null, null));
-            assertThat(test.broker.stats().retained()).isEqualTo(before);
+            assertThat(test.gateway.stats().retained()).isEqualTo(before);
         }
         try (RawClient s = RawClient.connected(test.port(), "s")) {
             s.subscribe(new Packet.Subscription("r", 1));
@@ -207,7 +207,7 @@ class BrokerPublishTest {
             assertThat(a.subscribe(new Packet.Subscription("r", 1))).containsExactly(1);
             assertThat(a.ping()).isEmpty();
         }
-        assertThat(test.broker.stats().droppedExpired()).isEqualTo(2);
+        assertThat(test.gateway.stats().droppedExpired()).isEqualTo(2);
     }
 
     /// Response topic, correlation data, user properties, content type and payload format pass unchanged.
@@ -248,10 +248,10 @@ class BrokerPublishTest {
 
     /// A client with more QoS 1 publishes unacknowledged than the broker's Receive Maximum is sent DISCONNECT 0x93.
     @Test
-    void aPublishPastTheBrokersReceiveMaximumEndsTheConnection() throws IOException {
-        test.broker.subscribe("held", "slow", 1, false, (m, o) -> new CompletableFuture<>());
+    void aPublishPastTheGatewaysReceiveMaximumEndsTheConnection() throws IOException {
+        test.gateway.subscribe("held", "slow", 1, false, (m, o) -> new CompletableFuture<>());
         try (RawClient c = RawClient.connected(test.port(), "a")) {
-            for (int i = 1; i <= TestBroker.RECEIVE_MAXIMUM + 1; i++) {
+            for (int i = 1; i <= TestGateway.RECEIVE_MAXIMUM + 1; i++) {
                 c.send(RawClient.qos1("slow", "m").withPacketId(i));
             }
             assertThat(c.untilClosed()).containsExactly(new Packet.Disconnect(Packet.RECEIVE_MAXIMUM_EXCEEDED, null));
@@ -267,14 +267,14 @@ class BrokerPublishTest {
             p.publish(new Packet.Publish("t", new byte[100], 1, false, false, 1, null, null));
             p.publish(new Packet.Publish("t", new byte[10], 1, false, false, 1, null, null));
             assertThat(s.receive().payload()).hasSize(10);
-            assertThat(test.broker.stats().droppedOversize()).isEqualTo(1);
+            assertThat(test.gateway.stats().droppedOversize()).isEqualTo(1);
         }
     }
 
     /// A packet larger than the broker's Maximum Packet Size ends the connection with DISCONNECT 0x95, refused on its
     /// header before its body is read.
     @Test
-    void aPacketLargerThanTheBrokersMaximumIsRefusedWith0x95() throws IOException {
+    void aPacketLargerThanTheGatewaysMaximumIsRefusedWith0x95() throws IOException {
         try (RawClient c = RawClient.connected(test.port(), "a")) {
             // a PUBLISH header announcing 70,000 bytes: 0xF0 0xA2 0x04 as a variable byte integer
             c.sendHex("30 F0 A2 04");
@@ -321,9 +321,9 @@ class BrokerPublishTest {
     @Test
     void pubAckWaitsForTheInternalSubscribersAndCarriesTheWorstCode() throws IOException {
         final List<CompletableFuture<Integer>> held = new CopyOnWriteArrayList<>();
-        test.broker.subscribe("held", "t", 1, false, (m, o) -> hold(held));
-        final TestBroker.Recording quick = new TestBroker.Recording();
-        test.broker.subscribe("quick", "t", 1, false, quick);
+        test.gateway.subscribe("held", "t", 1, false, (m, o) -> hold(held));
+        final TestGateway.Recording quick = new TestGateway.Recording();
+        test.gateway.subscribe("quick", "t", 1, false, quick);
         try (RawClient c = RawClient.connected(test.port(), "a")) {
             c.send(RawClient.qos1("t", "m").withPacketId(1));
             c.send(RawClient.qos1("nobody", "m").withPacketId(2));
@@ -339,16 +339,16 @@ class BrokerPublishTest {
     /// An internal subscriber that throws or fails its stage counts as 0x80 in the PUBACK, and is counted.
     @Test
     void aFailingInternalSubscriberCountsAsUnspecified() throws IOException {
-        test.broker.subscribe("throws", "t", 1, false, (m, o) -> {
+        test.gateway.subscribe("throws", "t", 1, false, (m, o) -> {
             throw new IllegalStateException("subscriber failure for the test");
         });
-        test.broker.subscribe("fails", "u", 1, false,
+        test.gateway.subscribe("fails", "u", 1, false,
                 (m, o) -> CompletableFuture.failedFuture(new IllegalStateException("failed stage for the test")));
         try (RawClient c = RawClient.connected(test.port(), "a")) {
             assertThat(c.publish(RawClient.qos1("t", "m"))).isEqualTo(Packet.UNSPECIFIED);
             assertThat(c.publish(RawClient.qos1("u", "m"))).isEqualTo(Packet.UNSPECIFIED);
         }
-        assertThat(test.broker.stats().subscriberFailures()).isEqualTo(2);
+        assertThat(test.gateway.stats().subscriberFailures()).isEqualTo(2);
     }
 
     /// A stage the test completes by hand, kept in `held`.

@@ -31,7 +31,7 @@ command line.
 | Package | Role | Main classes |
 |---|---|---|
 | `frontear` | One node, started and stopped as a unit | `Frontear` |
-| `gateway` | Connections, sessions, retained messages, routing | `Broker`, `BrokerOptions`, `Connection`, `Session`, `InternalSubscriber`, `Gate` |
+| `gateway` | Connections, sessions, retained messages, routing | `Gateway`, `GatewayOptions`, `Connection`, `Session`, `InternalSubscriber`, `Gate` |
 | `channels` | Which subscriber matches which topic | `TopicTree`, `Entry`, `Match` |
 | `octopus` | Forwarding to and from a peer broker | `Links`, `Link`, `LinkSpec`, `LinkFile`, `LinkOptions`, `LinkState`, `Forwarding` |
 | `store` | A link's log on disk | `LinkLog`, `LogForcer`, `LogOptions`, `LogFiles`, `WholeFile`, `Record` |
@@ -63,7 +63,7 @@ and subscribers inside the node share all three.
   connection ends.
 - **The gate.** A `Gate` decides what a client may publish and subscribe to. Without one, `$frontear/` is closed
   to clients.
-- **Bounds.** `BrokerOptions` caps everything that can grow: 1,000 sessions, 1,000 queued messages and 64 MiB per
+- **Bounds.** `GatewayOptions` caps everything that can grow: 1,000 sessions, 1,000 queued messages and 64 MiB per
   session, 10,000 retained messages, 128 topic levels. Past a bound the broker answers 0x97, quota exceeded.
 - **Liveness.** A connection must send CONNECT within 10 s. Silence for 1.5 times its keep alive closes it.
 
@@ -179,7 +179,7 @@ kind of thread is a platform thread: the log forcer, because a force blocks in t
 
 - `frontear` depends on the JDK and on `core`, of which it uses three packages: `loop`, `json` and `files`.
 - `app` depends on `frontear`: it can host a node, and its peer client is `frontear.protocol`'s `MqttClient`.
-- Test fixtures (`FakeBroker`, `Recorder`, `Relay`) are published for `app`'s tests.
+- Test fixtures (`FakeGateway`, `Recorder`, `Relay`) are published for `app`'s tests.
 
 ## 8. Tests
 
@@ -188,7 +188,7 @@ Run them with `./gradlew :frontear:test`.
 | Tests | Prove |
 |---|---|
 | `mqtt/` `CodecTest`, `CodecCorpusTest`, `WireTest`, `MqttClientTest` | Every packet encodes and decodes; the client's flows. |
-| `broker/` `BrokerProtocolTest`, `BrokerBoundsTest`, `BrokerRaceTest` | Sessions that outlive a connection, every bound, a drop and an immediate reconnect. |
+| `broker/` `GatewayProtocolTest`, `GatewayBoundsTest`, `GatewayRaceTest` | Sessions that outlive a connection, every bound, a drop and an immediate reconnect. |
 | `tree/TopicTreeTest` | Matching with `+` and `#`. |
 | `queue/LinkLogCrashTest` | A cut at every file operation: a kill, a kill mid-write, a power cut. |
 | `link/ForwardingTest`, `LinksTest`, `LinkRefusalBackoffTest` | Hop counts and expiry, order and no loss across restarts, the backoff on a refusal. |
@@ -196,7 +196,7 @@ Run them with `./gradlew :frontear:test`.
 | `sim/` `LineSimTest`, `RingSimTest`, `ChainSimTest`, `ShortcutSimTest` | Real nodes on the loopback behind faulty relays; a ledger checks loss, order and hops. |
 
 A simulation prints its two seeds. Replay it with `COMANDO_SIM_SEED0`, `COMANDO_SIM_SEED1` and
-`COMANDO_SIM_RUNS=1`. `COMANDO_SOAK=true` runs ten times as many. `BrokerInteropTest` runs against another
+`COMANDO_SIM_RUNS=1`. `COMANDO_SOAK=true` runs ten times as many. `ClientInteropTest` runs against another
 broker when you set `COMANDO_MQTT_BROKER=host:port`.
 
 ## Where next

@@ -37,7 +37,7 @@ public final class Relay implements AutoCloseable {
     private final List<Socket> open = new CopyOnWriteArrayList<>();
     private final AtomicInteger links = new AtomicInteger();
     private final AtomicIntegerArray fromClient = new AtomicIntegerArray(TYPES);
-    private final AtomicIntegerArray fromBroker = new AtomicIntegerArray(TYPES);
+    private final AtomicIntegerArray fromGateway = new AtomicIntegerArray(TYPES);
 
     /// A relay to the broker at `host`:`port`, accepting clients at once.
     public Relay(final String host, final int port) {
@@ -68,8 +68,8 @@ public final class Relay implements AutoCloseable {
     }
 
     /// The packets of control packet `type` forwarded from the broker to clients.
-    public int fromBroker(final int type) {
-        return fromBroker.get(type);
+    public int fromGateway(final int type) {
+        return fromGateway.get(type);
     }
 
     /// Closes every open link, both of its sockets, without a word to either side; later clients are still relayed.
@@ -103,19 +103,19 @@ public final class Relay implements AutoCloseable {
             } catch (final IOException _) {
                 return;
             }
-            final Socket broker = new Socket();
+            final Socket gateway = new Socket();
             try {
-                broker.connect(new InetSocketAddress(host, port), (int) CONNECT_WITHIN.toMillis());
+                gateway.connect(new InetSocketAddress(host, port), (int) CONNECT_WITHIN.toMillis());
             } catch (final IOException _) {
                 quietly(client);
-                quietly(broker);
+                quietly(gateway);
                 continue;
             }
             open.add(client);
-            open.add(broker);
+            open.add(gateway);
             links.incrementAndGet();
-            pump(client, broker, fromClient, "relay-to-broker");
-            pump(broker, client, fromBroker, "relay-to-client");
+            pump(client, gateway, fromClient, "relay-to-broker");
+            pump(gateway, client, fromGateway, "relay-to-client");
         }
     }
 

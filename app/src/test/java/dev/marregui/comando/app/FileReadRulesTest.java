@@ -71,7 +71,7 @@ class FileReadRulesTest {
         noClasses().that().doNotHaveFullyQualifiedName(Mapped.class.getName())
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
                 .and().doNotHaveFullyQualifiedName(MachineCdb.class.getName())
-                .and().doNotHaveFullyQualifiedName(FrontearFabric.class.getName())
+                .and().doNotHaveFullyQualifiedName(FrontearOctopus.class.getName())
                 .and().doNotHaveFullyQualifiedName(CDB_STORE_FILES)
                 .and().doNotHaveFullyQualifiedName(FRONTEAR_DISK_FILES)
                 .should().callMethodWhere(target(name("open")).and(target(owner(assignableTo(FileChannel.class)))))

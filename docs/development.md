@@ -300,7 +300,7 @@ tool commit that added `final` and ordered the imports.
 | G-2.3, G-3.1, G-10.7 | rule, hot path | plot: tick text formatted per frame, a `Path2D` and lambdas per series per repaint (`PlotCanvas`); `TextBox` lambdas | The plot is over its budget; its fix is one change | the plot's frame-time fix |
 | G-15.2, G-15.12 | defect | frontear MQTT reconnect: no jitter, no attempt limit | Disputed: the standard's v3 backlog asks whether "reconnects while the broker runs" is a stop condition | the standard's answer |
 | G-15.6 | rule | intent queue, strands (a session's among them, timed strands included), `ClaudeProcess` stdin: unbounded | Measured, bound later per use pattern: each reports its depth and peak to the metrics table `comando_queue` | the bound each queue's use calls for |
-| G-15.7 | defect | registry removal not fenced | Found 2026-10-30 | a change to `FrontearFabric`'s registry |
+| G-15.7 | defect | registry removal not fenced | Found 2026-10-30 | a change to `FrontearOctopus`'s registry |
 | G-5.3, G-6.5 | rule | log messages not shaped `[key=value]`; `Pty` has no logger of its own | Predates the standard | a change to the file |
 | G-10.1, G-10.5 | rule | member order in `PlotGate`; `tl` prefix and `length()` names | Predates the standard | a change to the file |
 | G-11.5 | rule | 34 `Thread.sleep` calls in `*Test.java` files (16 inside a loop, 14 fixed waits, among them waits that check nothing happens, 4 in helpers) and 5 unbounded joins (3 `Thread.join()`, 2 `CompletableFuture.join()`), counted 2026-11-01 with `grep`; the hand-run mains `Snapshot` and the three gates hold 18 more and are not tests | Predates the standard | a change to the test |

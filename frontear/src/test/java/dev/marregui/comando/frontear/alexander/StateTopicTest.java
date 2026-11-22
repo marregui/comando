@@ -25,23 +25,23 @@ class StateTopicTest {
     private static final long START_MILLIS = 1_800_000_000_000L;
 
     private final List<Packet.Publish> published = new ArrayList<>();
-    private FakeMesh mesh;
+    private FakeOctopus octopus;
     private TestClock clock;
     private StateTopic topic;
 
     @BeforeEach
     void topic() {
         published.clear();
-        mesh = new FakeMesh();
+        octopus = new FakeOctopus();
         clock = new TestClock(START_MILLIS);
-        topic = new StateTopic(mesh, "n1", clock, published::add);
+        topic = new StateTopic(octopus, "n1", clock, published::add);
     }
 
     /// The first look publishes on `$frontear/state/n1/links`, retained, QoS 1, JSON, with each link's fields, the
     /// links sorted by id.
     @Test
     void theFirstLookPublishesTheLinksRetained() {
-        mesh.state = List.of(new LinkState("b", true, 1, 2, 3, 4, 5, 6), new LinkState("a", false, 0, 0, 0, 0, 0));
+        octopus.state = List.of(new LinkState("b", true, 1, 2, 3, 4, 5, 6), new LinkState("a", false, 0, 0, 0, 0, 0));
         assertThat(topic.publishIfChanged()).isTrue();
         final Packet.Publish message = published.getFirst();
         assertThat(message.topic()).isEqualTo("$frontear/state/n1/links");
@@ -74,14 +74,14 @@ class StateTopicTest {
     @Test
     void aChangeIsRepublishedAtMostOnceASecond() {
         topic.publishIfChanged();
-        mesh.state = List.of(new LinkState("a", false, 0, 0, 0, 0, 0));
+        octopus.state = List.of(new LinkState("a", false, 0, 0, 0, 0, 0));
         clock.advance(Duration.ofMillis(1));
         assertThat(topic.publishIfChanged()).isFalse();
         clock.set(START_MILLIS + 999);
         assertThat(topic.publishIfChanged()).isFalse();
         clock.set(START_MILLIS + 1_000);
         assertThat(topic.publishIfChanged()).isTrue();
-        mesh.state = List.of(new LinkState("a", true, 0, 0, 0, 0, 0));
+        octopus.state = List.of(new LinkState("a", true, 0, 0, 0, 0, 0));
         assertThat(topic.publishIfChanged()).isFalse();
         clock.advance(StateTopic.EVERY);
         assertThat(topic.publishIfChanged()).isTrue();
@@ -94,7 +94,7 @@ class StateTopicTest {
     @Test
     void aClockThatStepsBackDoesNotHoldAChange() {
         topic.publishIfChanged();
-        mesh.state = List.of(new LinkState("a", false, 0, 0, 0, 0, 0));
+        octopus.state = List.of(new LinkState("a", false, 0, 0, 0, 0, 0));
         clock.set(START_MILLIS - Duration.ofHours(1).toMillis());
         assertThat(topic.publishIfChanged()).isTrue();
     }
