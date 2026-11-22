@@ -66,6 +66,35 @@ final class WebPageView implements PageView {
 
     private static final String SCROLL = "Math.round(window.scrollX) + ',' + Math.round(window.scrollY)";
 
+    /**
+     * Gives a page with no style sheet of its own the theme's, as a style element of comando's; takes it away from a
+     * page that has one, which keeps its own look whole. Called with the rules as its one argument; runs even where
+     * the page's own scripts are off, as every call of the view's does.
+     */
+    private static final String THEME = """
+            (function (css) {
+                var own = document.getElementById('comando-theme');
+                var sheets = 0;
+                for (var i = 0; i < document.styleSheets.length; i++) {
+                    var node = document.styleSheets[i].ownerNode;
+                    if (!node || node.id !== 'comando-theme') {
+                        sheets++;
+                    }
+                }
+                if (sheets > 0) {
+                    if (own) {
+                        own.parentNode.removeChild(own);
+                    }
+                    return;
+                }
+                if (!own) {
+                    own = document.createElement('style');
+                    own.id = 'comando-theme';
+                    (document.head || document.documentElement).appendChild(own);
+                }
+                own.textContent = css;
+            })""";
+
     /** Whether this process has started the JavaFX toolkit. EDT only, as {@link #create()} is. */
     private static boolean toolkitStarted;
 
@@ -85,6 +114,12 @@ final class WebPageView implements PageView {
 
     /** The page shown, without leaving it for its own anchors; JavaFX thread only. */
     private URI page;
+
+    /**
+     * Whether a page has loaded and still shows: a link stopped before it left the page keeps it shown, though the
+     * engine then reads the load as cancelled and may drop its document. JavaFX thread only.
+     */
+    private boolean shown;
 
     /** The scroll position to restore once the page now loading has loaded, or null; JavaFX thread only. */
     private int[] scrollAfterLoad;
@@ -115,6 +150,7 @@ final class WebPageView implements PageView {
         final URI uri = file.toAbsolutePath().toUri();
         onFx(() -> {
             page = uri;
+            shown = false;
             scrollAfterLoad = null;
             engine.setJavaScriptEnabled(scripts);
             engine.load(uri.toString());
@@ -242,10 +278,19 @@ final class WebPageView implements PageView {
                 && Objects.equals(to.getRawSchemeSpecificPart(), page.getRawSchemeSpecificPart());
     }
 
-    /** A page finished loading: keeps its selection, and restores the scroll position a reload asked for. */
+    /**
+     * A page finished loading: keeps its selection, takes the theme when it has no style of its own, and restores the
+     * scroll position a reload asked for.
+     */
     private void loaded() {
         if (closed) {
             return;
+        }
+        shown = true;
+        try {
+            theme();
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot give the page the theme [page=" + page + ']', e);
         }
         try {
             engine.executeScript(KEEP_SELECTION);
@@ -257,6 +302,12 @@ final class WebPageView implements PageView {
         } finally {
             scrollAfterLoad = null;
         }
+    }
+
+    /** Gives the page the theme's rules as they are now, unless it has style of its own. JavaFX thread. */
+    private void theme() {
+        final String css = panel.themeCss.replace("\\", "\\\\").replace("'", "\\'");
+        engine.executeScript(THEME + "('" + css + "')");
     }
 
     /** The page's scroll position as {x, y}, or null when the page cannot say. JavaFX thread. */
@@ -317,6 +368,12 @@ final class WebPageView implements PageView {
         /** The panel colour as {@code #rrggbb}, for the scene behind the page; EDT writes, the JavaFX thread reads. */
         private volatile String groundHex = "#000000";
 
+        /**
+         * The rules a page without style of its own takes ({@link PageTheme}); the EDT writes them at each theme
+         * change, the JavaFX thread reads them when a page loads or the theme changes.
+         */
+        private volatile String themeCss = "";
+
         @Override
         public void updateUI() {
             super.updateUI();
@@ -331,9 +388,19 @@ final class WebPageView implements PageView {
             }
             setBackground(c);
             groundHex = Theme.hex(c);
+            themeCss = PageTheme.css();
             Platform.runLater(() -> {
                 if (view != null && view.getScene() != null) {
                     view.getScene().setFill(Paint.valueOf(groundHex));
+                }
+                // the page shown takes the new theme now, also when the last load was a link stopped before it left
+                // the page (its state then reads cancelled); one still loading takes it again when loaded
+                if (!closed && engine != null && shown) {
+                    try {
+                        theme();
+                    } catch (final RuntimeException e) {
+                        LOG.log(System.Logger.Level.WARNING, "cannot restyle the page [page=" + page + ']', e);
+                    }
                 }
             });
         }

@@ -251,6 +251,75 @@ class WebPageViewUiTest {
         }
     }
 
+    /// A page with no style sheet of its own takes the theme's ground, and the next theme's when another is chosen; a
+    /// page with its own style sheet keeps its own ground under either theme.
+    @Test
+    void aPageWithoutStyleTakesTheThemeAndOneWithStyleKeepsItsOwn() throws Exception {
+        SwingUtilities.invokeAndWait(Theme::install);
+        try {
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.PAPER, Tint.TREASURE));
+            final Color paper = onEdt(Theme::ground);
+            load(write("plain.html", "<!doctype html><html><head><title>Plain</title></head><body><p>Plain text</p>"
+                    + "</body></html>"));
+            awaitText(t -> t.body().contains("Plain text"));
+            Awaitility.await().atMost(PAGE).until(() -> near(corner(), paper));
+
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.GRAPHITE, Tint.TREASURE));
+            final Color graphite = onEdt(Theme::ground);
+            assertThat(graphite).isNotEqualTo(paper);
+            Awaitility.await().atMost(PAGE).until(() -> near(corner(), graphite));
+
+            load(write("styled.html", "<!doctype html><html><head><title>Styled</title>"
+                    + "<style>body { background: #336699; }</style></head><body><p>Styled text</p></body></html>"));
+            awaitText(t -> t.title().equals("Styled"));
+            Awaitility.await().atMost(PAGE).until(() -> near(corner(), new Color(0x336699)));
+        } finally {
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.GRAPHITE, Tint.TREASURE));
+        }
+    }
+
+    /// A page whose last load was a link stopped before it left the page still takes the next theme.
+    @Test
+    void aPageAfterAStoppedLinkStillTakesTheNextTheme() throws Exception {
+        SwingUtilities.invokeAndWait(Theme::install);
+        try {
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.PAPER, Tint.TREASURE));
+            write("away.html", "<!doctype html><html><head><title>Away</title></head><body>away</body></html>");
+            load(write("stay.html", """
+                    <!doctype html><html><head><title>Stay</title></head><body style="margin:0">
+                    <a href="away.html" style="display:block;width:300px;height:60px">Away</a>
+                    </body></html>
+                    """));
+            awaitText(t -> t.title().equals("Stay"));
+            click(40, 20);
+            Awaitility.await().atMost(PAGE).until(() -> links.size() == 1);
+
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.GRAPHITE, Tint.TREASURE));
+            final Color graphite = onEdt(Theme::ground);
+
+            Awaitility.await().atMost(PAGE).until(() -> near(corner(320, 200), graphite));
+            assertThat(text().title()).isEqualTo("Stay");
+        } finally {
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.GRAPHITE, Tint.TREASURE));
+        }
+    }
+
+    /** The colour of the page's top-left corner as the view draws it now. */
+    private Color corner() throws Exception {
+        return corner(4, 4);
+    }
+
+    /** The colour of the page at {@code (x, y)} as the view draws it now. */
+    private Color corner(final int x, final int y) throws Exception {
+        return new Color(page.snapshot().get(PAGE.toMillis(), TimeUnit.MILLISECONDS).getRGB(x, y));
+    }
+
+    /** Whether {@code a} and {@code b} differ by at most 2 in each channel: WebKit may round a colour it blends. */
+    private static boolean near(final Color a, final Color b) {
+        return Math.abs(a.getRed() - b.getRed()) <= 2 && Math.abs(a.getGreen() - b.getGreen()) <= 2
+                && Math.abs(a.getBlue() - b.getBlue()) <= 2;
+    }
+
     /// Once the page is clicked, the down arrow scrolls it: the keys reach the page through its Swing component.
     @Test
     void theDownArrowScrollsAClickedPage() throws Exception {
