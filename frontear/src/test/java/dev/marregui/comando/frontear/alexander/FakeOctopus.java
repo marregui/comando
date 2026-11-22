@@ -13,8 +13,8 @@ import dev.marregui.comando.frontear.octopus.LinkSpec;
 import dev.marregui.comando.frontear.octopus.LinkState;
 import dev.marregui.comando.frontear.octopus.Octopus;
 
-/// A mesh that records what it was asked, for a test to read from any thread. A put adds or replaces the link's state
-/// (disconnected, all counters 0) and a remove drops it; a test may also set the state outright, make every call
+/// An octopus that records what it was asked, for a test to read from any thread. A put adds or replaces the link's
+/// state (disconnected, all counters 0) and a remove drops it; a test may also set the state outright, make every call
 /// fail, make each put throw an `Error`, or hold each put until it releases `hold`.
 final class FakeOctopus implements Octopus {
 
@@ -24,13 +24,13 @@ final class FakeOctopus implements Octopus {
     final List<LinkSpec> puts = new CopyOnWriteArrayList<>();
     final List<String> removes = new CopyOnWriteArrayList<>();
     final List<Filters> filters = new CopyOnWriteArrayList<>();
-    /// The links' state, replaced whole; written by the test and the caller of the mesh, read by both.
+    /// The links' state, replaced whole; written by the test and the caller of the octopus, read by both.
     volatile List<LinkState> state = List.of();
-    /// Thrown by every call when not null; written by the test, read by the caller of the mesh.
+    /// Thrown by every call when not null; written by the test, read by the caller of the octopus.
     volatile RuntimeException failure;
-    /// Each put waits for it when not null; written by the test, read by the caller of the mesh.
+    /// Each put waits for it when not null; written by the test, read by the caller of the octopus.
     volatile CountDownLatch hold;
-    /// Thrown by each put when not null; written by the test, read by the caller of the mesh.
+    /// Thrown by each put when not null; written by the test, read by the caller of the octopus.
     volatile Error putError;
 
     @Override

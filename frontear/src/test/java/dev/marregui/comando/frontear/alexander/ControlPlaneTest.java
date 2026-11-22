@@ -37,18 +37,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-/// A node's control plane on a real broker, its mesh a fake and its clock the test's:
+/// A node's control plane on a real gateway, its octopus a fake and its clock the test's:
 /// - a signed `PutLink` is applied and answered on its response topic with its correlation data
 /// - unsigned, an unknown key, a tampered payload, a tampered topic, a ts outside 30 s and a replayed nonce are each
-///   refused with their reason in the PUBACK and the reply, counted, and never reach the mesh
-/// - `GetState` answers with the mesh's state; `RemoveLink` and `SetFilters` reach the mesh; an unknown method, a bad
-///   body and a failing mesh are refused with their reason
+///   refused with their reason in the PUBACK and the reply, counted, and never reach the octopus
+/// - `GetState` answers with the octopus's state; `RemoveLink` and `SetFilters` reach the octopus; an unknown method, a
+/// bad   body and a failing octopus are refused with their reason
 /// - the state topic is republished on change, at most once a second by the injected clock
 /// - a request from before a restart is refused as stale
 /// - no reply goes to a reserved topic, and close is idempotent
 /// - requests waiting for their check are bounded in count and bytes, in all and per origin: past a bound a request is
 ///   refused as busy, and one origin's flood leaves room for another's genuine request
-/// - a mesh that throws an `Error` still lets the PUBACK go
+/// - an octopus that throws an `Error` still lets the PUBACK go
 class ControlPlaneTest {
 
     private static final Duration WAIT = Duration.ofSeconds(10);
@@ -94,8 +94,8 @@ class ControlPlaneTest {
         octopus = new FakeOctopus();
     }
 
-    /// A signed `PutLink` reaches the mesh with its spec, its PUBACK is success, and its reply `{"ok":true}` comes on
-    /// its response topic, JSON, with its correlation data unchanged.
+    /// A signed `PutLink` reaches the octopus with its spec, its PUBACK is success, and its reply `{"ok":true}` comes
+    /// on its response topic, JSON, with its correlation data unchanged.
     @Test
     void aSignedPutLinkIsAppliedAndAnsweredWithItsCorrelationData() throws Exception {
         try (ControlPlane plane = plane()) {
@@ -181,7 +181,7 @@ class ControlPlaneTest {
         }
     }
 
-    /// `GetState` answers with every link of the mesh and its fields.
+    /// `GetState` answers with every link of the octopus and its fields.
     @Test
     void getStateAnswersWithTheOctopusState() throws Exception {
         octopus.state = List.of(new LinkState("a", true, 1, 2, 3, 4, 5, 6));
@@ -203,7 +203,7 @@ class ControlPlaneTest {
         }
     }
 
-    /// `RemoveLink` and `SetFilters` reach the mesh with their fields.
+    /// `RemoveLink` and `SetFilters` reach the octopus with their fields.
     @Test
     void removeLinkAndSetFiltersReachTheOctopus() throws Exception {
         try (ControlPlane plane = plane()) {
@@ -217,7 +217,7 @@ class ControlPlaneTest {
         }
     }
 
-    /// A signed request for a method the node does not know, with a body that is not JSON, or that the mesh throws
+    /// A signed request for a method the node does not know, with a body that is not JSON, or that the octopus throws
     /// on, is refused with its own reason and code, and answered.
     @Test
     void anUnknownMethodABadBodyAndAnOctopusFailureAreRefused() throws Exception {
@@ -300,9 +300,9 @@ class ControlPlaneTest {
         assertThat(octopus.puts).extracting(LinkSpec::id).containsExactly("a", "b");
     }
 
-    /// With the mesh holding the first request, one origin has ORIGIN_PENDING_MAX forged requests waiting and its
+    /// With the octopus holding the first request, one origin has ORIGIN_PENDING_MAX forged requests waiting and its
     /// next is refused at once as busy with 0x97; a genuine request from another origin is still admitted, and once
-    /// the mesh lets go every waiting request is handled and nothing waits.
+    /// the octopus lets go every waiting request is handled and nothing waits.
     @Test
     void pastItsShareOneOriginIsRefusedAsBusyAndAnotherIsStillAdmitted() throws Exception {
         final CountDownLatch release = new CountDownLatch(1);
@@ -333,7 +333,7 @@ class ControlPlaneTest {
         }
     }
 
-    /// With the mesh holding the first request, PENDING_MAX requests from several origins, none past its share, wait
+    /// With the octopus holding the first request, PENDING_MAX requests from several origins, none past its share, wait
     /// and the next, from an origin with nothing waiting, is refused as busy.
     @Test
     void pastItsBoundARequestIsRefusedAsBusy() throws Exception {
@@ -362,7 +362,7 @@ class ControlPlaneTest {
         }
     }
 
-    /// With the mesh holding the first request, forged requests of 1 MiB from one origin wait only up to its byte
+    /// With the octopus holding the first request, forged requests of 1 MiB from one origin wait only up to its byte
     /// share and the next is refused as busy, while a genuine request from another origin is still admitted.
     @Test
     void pastItsByteShareOneOriginIsRefusedAsBusyAndAnotherIsStillAdmitted() throws Exception {
@@ -393,7 +393,7 @@ class ControlPlaneTest {
         }
     }
 
-    /// With the mesh holding the first request, origins each within their byte share fill the plane's byte bound:
+    /// With the octopus holding the first request, origins each within their byte share fill the plane's byte bound:
     /// a request of half a share from an origin with nothing waiting is refused as busy, a small one still fits.
     @Test
     void pastItsByteBoundARequestIsRefusedAsBusy() throws Exception {
@@ -423,7 +423,7 @@ class ControlPlaneTest {
         }
     }
 
-    /// With the mesh holding the first request, forged requests of 20,000 empty user properties each, 5 bytes apiece
+    /// With the octopus holding the first request, forged requests of 20,000 empty user properties each, 5 bytes apiece
     /// on the wire and a list entry, two strings and a record apiece in the heap, are weighed by what they hold: one
     /// origin's waiting requests stay within its byte share on the wire, where counting only their characters
     /// admitted them up to the count bound, a hundred times past the share.
@@ -461,11 +461,11 @@ class ControlPlaneTest {
         }
     }
 
-    /// A mesh that throws an `Error` still lets the request's PUBACK go, with 0x80, so the client's later PUBACKs do
-    /// not wait behind it.
+    /// An octopus that throws an `Error` still lets the request's PUBACK go, with 0x80, so the client's later PUBACKs
+    /// do not wait behind it.
     @Test
     void aRequestTheOctopusFailsWithAnErrorIsStillAcknowledged() throws Exception {
-        octopus.putError = new AssertionError("mesh broke");
+        octopus.putError = new AssertionError("octopus broke");
         try (ControlPlane plane = plane()) {
             assertThat(send(request("PutLink", putLink("a"), clock.millis()))).isEqualTo(Packet.UNSPECIFIED);
             assertNothingWaits(plane);

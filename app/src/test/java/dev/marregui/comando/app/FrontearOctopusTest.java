@@ -61,7 +61,7 @@ import static org.awaitility.Awaitility.await;
 /// - one reconcile links each node to the others with the peer's inbox and reply topics and its own presence out
 /// - a question and its reply cross the links, and a presence is retained on the peer's node
 /// - a question queued for a peer that is down reaches its inbox once after its restart on the same port, which holds
-///   the links until its peer broker is subscribed, and the connect tells the listener, which sends the presence again
+///   the links until its peer gateway is subscribed, and the connect tells the listener, which sends the presence again
 /// - a peer's changed start tells the listener as a connect would
 /// - a subscribe before the start publishes its node lets the links in once it does, and a stop forgets it
 /// - a link to a peer first seen is put at once when wanted, not at the next look
@@ -93,7 +93,7 @@ class FrontearOctopusTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        registry = dir.resolve("comando-fabric.json");
+        registry = dir.resolve("comando-octopus.json");
         base = freePort();
     }
 
@@ -145,7 +145,7 @@ class FrontearOctopusTest {
         assertThat(links("x", xp).keySet()).containsExactly("y");
     }
 
-    /// Two instances' peer brokers on their own nodes, as the peer link runs them: a question published on X's node
+    /// Two instances' peer gateways on their own nodes, as the peer link runs them: a question published on X's node
     /// with a response topic and correlation data reaches Y's inbox over X's link, the answer comes back over Y's link
     /// on that topic with that correlation, and both links count what they sent. X's presence, retained, reaches Y's
     /// node, which hands it to a client that subscribes later as retained.
@@ -206,7 +206,7 @@ class FrontearOctopusTest {
 
     /// Once Y closes, X's link to it disconnects and stays; a question for Y, not retained, queues in its log. Y
     /// started again takes the port it had and holds the links: a link client is refused 0x88, and a subscribe against
-    /// a generation other than its node's lets none in. Y's peer broker, as the peer link wires it, lets them in once
+    /// a generation other than its node's lets none in. Y's peer gateway, as the peer link wires it, lets them in once
     /// its inbox is subscribed; X's link then drains the question into that subscription, once, with its response
     /// topic and correlation data, and X's next reconcile tells the listener that a link connected, whose resend of
     /// X's presence reaches Y.
@@ -455,7 +455,7 @@ class FrontearOctopusTest {
         assertThat(again.mqttPort()).isEqualTo(port);
     }
 
-    /// The first start makes the control key pair in the fabric's folder, the folder and the private half readable by
+    /// The first start makes the control key pair in the octopus's folder, the folder and the private half readable by
     /// the user alone and the public half by all; the node answers a `GetState` signed with the private half read back
     /// from disk and refuses one signed by another key; a restart, in this instance or a new one on the same root,
     /// reuses the pair byte for byte.
@@ -644,7 +644,7 @@ class FrontearOctopusTest {
         assertThat(a.mqttPort()).isEqualTo(port);
     }
 
-    /// Off the peers, as every test and picture tool runs, the fabric's registry is the data root's and its port one
+    /// Off the peers, as every test and picture tool runs, the octopus's registry is the data root's and its port one
     /// the OS picks: a toggle hosts there and never binds the machine's port.
     @Test
     void offThePeersTheOctopusKeepsToTheDataRoot() throws Exception {
@@ -665,7 +665,7 @@ class FrontearOctopusTest {
     }
 
     /// Starts `octopus`'s node as an agent's `server_start frontear` does, waits until it runs, and lets the peers'
-    /// links in, as its peer broker does once subscribed.
+    /// links in, as its peer gateway does once subscribed.
     private static void host(final FrontearOctopus octopus) {
         start(octopus);
         octopus.openLinks(octopus.generation());

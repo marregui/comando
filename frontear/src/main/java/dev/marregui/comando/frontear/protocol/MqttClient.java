@@ -42,11 +42,11 @@ import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.frontear.tls.Tls;
 
 /**
- * An MQTT 5 client over a blocking socket, for the one broker its {@link Options} name: QoS 0 and 1 both ways,
+ * An MQTT 5 client over a blocking socket, for the one gateway its {@link Options} name: QoS 0 and 1 both ways,
  * subscriptions, keep alive, a last will, and reconnection when its {@link Handler} asks for it.
  *
  * <p>Threads. One reader, a timed strand named {@code mqtt-<client id>}, opens each connection, reads it, keeps it
- * alive and runs the reconnects the handler schedules; it never writes once the connection is up, so a broker that
+ * alive and runs the reconnects the handler schedules; it never writes once the connection is up, so a gateway that
  * stops reading cannot stall it. Every later write runs on the writer strand, {@code mqtt-writer-<client id>}, in the
  * order the client queued it, and takes the connection's write lock. A write that lasts longer than
  * {@link #WRITE_WITHIN} is cut by the reader, which closes the socket. The handler's {@code connected} and
@@ -55,7 +55,7 @@ import dev.marregui.comando.frontear.tls.Tls;
  * completion of {@link #connect}'s future, or on the thread that disconnects first.
  *
  * <p>TLS. A client made with an {@link SSLContext} layers TLS 1.3 over each TCP connection and finishes its handshake
- * before CONNECT. The handshake runs on the writer, idle until the broker accepts the connection, while the reader
+ * before CONNECT. The handshake runs on the writer, idle until the gateway accepts the connection, while the reader
  * waits for it at most what {@link #CONNECT_WITHIN} leaves after the TCP connect and closes the socket when it is not
  * done: a read of the handshake would wait its full timeout per record, so a peer that dribbles could hold it longer.
  * A failed or late handshake reaches the handler's {@code disconnected} as any failed attempt does.
@@ -63,7 +63,7 @@ import dev.marregui.comando.frontear.tls.Tls;
  * <p>Delivery. Within one connection, at least once both ways at QoS 1: a message in is acknowledged once the stage
  * its handler returned has completed, with the reason code it gave, and in the order the messages arrived (§4.6); a
  * publish out completes when its PUBACK arrives. The client starts every session clean and lets it expire on
- * disconnect, so a message in flight when a connection ends is lost: its publish fails, and the broker drops what it
+ * disconnect, so a message in flight when a connection ends is lost: its publish fails, and the gateway drops what it
  * had not delivered. Across connections delivery is therefore at most once.
  */
 public final class MqttClient implements AutoCloseable {
@@ -74,12 +74,12 @@ public final class MqttClient implements AutoCloseable {
      * replaced.
      */
     private static final Duration CONNECT_WITHIN = Duration.ofSeconds(10);
-    /** How long the broker may take to answer CONNECT: the HiveMQ client's default, which this client replaced. */
+    /** How long the gateway may take to answer CONNECT: the HiveMQ client's default, which this client replaced. */
     private static final Duration CONNACK_WITHIN = Duration.ofSeconds(60);
     /**
      * How long one write may wait for the write lock or for the socket, after which the connection is dropped.
-     * Unmeasured: a write to a broker on the same machine that drains its socket takes microseconds, so this only
-     * catches a broker that stopped reading.
+     * Unmeasured: a write to a gateway on the same machine that drains its socket takes microseconds, so this only
+     * catches a gateway that stopped reading.
      */
     static final Duration WRITE_WITHIN = Duration.ofSeconds(10);
     /** How often the reader wakes to check the writes when no keep-alive deadline wakes it sooner. Unmeasured. */
@@ -91,8 +91,8 @@ public final class MqttClient implements AutoCloseable {
     /** How long {@link #close} waits for the disconnect: the wait the HiveMQ client's caller gave it. */
     private static final Duration CLOSE_WITHIN = Duration.ofSeconds(2);
     /**
-     * How many QoS 1 publishes may wait for the broker's Receive Maximum to free a slot; a publish past them fails with
-     * {@link Packet#QUOTA_EXCEEDED}. Unmeasured: a peer publishes a handful of messages at a time.
+     * How many QoS 1 publishes may wait for the gateway's Receive Maximum to free a slot; a publish past them fails
+     * with {@link Packet#QUOTA_EXCEEDED}. Unmeasured: a peer publishes a handful of messages at a time.
      */
     public static final int QUEUE_MAX = 1_000;
     private static final int MAX_PACKET_ID = 65_535;
@@ -114,7 +114,7 @@ public final class MqttClient implements AutoCloseable {
     private final ScheduledExecutorService reader;
     /**
      * Runs the writes in the order queued; its queue has no bound of its own, what joins it is bounded where it comes
-     * from: the QoS 1 publishes by the broker's Receive Maximum (the rest wait in {@link #queued}, at most
+     * from: the QoS 1 publishes by the gateway's Receive Maximum (the rest wait in {@link #queued}, at most
      * {@link #QUEUE_MAX}), the SUBSCRIBEs and UNSUBSCRIBEs by the packet ids free, the PUBACKs by
      * {@link Options#receiveMaximum}, one ping at a time, one DISCONNECT. A QoS 0 publish is queued as it comes, so
      * its caller bounds how many it has unwritten, as a link does by its window; a write stuck past
@@ -135,9 +135,9 @@ public final class MqttClient implements AutoCloseable {
     private final CompletableFuture<Void> firstConnect = new CompletableFuture<>();
     /** The QoS 1 publishes and the subscriptions waiting for their acknowledgement, by packet id; guarded by lock. */
     private final Map<Integer, Pending> pending = new HashMap<>();
-    /** The QoS 1 publishes waiting for a slot under the broker's Receive Maximum, in order; guarded by lock. */
+    /** The QoS 1 publishes waiting for a slot under the gateway's Receive Maximum, in order; guarded by lock. */
     private final ArrayDeque<Queued> queued = new ArrayDeque<>();
-    /** The connection the broker accepted, null while there is none; guarded by lock. */
+    /** The connection the gateway accepted, null while there is none; guarded by lock. */
     private Connection current;
     /** The connection being opened or read, null between connections; guarded by lock. */
     private Connection opening;
@@ -191,7 +191,7 @@ public final class MqttClient implements AutoCloseable {
 
     /**
      * Starts connecting, at once; after a failed attempt or a lost connection the handler says when to try again.
-     * Returns a future that completes when the broker first accepts a connect, and fails when the client stops trying
+     * Returns a future that completes when the gateway first accepts a connect, and fails when the client stops trying
      * before that. A second call returns the same future.
      */
     public CompletableFuture<Void> connect() {
@@ -206,7 +206,7 @@ public final class MqttClient implements AutoCloseable {
     }
 
     /**
-     * Brings the scheduled reconnect forward to now, when one waits: the handler learnt the broker is back before its
+     * Brings the scheduled reconnect forward to now, when one waits: the handler learnt the gateway is back before its
      * backoff ran out. Returns false, changing nothing, while a connection runs, before {@link #connect} or after
      * {@link #disconnect}. A scheduled connect that has begun but not yet opened its connection gives way to the woken
      * one, so one chain of connects runs.
@@ -222,7 +222,7 @@ public final class MqttClient implements AutoCloseable {
         }
     }
 
-    /** Whether the broker has accepted the current connection and it has not ended. */
+    /** Whether the gateway has accepted the current connection and it has not ended. */
     public boolean connected() {
         synchronized (lock) {
             return current != null;
@@ -230,7 +230,7 @@ public final class MqttClient implements AutoCloseable {
     }
 
     /**
-     * The Receive Maximum the broker set for the current connection, how many QoS 1 publishes may await their PUBACK
+     * The Receive Maximum the gateway set for the current connection, how many QoS 1 publishes may await their PUBACK
      * at once; 0 while not connected.
      */
     public int receiveMaximum() {
@@ -249,9 +249,9 @@ public final class MqttClient implements AutoCloseable {
 
     /**
      * Sends {@code message} at its QoS, 0 or 1, with the packet id this client gives it. A QoS 0 publish completes
-     * once written, a QoS 1 one when the broker acknowledges it; past the broker's Receive Maximum a QoS 1 publish
+     * once written, a QoS 1 one when the gateway acknowledges it; past the gateway's Receive Maximum a QoS 1 publish
      * waits its turn, up to {@link #QUEUE_MAX} of them. It fails at once when the client is not connected, when the
-     * packet is larger than the broker accepts, or when the queue is full; later when the broker refuses it or the
+     * packet is larger than the gateway accepts, or when the queue is full; later when the gateway refuses it or the
      * connection ends first.
      */
     public CompletableFuture<Void> publish(final Packet.Publish message) {
@@ -285,13 +285,13 @@ public final class MqttClient implements AutoCloseable {
             synchronized (lock) {
                 final Connection c = connectedOrFail();
                 if (message.qos() > c.maximumQos) {
-                    // [MQTT-3.2.2-11]: never above the Maximum QoS the broker's CONNACK stated
-                    throw new MqttException(Packet.QOS_NOT_SUPPORTED, "QoS above the broker's maximum [qos="
+                    // [MQTT-3.2.2-11]: never above the Maximum QoS the gateway's CONNACK stated
+                    throw new MqttException(Packet.QOS_NOT_SUPPORTED, "QoS above the gateway's maximum [qos="
                             + message.qos() + ", max=" + c.maximumQos + ", topic=" + message.topic() + ']');
                 }
                 if (message.retain() && !c.retainAvailable) {
-                    // [MQTT-3.2.2-14]: no RETAIN 1 to a broker whose CONNACK said Retain Available 0
-                    throw new MqttException(Packet.RETAIN_NOT_SUPPORTED, "retain not available on the broker [topic="
+                    // [MQTT-3.2.2-14]: no RETAIN 1 to a gateway whose CONNACK said Retain Available 0
+                    throw new MqttException(Packet.RETAIN_NOT_SUPPORTED, "retain not available on the gateway [topic="
                             + message.topic() + ']');
                 }
                 if (message.qos() == 0) {
@@ -313,7 +313,7 @@ public final class MqttClient implements AutoCloseable {
     }
 
     /**
-     * Subscribes to {@code filter} with maximum QoS {@code qos}. The future completes when the broker grants the
+     * Subscribes to {@code filter} with maximum QoS {@code qos}. The future completes when the gateway grants the
      * subscription, and fails when it refuses it, when the client is not connected, or when the connection ends first.
      */
     public CompletableFuture<Void> subscribe(final String filter, final int qos) {
@@ -327,7 +327,7 @@ public final class MqttClient implements AutoCloseable {
     }
 
     /**
-     * Unsubscribes from {@code filter}. The future completes when the broker acknowledges it, a filter it held no
+     * Unsubscribes from {@code filter}. The future completes when the gateway acknowledges it, a filter it held no
      * subscription for included, and fails as {@link #subscribe} does.
      */
     public CompletableFuture<Void> unsubscribe(final String filter) {
@@ -352,7 +352,7 @@ public final class MqttClient implements AutoCloseable {
     }
 
     /**
-     * {@code acknowledged}, failed with an {@link MqttException} carrying the reason code when the broker refused the
+     * {@code acknowledged}, failed with an {@link MqttException} carrying the reason code when the gateway refused the
      * packet (0x80 or above, §2.4).
      */
     private static CompletableFuture<Void> refusedFails(final Kind kind, final CompletableFuture<Ack> acknowledged) {
@@ -361,7 +361,7 @@ public final class MqttClient implements AutoCloseable {
             if (e != null) {
                 result.completeExceptionally(e);
             } else if (a.reasonCode() >= Packet.FAILURE) {
-                result.completeExceptionally(new MqttException(a.reasonCode(), "the broker refused the "
+                result.completeExceptionally(new MqttException(a.reasonCode(), "the gateway refused the "
                         + kind.name().toLowerCase(Locale.ROOT) + " [reasonCode=" + Packet.hex(a.reasonCode())
                         + ", reason=" + a.reasonString() + ']'));
             } else {
@@ -372,7 +372,7 @@ public final class MqttClient implements AutoCloseable {
     }
 
     /**
-     * Stops: cancels a scheduled reconnect, sends DISCONNECT on an accepted connection, so the broker drops the will,
+     * Stops: cancels a scheduled reconnect, sends DISCONNECT on an accepted connection, so the gateway drops the will,
      * and closes it. Returns a future that completes once the connection has ended and the client's strands were told
      * to stop; every later call returns it. A client disconnected does not connect again.
      */
@@ -478,22 +478,22 @@ public final class MqttClient implements AutoCloseable {
     }
 
     /**
-     * Opens {@code c}, sends CONNECT and reads until the connection ends. Returns the broker's refusal or DISCONNECT
-     * as the cause; throws when the connection broke or the broker broke the protocol.
+     * Opens {@code c}, sends CONNECT and reads until the connection ends. Returns the gateway's refusal or DISCONNECT
+     * as the cause; throws when the connection broke or the gateway broke the protocol.
      */
     private MqttException run(final Connection c) throws IOException, InterruptedException {
         final long startNanos = System.nanoTime();
         c.socket.setTcpNoDelay(true);
         c.socket.connect(new InetSocketAddress(options.host(), options.port()), (int) CONNECT_WITHIN.toMillis());
         c.open(tls == null ? c.socket : handshake(c, startNanos));
-        // the reader writes CONNECT itself: nothing else writes on a connection the broker has not accepted, and the
-        // send buffer of a new socket is empty, so the write does not wait for the broker
+        // the reader writes CONNECT itself: nothing else writes on a connection the gateway has not accepted, and the
+        // send buffer of a new socket is empty, so the write does not wait for the gateway
         c.write(Codec.encode(new Packet.Connect(options.clientId(), true, options.keepAliveSeconds(), 0,
                 options.receiveMaximum(), options.maximumPacketSize(), options.will())));
         c.socket.setSoTimeout((int) CONNACK_WITHIN.toMillis());
         final int first = c.in.read();
         if (first < 0) {
-            throw new EOFException("the broker closed the connection before acknowledging it");
+            throw new EOFException("the gateway closed the connection before acknowledging it");
         }
         final Packet answer = Codec.read(c.in, first, options.maximumPacketSize());
         if (!(answer instanceof final Packet.ConnAck ack)) {
@@ -501,11 +501,11 @@ public final class MqttClient implements AutoCloseable {
                     + answer.getClass().getSimpleName() + ']');
         }
         if (ack.reasonCode() != Packet.SUCCESS) {
-            return new MqttException(ack.reasonCode(), "the broker refused the connect [reasonCode="
+            return new MqttException(ack.reasonCode(), "the gateway refused the connect [reasonCode="
                     + Packet.hex(ack.reasonCode()) + ", reason=" + ack.reasonString() + ']');
         }
         if (ack.sessionPresent()) {
-            // [MQTT-3.2.2-4]: the client asked Clean Start, so it holds no session the broker could have resumed
+            // [MQTT-3.2.2-4]: the client asked Clean Start, so it holds no session the gateway could have resumed
             throw new MqttException(Packet.PROTOCOL_ERROR, "session present after a clean start [client="
                     + options.clientId() + ']');
         }
@@ -558,7 +558,10 @@ public final class MqttClient implements AutoCloseable {
         }
     }
 
-    /** Reads packets until the broker disconnects, whose DISCONNECT this returns; throws when the connection breaks. */
+    /**
+     * Reads packets until the gateway disconnects, whose DISCONNECT this returns; throws when the connection
+     * breaks.
+     */
     private MqttException readLoop(final Connection c) throws IOException {
         while (true) {
             final long now = System.nanoTime();
@@ -571,7 +574,7 @@ public final class MqttClient implements AutoCloseable {
                 continue;
             }
             if (first < 0) {
-                throw new EOFException("the broker closed the connection");
+                throw new EOFException("the gateway closed the connection");
             }
             c.lastReadNanos = System.nanoTime();
             c.socket.setSoTimeout(c.bodyMillis);
@@ -585,13 +588,13 @@ public final class MqttClient implements AutoCloseable {
     /**
      * The reader's checks between reads: a write that lasts past {@link #WRITE_WITHIN} or a ping unanswered for the
      * keep alive ends the connection; a connection idle in either direction for the keep alive is pinged, as the
-     * HiveMQ client did. Only a PINGRESP answers a ping (§3.12.4): a broker that sends messages but never answers is
+     * HiveMQ client did. Only a PINGRESP answers a ping (§3.12.4): a gateway that sends messages but never answers is
      * timed out all the same.
      */
     private void watch(final Connection c, final long now) throws MqttException {
         // c.writing is written after c.writeStartedNanos, both volatile, so a write seen in progress has its start
         if (c.writing && now - c.writeStartedNanos >= WRITE_WITHIN.toNanos()) {
-            throw new MqttException(Packet.UNSPECIFIED, "write to the broker stalled [waitMillis="
+            throw new MqttException(Packet.UNSPECIFIED, "write to the gateway stalled [waitMillis="
                     + WRITE_WITHIN.toMillis() + ']');
         }
         if (c.keepAliveNanos == 0) {
@@ -628,7 +631,7 @@ public final class MqttClient implements AutoCloseable {
         return read - wrote < 0 ? read : wrote;
     }
 
-    /** Acts on a packet read; returns the cause when it is the broker's DISCONNECT. */
+    /** Acts on a packet read; returns the cause when it is the gateway's DISCONNECT. */
     private MqttException handle(final Connection c, final Packet packet) throws MqttException {
         return switch (packet) {
             case Packet.Publish m -> {
@@ -660,9 +663,9 @@ public final class MqttClient implements AutoCloseable {
                 yield null;
             }
             case Packet.Disconnect(final int code, final String reason, _) -> new MqttException(code,
-                    "the broker disconnected [reasonCode=" + Packet.hex(code) + ", reason=" + reason + ']');
+                    "the gateway disconnected [reasonCode=" + Packet.hex(code) + ", reason=" + reason + ']');
             case Packet.Connect _, Packet.ConnAck _, Packet.Subscribe _, Packet.Unsubscribe _, Packet.PingReq _ ->
-                    throw new MqttException(Packet.PROTOCOL_ERROR, "packet a broker does not send [packet="
+                    throw new MqttException(Packet.PROTOCOL_ERROR, "packet a gateway does not send [packet="
                             + packet.getClass().getSimpleName() + ']');
         };
     }
@@ -676,7 +679,7 @@ public final class MqttClient implements AutoCloseable {
             throw new MqttException(Packet.PROTOCOL_ERROR, "QoS 2 message on a QoS 1 subscription [topic="
                     + m.topic() + ']');
         }
-        // the CONNECT sent options.receiveMaximum(), the most the broker may have unacknowledged at once (§3.1.2.11.3)
+        // the CONNECT sent options.receiveMaximum(), the most the gateway may have unacknowledged at once (§3.1.2.11.3)
         if (m.qos() == 1 && c.unacked.incrementAndGet() > options.receiveMaximum()) {
             throw new MqttException(Packet.RECEIVE_MAXIMUM_EXCEEDED, "more QoS 1 messages unacknowledged than "
                     + "allowed [max=" + options.receiveMaximum() + ']');
@@ -799,7 +802,7 @@ public final class MqttClient implements AutoCloseable {
         c.inflight++;
     }
 
-    /** The connection the broker accepted, or a failure: the client is not connected. Holds lock. */
+    /** The connection the gateway accepted, or a failure: the client is not connected. Holds lock. */
     private Connection connectedOrFail() throws MqttException {
         if (current == null) {
             throw new MqttException(Packet.UNSPECIFIED, "not connected [client=" + options.clientId() + ']');
@@ -819,11 +822,11 @@ public final class MqttClient implements AutoCloseable {
         throw new MqttException(Packet.QUOTA_EXCEEDED, "no packet id free [inFlight=" + pending.size() + ']');
     }
 
-    /** {@code packet}'s bytes, or a failure when the broker's Maximum Packet Size cannot take them. */
+    /** {@code packet}'s bytes, or a failure when the gateway's Maximum Packet Size cannot take them. */
     private static byte[] encode(final Connection c, final Packet packet) throws MqttException {
         final byte[] bytes = Codec.encode(packet);
         if (bytes.length > c.maximumPacketSize) {
-            throw new MqttException(Packet.PACKET_TOO_LARGE, "packet larger than the broker accepts [bytes="
+            throw new MqttException(Packet.PACKET_TOO_LARGE, "packet larger than the gateway accepts [bytes="
                     + bytes.length + ", max=" + c.maximumPacketSize + ']');
         }
         return bytes;
@@ -862,7 +865,8 @@ public final class MqttClient implements AutoCloseable {
 
     /**
      * Sends DISCONNECT with {@code reasonCode} and closes {@code c}, whichever thread asks, at most
-     * {@link #WRITE_WITHIN} later: on the writer the write runs at once; elsewhere it queues behind the writes before it.
+     * {@link #WRITE_WITHIN} later: on the writer the write runs at once; elsewhere it queues behind the writes before
+     * it.
      */
     private void goodbye(final Connection c, final int reasonCode) {
         if (c.out == null) {
@@ -1001,8 +1005,8 @@ public final class MqttClient implements AutoCloseable {
 
     /**
      * Who to connect to and as whom: {@code keepAliveSeconds} 0 for no keep alive, the largest packet this client
-     * reads in bytes (sent to the broker as its Maximum Packet Size), the {@code will}, null for none, how many
-     * QoS 1 messages the broker may have unacknowledged at once (sent as its Receive Maximum), and how many QoS 0
+     * reads in bytes (sent to the gateway as its Maximum Packet Size), the {@code will}, null for none, how many
+     * QoS 1 messages the gateway may have unacknowledged at once (sent as its Receive Maximum), and how many QoS 0
      * messages may wait for the handler: one that arrives past them is dropped and counted in
      * {@link MqttClient#droppedQos0}.
      */
@@ -1045,7 +1049,7 @@ public final class MqttClient implements AutoCloseable {
     /** What a client tells its owner. */
     public interface Handler {
 
-        /** The broker accepted a connect, the first or a later one. On the callbacks executor. */
+        /** The gateway accepted a connect, the first or a later one. On the callbacks executor. */
         void connected();
 
         /** A message arrived. On the callbacks executor, in the order of arrival; a QoS 1 one is acknowledged after. */
@@ -1063,7 +1067,7 @@ public final class MqttClient implements AutoCloseable {
         }
 
         /**
-         * A connect attempt failed, or an accepted connection ended, because of {@code cause}, the broker's refusal
+         * A connect attempt failed, or an accepted connection ended, because of {@code cause}, the gateway's refusal
          * or disconnect included. {@code attempts} counts the attempts failed in a row, 0 when an accepted
          * connection ended. Returns how long to wait before the next attempt, or null for none. On the reader.
          */
@@ -1084,7 +1088,7 @@ public final class MqttClient implements AutoCloseable {
     private record Pending(Kind kind, CompletableFuture<Ack> future) {
     }
 
-    /** A QoS 1 publish waiting for a slot under the broker's Receive Maximum. */
+    /** A QoS 1 publish waiting for a slot under the gateway's Receive Maximum. */
     private record Queued(Packet.Publish message, CompletableFuture<Ack> future) {
     }
 
@@ -1121,7 +1125,7 @@ public final class MqttClient implements AutoCloseable {
         private OutputStream out;
         /** Written by the reader at CONNACK; read by {@link #disconnect} and the writer. */
         private volatile boolean accepted;
-        /** The broker's limits and the keep alive, written by the reader before {@link #accepted}. */
+        /** The gateway's limits and the keep alive, written by the reader before {@link #accepted}. */
         private int receiveMaximum;
         private int maximumPacketSize = Packet.PROTOCOL_MAXIMUM_PACKET_SIZE;
         private int maximumQos = Packet.Capabilities.DEFAULT.maximumQos();
@@ -1154,7 +1158,7 @@ public final class MqttClient implements AutoCloseable {
             out = wire.getOutputStream();
         }
 
-        /** Takes the broker's CONNACK: its limits, and the keep alive that holds. On the reader. */
+        /** Takes the gateway's CONNACK: its limits, and the keep alive that holds. On the reader. */
         void accept(final Packet.ConnAck ack, final int keepAliveSeconds) {
             receiveMaximum = ack.receiveMaximum();
             maximumPacketSize = ack.maximumPacketSize();

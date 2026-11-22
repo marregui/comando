@@ -140,7 +140,7 @@ sealed interface Request {
     record GetState() implements Request {
     }
 
-    /** A request refused before it reached the mesh, with the refusal and what was wrong. */
+    /** A request refused before it reached the octopus, with the refusal and what was wrong. */
     final class Invalid extends Exception {
 
         private final Refusal refusal;

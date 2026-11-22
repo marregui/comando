@@ -13,7 +13,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
 
 /**
  * What a node does, kept for whoever watches it: a ring of a power-of-two number of slots, written by sequence from
- * the broker's, the links' and the logs' threads, and read by pollers through {@link #since}. Off until
+ * the gateway's, the links' and the logs' threads, and read by pollers through {@link #since}. Off until
  * {@link #on(boolean)} turns it on; while off, a hook costs one volatile read and builds nothing.
  *
  * <p>While on, a hook claims the next sequence, builds its event and stores it in the slot the sequence masks to,
@@ -121,7 +121,7 @@ public final class Watch {
 
     /**
      * Keeps a {@link Published} for {@code message} from {@code origin}, routed to {@code matches} subscriptions. From
-     * the broker's threads.
+     * the gateway's threads.
      */
     public void published(final String origin, final Packet.Publish message, final int matches) {
         if (!on) {

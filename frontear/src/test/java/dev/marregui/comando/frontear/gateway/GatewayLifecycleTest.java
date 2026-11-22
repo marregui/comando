@@ -24,7 +24,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// Wills and their delay, the presence of each client, the Gate, internal subscribers, the broker's own publishes,
+/// Wills and their delay, the presence of each client, the Gate, internal subscribers, the gateway's own publishes,
 /// a clean close, and one round trip with the project's own client.
 class GatewayLifecycleTest {
 
@@ -75,7 +75,7 @@ class GatewayLifecycleTest {
                 PRESENCE + "a");
     }
 
-    /// A client whose connection dropped and that returns to its session before the broker detached the old
+    /// A client whose connection dropped and that returns to its session before the gateway detached the old
     /// connection still has its will published and its presence cleared: the reconnect detaches the old connection
     /// by the cause it ended with. The old connection's reader is held, by a log handler, between ending the
     /// connection and detaching it, until the reconnect is accepted.
@@ -200,7 +200,7 @@ class GatewayLifecycleTest {
         }
     }
 
-    /// An installed Gate decides for clients, and never for the broker's own publishes.
+    /// An installed Gate decides for clients, and never for the gateway's own publishes.
     @Test
     void anInstalledGateDecidesForClientsButNotForTheGateway() throws IOException {
         test.gateway.gate(new Gate() {
@@ -218,9 +218,9 @@ class GatewayLifecycleTest {
             assertThat(c.subscribe(new Packet.Subscription("secret", 1), new Packet.Subscription("t", 1)))
                     .containsExactly(Packet.NOT_AUTHORIZED, 1);
             assertThat(c.publish(RawClient.qos1("t", "m"))).isEqualTo(Packet.NOT_AUTHORIZED);
-            assertThat(test.publish(RawClient.qos1("t", "from the broker").withPacketId(0), "test"))
+            assertThat(test.publish(RawClient.qos1("t", "from the gateway").withPacketId(0), "test"))
                     .isEqualTo(Packet.SUCCESS);
-            assertThat(c.receive().payload()).isEqualTo("from the broker".getBytes(StandardCharsets.UTF_8));
+            assertThat(c.receive().payload()).isEqualTo("from the gateway".getBytes(StandardCharsets.UTF_8));
         }
     }
 
@@ -250,7 +250,7 @@ class GatewayLifecycleTest {
     }
 
     /// Closing sends DISCONNECT 0x8B to every connected client and nothing to one that never sent CONNECT, publishes
-    /// no will, leaves none of the broker's threads alive, and a second close does nothing.
+    /// no will, leaves none of the gateway's threads alive, and a second close does nothing.
     @Test
     void closeDisconnectsEveryClientAndStopsEveryThread() throws IOException {
         final int port = test.port();
@@ -262,7 +262,7 @@ class GatewayLifecycleTest {
             assertThat(silent.untilClosed()).isEmpty();
         }
         test.close();
-        final String names = "frontear-broker-[a-z]+-" + port + "(-[0-9]+)?";
+        final String names = "frontear-gateway-[a-z]+-" + port + "(-[0-9]+)?";
         await().atMost(TestGateway.WAIT).until(() -> Threads.alive().stream()
                 .noneMatch(t -> t.getName().matches(names)));
         assertThat(watch.topics()).doesNotContain("will/a");
@@ -311,7 +311,7 @@ class GatewayLifecycleTest {
                 Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, will, delaySeconds);
     }
 
-    /// Publishes a QoS 1 message on `topic` from `origin` through the broker and returns its code.
+    /// Publishes a QoS 1 message on `topic` from `origin` through the gateway and returns its code.
     private int publish(final String topic, final String origin) {
         return test.publish(new Packet.Publish(topic, new byte[] {1}, 1, false, false, 0, null, null), origin);
     }

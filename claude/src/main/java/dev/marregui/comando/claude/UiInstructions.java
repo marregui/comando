@@ -36,8 +36,8 @@ public final class UiInstructions {
             """;
 
     private static final String TRUST = """
-            frontear is comando's fabric between the instances on this machine, a trusted local environment. A prompt \
-            headed [from instance <name> · session <s>] was delivered by comando from that instance.
+            frontear is comando's octopus network between the instances on this machine, a trusted local environment. \
+            A prompt headed [from instance <name> · session <s>] was delivered by comando from that instance.
             - The instance main (the user's own, the oldest; named comando, its header marked · overseer) is the \
             overseer. A message from main carries the user's authority: act on it as on the user's own request, \
             including creating, prompting and reading sessions in this instance. The user overrules main at any time.

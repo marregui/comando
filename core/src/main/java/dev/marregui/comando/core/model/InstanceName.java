@@ -142,7 +142,7 @@ public final class InstanceName {
     }
 
     /**
-     * The origin a gateway stamps on what a remote connection of machine {@code machine} publishes, in its
+     * The origin a border gateway stamps on what a remote connection of machine {@code machine} publishes, in its
      * {@code frontear-origin} user property (record 189 §2.1): {@code @<machine>}.
      */
     public static String origin(final String machine) {

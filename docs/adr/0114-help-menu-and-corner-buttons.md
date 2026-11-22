@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted; amended on 2026-10-29 and 2026-11-01 (see Amendments); the corner gains the fabric's toggle by [record 122](0122-instances-name-kit-brain-data-root-edge.md); superseded in part by [record 185](0185-frontear-is-the-only-fabric.md) | Miguel and Claude |
+| 2026-10-28 | accepted; amended on 2026-10-29 and 2026-11-01 (see Amendments); the corner gains the octopus network's toggle by [record 122](0122-instances-name-kit-brain-data-root-edge.md); superseded in part by [record 185](0185-frontear-is-the-only-octopus-network.md) | Miguel and Claude |
 
 ## 1. Context
 

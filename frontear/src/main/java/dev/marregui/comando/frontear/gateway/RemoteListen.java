@@ -8,7 +8,7 @@ import java.util.function.Function;
 import javax.net.ssl.SSLContext;
 
 /**
- * The network listener of a gateway node (ADR 0189 §2.1): TLS 1.3 on {@code bind}, one address, never the wildcard,
+ * The network listener of the border gateway (ADR 0189 §2.1): TLS 1.3 on {@code bind}, one address, never the wildcard,
  * each client authenticated by its certificate through {@code ssl}, and named by {@code machineOf}, the machine its
  * certificate's key is pinned to, or null for a key no machine is paired with. {@code machine} is this machine's id;
  * {@code maxConnections} the remote connections held at once, one past it closed unanswered; {@code handshake} how

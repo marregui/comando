@@ -59,8 +59,8 @@ class HealthRowsTest {
         assertThat(h.read(node(62_000L, link("bob", true, 0L, 4L))).getFirst().status()).isEqualTo(Status.OK);
     }
 
-    /// A link whose broker messages wait at the limit is `log full`; a log whose 99th percentile force is over 50 ms is
-    /// `slow disk`.
+    /// A link whose gateway messages wait at the limit is `log full`; a log whose 99th percentile force is over 50 ms
+    /// is `slow disk`.
     @Test
     void aFullLogAndASlowForceHaveTheirStatus() {
         final Link full = new Link("bob", true, 0L, 0L, 0L, 0L, 0L, 0L, 64, 64, 0.0, 0.0, 1L, 0L, "");

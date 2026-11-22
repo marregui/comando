@@ -14,9 +14,9 @@ public record LinkStep(long seq, long atMillis, String link, Kind kind, long off
         APPENDED,
         /** The peer accepted the message at {@code offset}, and the cursor may pass it. */
         SENT,
-        /** A message came in over a link and the broker routed it. */
+        /** A message came in over a link and the gateway routed it. */
         ARRIVED,
-        /** A message will not reach the peer, or the local broker, for the reason in {@code detail}. */
+        /** A message will not reach the peer, or the local gateway, for the reason in {@code detail}. */
         DROPPED,
         /** The peer accepted the link's connection. */
         CONNECTED,

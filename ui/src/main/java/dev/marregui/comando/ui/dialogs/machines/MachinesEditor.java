@@ -33,12 +33,12 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * This machine and the machines paired with it (record 189), as a list beside a form: this machine's id, the address
- * its gateway listens on, which the user sets or clears, its port, its fingerprint and its pairing token, to copy to
- * the other machine; the selected paired machine's address, grant, connection and fingerprint; and a field for another
- * machine's token, the fingerprint it holds shown for the user to compare before pairing, with the grant to give it,
- * {@code peer} unless the user picks {@code overseer}. Unpairing asks first. Every call to the port runs on an errand,
- * off the EDT, and its answer comes back on the EDT, the buttons waiting meanwhile; what the port refuses shows in red
- * in the message line, and after each change the machines are read again. EDT only.
+ * its border gateway listens on, which the user sets or clears, its port, its fingerprint and its pairing token, to
+ * copy to the other machine; the selected paired machine's address, grant, connection and fingerprint; and a field for
+ * another machine's token, the fingerprint it holds shown for the user to compare before pairing, with the grant to
+ * give it, {@code peer} unless the user picks {@code overseer}. Unpairing asks first. Every call to the port runs on an
+ * errand, off the EDT, and its answer comes back on the EDT, the buttons waiting meanwhile; what the port refuses shows
+ * in red in the message line, and after each change the machines are read again. EDT only.
  */
 public final class MachinesEditor {
 
@@ -143,7 +143,7 @@ public final class MachinesEditor {
             port.listen(host);
             return host;
         }, h -> {
-            // the gateway reads the machine file at its next look (record 189 §2.2)
+            // the border gateway reads the machine file at its next look (record 189 §2.2)
             note = h.isEmpty() ? "Stopped listening: other machines cannot reach this one"
                     : "Listening on " + h + " from frontear's next look, within 5 s";
             look();
@@ -341,12 +341,12 @@ public final class MachinesEditor {
         }
         form.fact("Machine", machine, "This machine's id, which the other machines know it by");
         form.row("Listen on", FormRows.withButton(listen, setListen), listen, "listen",
-                "Set the address the gateway listens on for other machines; empty stops it",
+                "Set the address the border gateway listens on for other machines; empty stops it",
                 "A Tailscale or LAN address of this machine, never 0.0.0.0; empty: not listening",
-                "The address frontear's gateway, on the node of the instance main, listens on for the paired "
+                "The address frontear's border gateway, on the node of the instance main, listens on for the paired "
                         + "machines, with mutual TLS. It must be an address of this machine; the wildcard is refused. "
                         + "frontear reads it at its next look, within 5 s.");
-        form.fact("Port", portShown, "The gateway's port, port of machine.json");
+        form.fact("Port", portShown, "The border gateway's port, port of machine.json");
         form.fact("Fingerprint", fingerprint, "SHA-256 of this machine's public key; the other machine compares it");
         form.row("Token", FormRows.withButton(token, copyToken), token, "token",
                 "This machine's pairing token: copy it to the other machine's Machines window",

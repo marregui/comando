@@ -5,7 +5,7 @@
 **In one paragraph.** `app` is where comando becomes one program. Every other module is a part with no knowledge of
 its neighbours. `app` holds `main`, builds each part, plugs them together and closes them in the right order. It also
 owns what belongs to no single part: the files comando keeps, the keychain, the intent log, the machine's database
-server and the broker that lets instances talk. Read this page to learn how comando starts, stops, remembers and
+server and the gateway that lets instances talk. Read this page to learn how comando starts, stops, remembers and
 ships.
 
 ## 1. The idea: one place that knows everything
@@ -35,9 +35,9 @@ handler before those six exist, so `App.DeferredEffects` stands in until they do
 | `ui`, the Search view | `Searcher` | `ComandoUi.search` |
 | `ui`, the Instances tab | `mcp` `Peers` | `ComandoUi.instances` |
 | `ui` | `RootSetup`: the kit root, its version and its jobs | `ui`'s `Setup` |
-| `mcp` `McpTools` | The fabric and `MachineCdb`, to start and stop | `core`'s `ServerSwitch` |
+| `mcp` `McpTools` | The octopus network and `MachineCdb`, to start and stop | `core`'s `ServerSwitch` |
 | `mcp` `McpTools` | The terminals of the window | `ComandoUi.terminals` |
-| `mcp` `Peers` | The broker | `mcp`'s `PeerGateway`, implemented by `MqttPeerGateway` |
+| `mcp` `Peers` | The gateway | `mcp`'s `PeerGateway`, implemented by `MqttPeerGateway` |
 
 > **Learn: dependency injection and the composition root.** A lamp does not contain a power station. It has a plug,
 > and someone else decides what the plug goes into. Code built this way asks for what it needs through an interface
@@ -73,7 +73,7 @@ handler before those six exist, so `App.DeferredEffects` stands in until they do
 
 ### The life of the parts
 
-![The life of the parts: built in dependency order, closed in reverse, with the fabric, the machine's cdb and the window kept for the end](../images/mod-app-lifecycle.svg)
+![The life of the parts: built in dependency order, closed in reverse, with the octopus network, the machine's cdb and the window kept for the end](../images/mod-app-lifecycle.svg)
 
 `App` keeps every long-lived part on a stack. The constructor pushes each part as it builds it. `close()` pops, so
 the last part built closes first. The picture shows the ten main parts. The table shows them all, in closing order:
@@ -82,7 +82,7 @@ the last part built closes first. The picture shows the ten main parts. The tabl
 |---|---|---|
 | 1 | The kit check's strand | The periodic read of the kit's version and of the queues |
 | 2 | `Peers` | This instance among the others |
-| 3 | `MqttPeerGateway` | This instance's link to the broker |
+| 3 | `MqttPeerGateway` | This instance's link to the gateway |
 | 4 | `Searcher` | The Search view's searches |
 | 5 | `ClaudeTopics` | The short asks behind the tabs' cards |
 | 6 | `ToolsAdapter` | Repositories, folders and runs |
@@ -97,7 +97,7 @@ the last part built closes first. The picture shows the ten main parts. The tabl
 | 15 | `Store` | The stored files; it writes what is pending |
 | 16 | `KitGit` | The git runs on the kit root |
 | 17 | The kit root | The root named before is named again |
-| 18 | The fabric | This instance's node stops and its registry entry is marked down |
+| 18 | The octopus network | This instance's node stops and its registry entry is marked down |
 | 19 | `MachineCdb` | Its errands stop; the server keeps running |
 | 20 | `ComandoUi` | The window, greyed and titled "closing…" until then |
 
@@ -226,11 +226,11 @@ a real `StateLoop` from it. The window test `UiReplayTest` plays a recording thi
 The server itself: [the `cdb` module](cdb.md) and [the cdb guide](../cdb.md). Why one server for the machine:
 [cdb is the machine server](../adr/0180-cdb-is-the-machine-server.md).
 
-## 7. The fabric
+## 7. The octopus network
 
-![The fabric: three instances, each with a frontear node inside its own JVM on its own port and its MqttPeerGateway as that node's client; each node has a link to every other node, one each way, and each link keeps a log at its sender until the peer acknowledges](../images/mod-app-fabric.svg)
+![The octopus network: three instances, each with a frontear node inside its own JVM on its own port and its MqttPeerGateway as that node's client; each node has a link to every other node, one each way, and each link keeps a log at its sender until the peer acknowledges](../images/mod-app-octopus.svg)
 
-Several comando instances can run on one machine and consult each other. They meet on the fabric: one frontear node
+Several comando instances can run on one machine and consult each other. They meet on the octopus network: one frontear node
 inside each instance's JVM, hosted by its `FrontearOctopus`, and a link from each node to every other one
 ([record 187](../adr/0187-frontear-lab-node-per-instance.md)).
 
@@ -239,9 +239,9 @@ inside each instance's JVM, hosted by its `FrontearOctopus`, and a link from eac
 | Class | `FrontearOctopus`, named `frontear` to the window and the agents |
 | Runs as | A frontear node named as the instance's id, inside its JVM; the node refuses a link client named for another node, and every link client (`0x88`, Server unavailable, which the link retries after its backoff) until `MqttPeerGateway` has its subscriptions acknowledged on it, so what the other nodes queued for this instance is delivered after its inbox is subscribed. An acknowledgement that comes before the start has published the node opens it once published; a refused one is renewed at the next look (every 5 s) |
 | Port on `127.0.0.1` | MQTT: the lowest port from 18883 up that is free and that no other instance's entry holds, kept in the registry for that instance from then on |
-| Registry | `~/.comando-fabric.json`, version 2: per instance id, the node's port, the pid while it runs (0 once down), its start, the instance's name and data root. Every read-modify-write of it runs under an OS lock on `~/.comando-fabric.json.lock` (bounded wait), so instances starting at once take distinct ports. A file of version 1 is replaced |
+| Registry | `~/.comando-fabric.json` (a legacy name, kept so that running instances still find each other), version 2: per instance id, the node's port, the pid while it runs (0 once down), its start, the instance's name and data root. Every read-modify-write of it runs under an OS lock on `~/.comando-fabric.json.lock` (bounded wait), so instances starting at once take distinct ports. A file of version 1 is replaced |
 | Links | One per other instance in the registry, put through the node's own control plane at each look (every 5 s): to `127.0.0.1` at that instance's port, out its inbox and reply topics and this instance's presence, nothing in, hop limit 1; also at once when `Peers` first sees an instance's presence and before each question to it, as the link is the only subscriber of its inbox on this node. A link to an instance that is merely down stays and queues; forgetting an instance removes its link and its entry |
-| Keeps in the data root | `fabric/`, with the key pair `pod.key` and `pod.pub` (Ed25519) and a folder per link with its spec and log |
+| Keeps in the data root | `fabric/` (a legacy name, kept so that existing keys and logs are found), with the key pair `pod.key` and `pod.pub` (Ed25519) and a folder per link with its spec and log |
 | Starts | At the peer link's first look, and at any later look while it is down |
 | Stops | By hand or at the instance's close; the other nodes keep running. A stop by hand holds in that instance until it is asked again |
 | A port held by another process | The node takes the next free port; the process is probed, never signalled |
@@ -256,16 +256,16 @@ and renews its subscriptions. The MQTT client it uses lives in [`frontear`](fron
 `frontear.protocol`.
 
 > **Learn: publish and subscribe.** A school notice board has topics: sports, lost property, exams. Whoever pins a
-> note does not know who reads it. Whoever reads a topic does not know who pinned the note. A broker is that board
-> for programs: one publishes to a topic, and the broker hands the message to every subscriber. Nobody needs
+> note does not know who reads it. Whoever reads a topic does not know who pinned the note. A gateway is that board
+> for programs: one publishes to a topic, and the gateway hands the message to every subscriber. Nobody needs
 > anybody's address, only the board's. comando's instances meet this way: each pins on its own board, and the boards
 > copy to each other the notes meant for one another.
 
 How frontear works: [the `frontear` module](frontear.md) and [the frontear guide](../frontear.md). What instances say
 to each other: [the `mcp` module](mcp.md). The reasons:
 [instances consult each other](../adr/0123-instances-consult-each-other.md) and
-[frontear, comando's own MQTT fabric](../adr/0184-frontear-comandos-own-mqtt-fabric.md) and
-[frontear is the only fabric](../adr/0185-frontear-is-the-only-fabric.md).
+[frontear, comando's own MQTT octopus network](../adr/0184-frontear-comandos-own-mqtt-octopus-network.md) and
+[frontear is the only octopus network](../adr/0185-frontear-is-the-only-octopus-network.md).
 
 ## 8. What `app` may depend on
 
@@ -275,7 +275,7 @@ to each other: [the `mcp` module](mcp.md). The reasons:
 | `db` | `DbRouter`; `app` reaches `cdb` only through it |
 | `claude` | `ClaudeAdapter`, `ClaudeTopics`, the metrics log |
 | `mcp` | `McpServer`, `McpTools`, `Peers` |
-| `frontear` | The fabric and the MQTT client |
+| `frontear` | The octopus network and the MQTT client |
 | `tools` | `ToolsAdapter`, `KitGit` |
 | `ui` | `ComandoUi` |
 
@@ -290,7 +290,7 @@ No module depends on `app`. The module is one package, `dev.marregui.comando.app
 | `IntentLog` | The intent log |
 | `Logging` | `System.Logger` to the log files, warnings to stderr |
 | `MachineCdb` | The machine's cdb |
-| `FrontearOctopus`, `MqttPeerGateway` | The fabric and the link to it |
+| `FrontearOctopus`, `MqttPeerGateway` | The octopus network and the link to it |
 | `RootSetup` | `ui`'s `Setup`: the kit root, its version and its jobs |
 | `Searcher` | `SearchPort`: one search at a time, at most 1 000 hits |
 | `Welcome` | The text of the first panel on a fresh data root |
@@ -363,6 +363,6 @@ your machine's cdb.
 
 - [The `ui` module](ui.md): the window that `app` builds.
 - [The `core` module](core.md): the state loop and the ports.
-- [The `frontear` module](frontear.md): the broker inside the fabric.
+- [The `frontear` module](frontear.md): the gateway inside the octopus.
 - [Architecture](../architecture.md): the whole picture.
 - [Development](../development.md): build, run, test and configure.

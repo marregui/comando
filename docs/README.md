@@ -5,7 +5,7 @@
 ## In one paragraph
 
 This is the map of comando's documentation. comando is a desktop workbench: one editor that sends SQL to your databases
-and prompts to Claude Code. Around it sit a database, a message broker, and a kit and a brain that give an agent tools
+and prompts to Claude Code. Around it sit a database, a message gateway, and a kit and a brain that give an agent tools
 and memory. Every page here starts with a picture and one paragraph, so you can stop early and still know the idea.
 Boxes marked **Learn** explain the computer science behind a design, in plain words. Pick a path below, or jump
 to any page from the table.
@@ -17,7 +17,7 @@ to any page from the table.
 | You are | You want | Read, in this order |
 |---|---|---|
 | **A newcomer** | to use comando today | [INSTALL](../INSTALL.md) → [Tutorial](tutorial.md) → [Workbench](workbench.md) → [Claude Code in comando](claude-code.md) |
-| **A learner** | to understand how agents, databases and brokers work | [Kit and brain](kit-and-brain.md) → [The kit](kit.md) → [The brain](brain.md) → [cdb's SQL](cdb-sql.md) → [cdb](cdb.md) → [frontear](frontear.md) |
+| **A learner** | to understand how agents, databases and gateways work | [Kit and brain](kit-and-brain.md) → [The kit](kit.md) → [The brain](brain.md) → [cdb's SQL](cdb-sql.md) → [cdb](cdb.md) → [frontear](frontear.md) |
 | **A developer** | to read or change the code | [Architecture](architecture.md) → [the module pages](#the-code) → [Development](development.md) → [the decision records](adr/README.md) |
 
 ## Every page
@@ -45,7 +45,7 @@ to any page from the table.
 |---|---|
 | [cdb](cdb.md) | a database for time series: how it stores, writes and queries |
 | [cdb's SQL](cdb-sql.md) | the SQL cdb speaks |
-| [frontear](frontear.md) | an MQTT broker and client: how messages travel between programs |
+| [frontear](frontear.md) | an MQTT gateway and client: how messages travel between programs |
 
 ### The code
 
@@ -56,7 +56,7 @@ to any page from the table.
 | [testkit](modules/testkit.md) | the fakes the tests share |
 | [db](modules/db.md) | connections, lanes, results |
 | [cdb](modules/cdb.md) | the database's code |
-| [frontear](modules/frontear.md) | the broker's code |
+| [frontear](modules/frontear.md) | the gateway's code |
 | [claude](modules/claude.md) | the `claude -p` process and its stream |
 | [mcp](modules/mcp.md) | the MCP server and its tools |
 | [tools](modules/tools.md) | Gradle, folders, git |

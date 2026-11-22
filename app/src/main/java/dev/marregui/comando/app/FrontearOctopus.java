@@ -78,9 +78,9 @@ import dev.marregui.comando.mcp.Peers;
 import dev.marregui.comando.ui.shell.ServerToggle;
 
 /**
- * frontear, comando's fabric between instances (records 184, 185, 187): every instance hosts a node of its own in this
- * process, named after its slug, on a port of its own on {@code 127.0.0.1}, and its peer link connects to that node
- * alone. A registry file in the machine root ({@code ~/.comando-fabric.json} unless {@code -Dcomando.machineRoot}
+ * frontear, comando's octopus network between instances (records 184, 185, 187): every instance hosts a node of its own
+ * in this process, named after its slug, on a port of its own on {@code 127.0.0.1}, and its peer link connects to that
+ * node alone. A registry file in the machine root ({@code ~/.comando-fabric.json} unless {@code -Dcomando.machineRoot}
  * names another folder; versioned as record 133 says) holds every slug's node: its port, kept for good so a peer that
  * restarts is found where it was, and the process that runs it, pid 0 once it is down.
  * <p>
@@ -90,15 +90,16 @@ import dev.marregui.comando.ui.shell.ServerToggle;
  * ({@link #runningOrHost}). A link to a peer that is down stays: the messages for it queue in its log, and the peer's
  * restart on the same port drains them.
  * <p>
- * Across machines (record 189), the node of the instance {@code main} is the machine's gateway: while this machine
+ * Across machines (record 189), the node of the instance {@code main} is the border gateway: while this machine
  * listens on an address ({@link Machines}) and a machine is paired, it opens the remote listener there, over TLS with
  * the paired machines' keys pinned, and keeps one link per paired machine {@code m}, id {@code main@m}, over TLS to
- * that machine's gateway, with {@code m}'s inbox and reply topics and this machine's presences out, hop limit 2. Every
- * other node adds to its link to the gateway the paired machines' inbox and reply topics and its own presence for
- * them; the gateway adds to its link to each instance that instance's topics on this machine and the paired machines'
- * presences, hop limit 3. A look reconciles all of it as it does the local links.
+ * that machine's border gateway, with {@code m}'s inbox and reply topics and this machine's presences out, hop limit 2.
+ * Every other node adds to its link to the border gateway the paired machines' inbox and reply topics and its own
+ * presence for them; the border gateway adds to its link to each instance that instance's topics on this machine and
+ * the paired machines' presences, hop limit 3. A look reconciles all of it as it does the local links.
  * <p>
- * The node's data folder is {@code fabric/} in the instance's data root (the links' logs). The one control key it
+ * The node's data folder is {@code fabric/} in the instance's data root (the links' logs), a legacy name kept so that
+ * an existing data root's keys and logs are found. The one control key it
  * trusts is this instance's own, an Ed25519 pair made at the first start and kept beside them ({@code pod.key},
  * readable by the user alone, and {@code pod.pub}, base64 of the X.509 encoding as {@code Frontear.main} reads a key):
  * this comando is the control pod of its node.
@@ -115,10 +116,13 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
      * start, and a later one is read by no instance of this comando.
      */
     static final int REGISTRY_VERSION = 2;
-    /** The registry every comando instance on this machine reads. */
+    /**
+     * The registry every comando instance on this machine reads. Its file name is a legacy name, kept so that running
+     * instances of every version find one another.
+     */
     static final Path REGISTRY = AppConfig.machineRoot().resolve(".comando-fabric.json");
     /**
-     * The lowest MQTT port a node takes on the machine: the one the instances' broker has had since record 123. Each
+     * The lowest MQTT port a node takes on the machine: the one the instances' gateway has had since record 123. Each
      * slug takes the lowest from here that no other slug holds and no process listens on (record 187).
      */
     static final int PORT = 18883;
@@ -128,14 +132,14 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     static final String PUBLIC_KEY = "pod.pub";
     /** A link's hop limit: each node pushes to a peer what that peer reads, and nothing it got from a link goes on. */
     static final int HOP_LIMIT = 1;
-    /** The instance whose node is the machine's gateway (ADR 0189 §2.1): the unnamed one, {@code main}. */
+    /** The instance whose node is the border gateway (ADR 0189 §2.1): the unnamed one, {@code main}. */
     static final String BORDER = InstanceName.slug("");
     /**
-     * The gateway's links to this machine's other nodes while a machine is paired: a question goes asker's node,
-     * gateway, the other gateway, the node asked, and nothing goes further (ADR 0189 §2.2).
+     * The border gateway's links to this machine's other nodes while a machine is paired: a question goes asker's node,
+     * border gateway, the other border gateway, the node asked, and nothing goes further (ADR 0189 §2.2).
      */
     static final int BORDER_HOP_LIMIT = 3;
-    /** A gateway's link to another machine's: from the asker's node to here, then across (ADR 0189 §2.2). */
+    /** A border gateway's link to another machine's: from the asker's node to here, then across (ADR 0189 §2.2). */
     static final int REMOTE_HOP_LIMIT = 2;
     private static final String ALGORITHM = "Ed25519";
     private static final Set<PosixFilePermission> READABLE = PosixFilePermissions.fromString("rw-r--r--");
@@ -166,8 +170,8 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
      */
     private static final Duration CONTROL_WITHIN = Duration.ofSeconds(5);
     /** The internal subscriber that takes the control plane's answers, and the origin of the requests. */
-    private static final String CONTROLLER = "comando-fabric";
-    /** At most this many remote connections at once on the gateway's listener (ADR 0189 §2.1). */
+    private static final String CONTROLLER = "comando-octopus";
+    /** At most this many remote connections at once on the border gateway's listener (ADR 0189 §2.1). */
     private static final int REMOTE_CONNECTIONS = 64;
     /** A remote connection's TLS handshake is bounded to this (ADR 0189 §2.1). */
     private static final Duration HANDSHAKE_WITHIN = Duration.ofSeconds(10);
@@ -191,8 +195,8 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     private final Path lock;
     /** The lowest port a start may take; 0 for one the OS picks at each start. */
     private final int base;
-    /** The starts, stops, reconciles and forgets under way, each on a virtual thread; closed with the fabric. */
-    private final Errands errands = new Errands("fabric");
+    /** The starts, stops, reconciles and forgets under way, each on a virtual thread; closed with the octopus. */
+    private final Errands errands = new Errands("octopus");
     /** A start or stop is under way; a toggle meanwhile does nothing but say so. */
     private final AtomicBoolean busy = new AtomicBoolean();
     /** A reconcile of the links is under way; a look meanwhile starts none. */
@@ -236,7 +240,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     private String saidOnItsOwn = "";
 
     /**
-     * The fabric with its data in {@code root}, for the instance on data root {@code owner} named {@code name}, on
+     * The octopus with its data in {@code root}, for the instance on data root {@code owner} named {@code name}, on
      * {@code registry}; its node takes the lowest port from {@code port} up that is free, or, for 0, one the OS picks.
      */
     FrontearOctopus(final Path root, final Path owner, final String name, final IntentSink intents, final Path registry,
@@ -252,7 +256,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     }
 
     /**
-     * The fabric of the instance on data root {@code home} named {@code name}, its data in {@code fabric/} there. On
+     * The octopus of the instance on data root {@code home} named {@code name}, its data in {@code fabric/} there. On
      * the machine's ({@code machine}), it uses {@link #REGISTRY} and ports from {@link #PORT}; off it, as
      * {@code -Dcomando.peers} false keeps every test and picture tool, a registry in the data root and a port the OS
      * picks, so neither the toggle nor {@code server_start frontear} touches the machine's.
@@ -304,7 +308,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     boolean runningOrHost() {
         if (hosted != null) {
             if (linking.compareAndSet(false, true)) {
-                final Thread t = errands.start("fabric-links", () -> {
+                final Thread t = errands.start("octopus-links", () -> {
                     try {
                         reconcile();
                     } finally {
@@ -318,7 +322,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
             return true;
         }
         if (!stoppedByHand && busy.compareAndSet(false, true)) {
-            final Thread t = errands.start("fabric-host", () -> {
+            final Thread t = errands.start("octopus-host", () -> {
                 try {
                     flip(Boolean.TRUE, true);
                 } finally {
@@ -359,7 +363,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
                     + "; wait for it", false));
             return;
         }
-        final Thread t = errands.start("fabric-toggle", () -> {
+        final Thread t = errands.start("octopus-toggle", () -> {
             try {
                 flip(null, false);
             } finally {
@@ -390,7 +394,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
         if (!busy.compareAndSet(false, true)) {
             return "frontear is " + (doing.isEmpty() ? "busy" : doing) + "; try again when that ends";
         }
-        final Thread t = errands.start(up ? "fabric-start" : "fabric-stop", () -> {
+        final Thread t = errands.start(up ? "octopus-start" : "octopus-stop", () -> {
             try {
                 flip(up, false);
             } finally {
@@ -450,9 +454,9 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
      * Then tells {@link #onPeers}'s listeners of the peers whose process is gone, and whether a link connected or a
      * peer's node started again (its entry's {@code started} changed), since the reconcile before: a peer that
      * restarted between two reconciles is never seen disconnected, and its new node holds none of this one's retained
-     * messages. Across machines, the links carry the paired machines' topics, and on the gateway the remote listener
-     * and the links to the paired machines follow the pairings ({@link #wanted}); a link's put changes when its spec
-     * does. Does nothing while the node does not run or the registry is not of this version.
+     * messages. Across machines, the links carry the paired machines' topics, and on the border gateway the remote
+     * listener and the links to the paired machines follow the pairings ({@link #wanted}); a link's put changes when
+     * its spec does. Does nothing while the node does not run or the registry is not of this version.
      */
     void reconcile() {
         final Hosted h = hosted;
@@ -507,7 +511,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
                 }
             }
         } catch (final InterruptedException _) {
-            // the fabric is closing: its errands are interrupted
+            // the octopus is closing: its errands are interrupted
             Thread.currentThread().interrupt();
             return;
         } catch (final IOException e) {
@@ -556,12 +560,12 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
      * The links node {@code slug} keeps, by id, for registry {@code nodes} on machine {@code machine} with
      * {@code paired} paired (none while this machine listens nowhere). To each other slug with a port, a link with
      * that slug's inbox and reply topics and this slug's presence out, hop limit {@link #HOP_LIMIT}. While a machine
-     * is paired, a node other than the gateway adds to its link to the gateway each paired machine's inbox and reply
-     * topics and its own presence on this machine; the gateway adds to its link to each slug {@code X} {@code X}'s
-     * inbox and reply topics on this machine and each paired machine's presences, hop limit {@link #BORDER_HOP_LIMIT},
-     * and keeps a link {@code main@m} to each paired machine {@code m}, over TLS, to its host and port, with
-     * {@code m}'s inbox and reply topics and this machine's presences out, hop limit {@link #REMOTE_HOP_LIMIT}
-     * (ADR 0189 §2.2).
+     * is paired, a node other than the border gateway adds to its link to the border gateway each paired machine's
+     * inbox and reply topics and its own presence on this machine; the border gateway adds to its link to each slug
+     * {@code X} {@code X}'s inbox and reply topics on this machine and each paired machine's presences, hop limit
+     * {@link #BORDER_HOP_LIMIT}, and keeps a link {@code main@m} to each paired machine {@code m}, over TLS, to its
+     * host and port, with {@code m}'s inbox and reply topics and this machine's presences out, hop limit {@link
+     * #REMOTE_HOP_LIMIT} (ADR 0189 §2.2).
      */
     static Map<String, LinkSpec> wanted(
             final String slug,
@@ -606,7 +610,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
         return specs;
     }
 
-    /** The gateway's link to machine {@code machine}: {@code main@<machine>} (ADR 0189 §2.2). */
+    /** The border gateway's link to machine {@code machine}: {@code main@<machine>} (ADR 0189 §2.2). */
     static String remoteLink(final String machine) {
         return InstanceName.onMachine(BORDER, machine);
     }
@@ -616,7 +620,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
      * node's link to it; the link's log stays (record 184).
      */
     void forget(final String peer) {
-        if (errands.start("fabric-forget", () -> forgetNow(peer)) == null) {
+        if (errands.start("octopus-forget", () -> forgetNow(peer)) == null) {
             LOG.log(System.Logger.Level.DEBUG, "peer not forgotten: comando is closing [peer=" + peer + ']');
         }
     }
@@ -774,7 +778,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
                     + ex.getMessage() + ']', null);
             return;
         } catch (final InterruptedException _) {
-            // the fabric is closing: its errands are interrupted
+            // the octopus is closing: its errands are interrupted
             Thread.currentThread().interrupt();
             return;
         }
@@ -881,7 +885,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
             node.openLinks();
         }
         saidOnItsOwn = "";
-        LOG.log(System.Logger.Level.INFO, "fabric up [node=" + slug + ", port=" + node.port() + ", root=" + root
+        LOG.log(System.Logger.Level.INFO, "octopus up [node=" + slug + ", port=" + node.port() + ", root=" + root
                 + ", key=" + Signer.keyId(pair.getPublic()) + ", asked=" + !onItsOwn + ']');
         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is up: MQTT " + HOST + ':' + node.port(),
                 false));
@@ -946,7 +950,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
         } finally {
             markDown();
         }
-        LOG.log(System.Logger.Level.INFO, "fabric stopped [node=" + slug + ", port=" + h.node().port() + ']');
+        LOG.log(System.Logger.Level.INFO, "octopus stopped [node=" + slug + ", port=" + h.node().port() + ']');
         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is down", false));
     }
 
@@ -1118,7 +1122,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     }
 
     /**
-     * Brings the gateway's remote listener in line with {@code r}: the paired machines' keys pinned, a remote
+     * Brings the border gateway's remote listener in line with {@code r}: the paired machines' keys pinned, a remote
      * connection whose key is no longer pinned ended, each link to a paired machine given its TLS context
      * ({@link #dialWith}), and the listener on {@code r}'s address while a machine is paired, none otherwise; a changed
      * address restarts it. A start that fails is tried again at the next look and said once until it changes; under
@@ -1218,7 +1222,10 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
         }
     }
 
-    /** Tells the machines that no gateway link of this node is connected, as it stops; nothing off the gateway. */
+    /**
+     * Tells the machines that no border gateway link of this node is connected, as it stops; nothing off the border
+     * gateway.
+     */
     private void disconnected() {
         final Machines of = machines;
         if (of != null && BORDER.equals(slug)) {
@@ -1306,7 +1313,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
                 LOG.log(System.Logger.Level.WARNING, "registry left to go stale with this process: interrupted"
                         + " [lock=" + lock + ']');
             }
-            LOG.log(System.Logger.Level.INFO, "fabric stopped with comando [node=" + slug + ", port="
+            LOG.log(System.Logger.Level.INFO, "octopus stopped with comando [node=" + slug + ", port="
                     + h.node().port() + ']');
         }
     }
@@ -1372,7 +1379,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     }
 
     /**
-     * What a reconcile links across machines: {@code of}, null when the fabric has no machines, this machine's id, the
+     * What a reconcile links across machines: {@code of}, null when the octopus has no machines, this machine's id, the
      * address and port it listens on, and the machines paired, none while nothing is linked across.
      */
     private record Remoting(Machines of, String machine, String host, int port, Map<String, Machines.Remote> paired) {
@@ -1387,7 +1394,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
      * wait for. {@link #specs}, {@link #up}, {@link #started}, {@link #pinned}, {@link #dials}, {@link #listening}
      * and {@link #listenSaid} are guarded by the instance: the links put, whether each was connected and the start its
      * peer's entry named, at the last read; the fingerprints pinned and the links to paired machines' TLS contexts,
-     * by machine, as last given; and the gateway's remote listener's address, null while none runs, and its last
+     * by machine, as last given; and the border gateway's remote listener's address, null while none runs, and its last
      * failure said.
      */
     private static final class Hosted implements InternalSubscriber {
@@ -1400,7 +1407,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
         private final Map<String, LinkSpec> specs = new HashMap<>();
         private final Map<String, Boolean> up = new HashMap<>();
         private final Map<String, String> started = new HashMap<>();
-        /** The paired machines' keys the remote listener trusts; replaced at each reconcile of the gateway. */
+        /** The paired machines' keys the remote listener trusts; replaced at each reconcile of the border gateway. */
         private final Pins pins = new Pins();
         private final long generation;
         private Map<String, String> pinned = Map.of();
@@ -1412,7 +1419,8 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
             this.node = node;
             this.signer = signer;
             this.generation = generation;
-            // under comando's own topics, so the control plane answers it; no link's filter covers it
+            // under comando's own topics, so alexander answers it; no link's filter covers it; the topic's level
+            // name is a legacy name, kept for the instances already running
             this.replyTopic = "comando/v1/local/fabric/" + slug + "/control";
         }
 

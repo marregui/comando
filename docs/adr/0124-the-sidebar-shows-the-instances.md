@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; built; amended the same day (§4); superseded in part by [record 185](0185-frontear-is-the-only-fabric.md) | Miguel and Claude |
+| 2026-10-30 | accepted; built; amended the same day (§4); superseded in part by [record 185](0185-frontear-is-the-only-octopus-network.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -41,12 +41,12 @@ instance … only from information that is available from edge, without having t
 only by virtue of the protocol"; "double click should do nothing. single click should open the tooltip, same as for the
 sessions"; the "Connected as …" header is not wanted; a closed instance must not vanish; which instance owns the Edge
 must show; this instance's row must show what the others' show. Sessions of one instance talk to each other through
-its MCP tools; instances talk only through the Edge, or any HiveMQ broker.
+its MCP tools; instances talk only through the Edge, or any MQTT 5 server.
 
 | Question | Rule (replaces §2 where they differ) |
 |---|---|
 | presence (amends record 123) | adds `edge`, true when the instance started the comando Edge, and per session: `status`, `activity` (what its turn does), `turnStarted`, `model`, `effort`, `context` (percent), `folder` (home as `~`), `branch`, `tasks` (background, by description), and `prompt` and `reply`, the first line of its last prompt and last reply, its own and not a subagent's, a consult's `[from instance …]` header skipped, at most 200 characters each. Still published at most every 2 s, and only when it changed |
-| what leaves the machine | those two lines are the only words of a conversation a presence carries; on the comando Edge they stay on 127.0.0.1, on a broker elsewhere they leave the machine |
+| what leaves the machine | those two lines are the only words of a conversation a presence carries; on the comando Edge they stay on 127.0.0.1, on an MQTT server elsewhere they leave the machine |
 | header | none while connected; while not, why, and **Start the Edge** while the Edge is down |
 | instances | this instance, then the others present, then those that left, greyed, "left HH:MM" (with the date when not today), with no dot and no sessions. With the link down every other instance shows as last seen. The data root's `instances-seen.json` (id, name, version, role, kit, started, last seen) keeps them across restarts |
 | marks | the dot: green idle, Claude's orange while a session runs a turn, red when its questions are refused here; the Edge's antenna (`edge` icon) after it when the instance started the comando Edge; a session's dot is coloured as the Sessions tab colours its icon (orange running a turn, green idle, grey stopped, red failed), and its row adds what its turn is doing |

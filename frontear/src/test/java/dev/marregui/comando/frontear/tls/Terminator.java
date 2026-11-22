@@ -17,11 +17,11 @@ import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 
 /// A TLS server for tests on `127.0.0.1`, at a port of the system's choosing, that asks each client for its
-/// certificate and, after the handshake, copies bytes both ways to a plain broker; it keeps each session's protocol
+/// certificate and, after the handshake, copies bytes both ways to a plain gateway; it keeps each session's protocol
 /// and the client's fingerprint, or the handshake's failure.
 public final class Terminator implements AutoCloseable {
 
-    /// How long a handshake or the connect to the broker may take: both are on this machine.
+    /// How long a handshake or the connect to the gateway may take: both are on this machine.
     private static final Duration WAIT = Duration.ofSeconds(10);
 
     private final SSLServerSocket listening;
@@ -33,7 +33,7 @@ public final class Terminator implements AutoCloseable {
     private final List<String> peers = new CopyOnWriteArrayList<>();
     private final List<IOException> failures = new CopyOnWriteArrayList<>();
 
-    /// A terminator with `context`'s key and pins in front of the broker at `gatewayPort`, accepting at once.
+    /// A terminator with `context`'s key and pins in front of the gateway at `gatewayPort`, accepting at once.
     public Terminator(final SSLContext context, final int gatewayPort) throws IOException {
         this.gatewayPort = gatewayPort;
         try {
@@ -103,7 +103,7 @@ public final class Terminator implements AutoCloseable {
                 open.add(gateway);
                 gateway.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), gatewayPort),
                         (int) WAIT.toMillis());
-                pump(client, gateway, "tls-terminator-to-broker");
+                pump(client, gateway, "tls-terminator-to-gateway");
                 pump(gateway, client, "tls-terminator-to-client");
             } catch (final IOException e) {
                 failures.add(e);

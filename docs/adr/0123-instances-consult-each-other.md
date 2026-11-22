@@ -1,14 +1,14 @@
-# 123. Instances consult each other through a local MQTT broker: presence, ask, reply
+# 123. Instances consult each other through a local MQTT gateway: presence, ask, reply
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md); its MQTT client replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md); superseded in part by [record 185](0185-frontear-is-the-only-fabric.md); answering and who may ask amended by [record 186](0186-instances-trust-the-overseer.md) | Miguel and Claude |
+| 2026-10-29 | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md); its MQTT client replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md); superseded in part by [record 185](0185-frontear-is-the-only-octopus-network.md); answering and who may ask amended by [record 186](0186-instances-trust-the-overseer.md) | Miguel and Claude |
 
 ## 1. Context
 
 Miguel, 2026-10-29: specialist instances (a Comando Expert, with its own kit and a curated brain) take the work of
 their field; a session of one instance consults the expert, and later any instance consults any other, up to a
-brainstorm. [Record 122](0122-instances-name-kit-brain-data-root-edge.md) §2.4 chose the comando Edge as the broker and
+brainstorm. [Record 122](0122-instances-name-kit-brain-data-root-edge.md) §2.4 chose the comando Edge as the gateway and
 the topic layout; this record builds the part one machine needs, all of it at once, as Miguel asked.
 
 ## 2. Decision
@@ -26,7 +26,7 @@ the topic layout; this record builds the part one machine needs, all of it at on
 | Edge down | the tools say so and how to start it (the Edge toggle in any instance); presence resumes when it is up |
 
 Not built: per-instance credentials and the Edge's access rules (record 122 §2.4, trust): on one machine and one user
-the broker listens on `127.0.0.1` only; any local process of that user could publish. Bridging beyond the machine, the
+the gateway listens on `127.0.0.1` only; any local process of that user could publish. Bridging beyond the machine, the
 board and roles stay proposed.
 
 ## 3. Consequences
@@ -35,5 +35,5 @@ board and roles stay proposed.
   and consultation are separate paths.
 - Every consultation is visible in both instances: the asking session's tool call, and the peer's `consult-<slug>`
   panel.
-- The MQTT client (`com.hivemq:hivemq-mqtt-client`) is a new dependency of the `app` module only; `mcp` sees the broker
+- The MQTT client (`com.hivemq:hivemq-mqtt-client`) is a new dependency of the `app` module only; `mcp` sees the gateway
   through an interface, so its tests run without one.

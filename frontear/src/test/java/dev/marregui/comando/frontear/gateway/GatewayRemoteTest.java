@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-/// The remote listener (ADR 0189 §2.1) of a broker started as node `main` of machine `here`, behind a [RemoteGate]:
+/// The remote listener (ADR 0189 §2.1) of a gateway started as node `main` of machine `here`, behind a [RemoteGate]:
 /// TLS 1.3 with both sides pinned, what a connection of a paired machine may do, the machine stamped on what it
 /// publishes, the session its link holds, the clients closed unanswered and counted, the bounds, the connections
 /// ended when their machine is unpaired, and the listener's close beside a loopback listener that goes on as before.
@@ -287,7 +287,7 @@ class GatewayRemoteTest {
         }
     }
 
-    /// A paired machine has the broker retain at most 64 presences at once: the next one is refused 0x87, and a
+    /// A paired machine has the gateway retain at most 64 presences at once: the next one is refused 0x87, and a
     /// retained will past them refuses its CONNECT; a presence it holds is retained again.
     @Test
     void aRemoteMachineRetainsAtMost64Presences() throws Exception {
@@ -355,8 +355,8 @@ class GatewayRemoteTest {
         }
     }
 
-    /// A second `listenRemote` while one is open is refused, and so is one after the broker closed; the close ends
-    /// the remote listener with the broker's.
+    /// A second `listenRemote` while one is open is refused, and so is one after the gateway closed; the close ends
+    /// the remote listener with the gateway's.
     @Test
     void theRemoteListenerOpensOnceAndClosesWithTheGateway() throws Exception {
         assertThatThrownBy(() -> gateway.listenRemote(listen(MAX_CONNECTIONS, RemoteTls.HANDSHAKE)))
@@ -412,7 +412,7 @@ class GatewayRemoteTest {
         return RemoteTls.listen(server, RemoteTls.machineOf(there, yonder), HERE, port, maxConnections, handshake);
     }
 
-    /// A client of machine `m`, pinning this machine's key, that the broker accepted as `clientId`.
+    /// A client of machine `m`, pinning this machine's key, that the gateway accepted as `clientId`.
     private RawClient connected(final RemoteTls.Machine m, final String clientId) throws Exception {
         return connected(m, RawClient.connect(clientId, true, 0));
     }
@@ -434,14 +434,14 @@ class GatewayRemoteTest {
         }
     }
 
-    /// What the broker sent `c` after its CONNECT until it closed the connection; a handshake refused while the
+    /// What the gateway sent `c` after its CONNECT until it closed the connection; a handshake refused while the
     /// CONNECT was written counts as nothing sent.
     private static List<Packet> unanswered(final RawClient c) throws IOException {
         try (c) {
             try {
                 c.send(RawClient.connect("a~main", true, 0));
             } catch (final SSLException | SocketException _) {
-                // the broker closed the connection in the handshake, before the CONNECT went out
+                // the gateway closed the connection in the handshake, before the CONNECT went out
                 return List.of();
             }
             return c.untilClosed();

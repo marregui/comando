@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/// Every packet the client and the broker speak, written and read back unchanged, against the specification's
+/// Every packet the client and the gateway speak, written and read back unchanged, against the specification's
 /// examples where it gives one; the packets a peer could send wrong, each refused with the reason code §4.13 asks
 /// for; and what frontear declines, each refused with the reason code that names it.
 class CodecTest {
@@ -42,7 +42,7 @@ class CodecTest {
         assertThat(read(b)).isEqualTo(c);
     }
 
-    /// A broker passes a message's application properties on unchanged, so every one of them survives a round trip,
+    /// A gateway passes a message's application properties on unchanged, so every one of them survives a round trip,
     /// a repeated user property name in its order, on a PUBLISH and on a will.
     @Test
     void publishAndWillPropertiesRoundTrip() throws Exception {
@@ -113,7 +113,7 @@ class CodecTest {
     }
 
     /// [MQTT-3.3.4-6]: a Subscription Identifier in a PUBLISH is a Protocol Error when a client sent it, and read as
-    /// it is when a broker did.
+    /// it is when a gateway did.
     @Test
     void aSubscriptionIdentifierInAClientPublishIsAProtocolError() throws Exception {
         final byte[] publish = HEX.parseHex("32 09 00 01 74 00 01 02 0B 01 6D");
@@ -148,7 +148,7 @@ class CodecTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    /// A CONNACK states what the broker declines (§3.2.2.3.4, .11 to .13): Maximum QoS 1 and Subscription Identifiers
+    /// A CONNACK states what the gateway declines (§3.2.2.3.4, .11 to .13): Maximum QoS 1 and Subscription Identifiers
     /// and Shared Subscriptions not available are written as their bytes, a capability at its default is left out,
     /// and an absent capability reads as available.
     @Test
@@ -220,7 +220,7 @@ class CodecTest {
         assertThat(Packet.SUBSCRIPTION_IDS_NOT_SUPPORTED).isEqualTo(0xA1);
     }
 
-    /// The broker's mistakes in a packet's form are Malformed Packet: QoS 3, a QoS 1 packet id of 0, reserved header
+    /// The gateway's mistakes in a packet's form are Malformed Packet: QoS 3, a QoS 1 packet id of 0, reserved header
     /// flags set, a wildcard in a topic name, a string longer than its packet, and bytes after a packet's end.
     @Test
     void aPacketOfTheWrongFormIsMalformed() {
@@ -239,7 +239,7 @@ class CodecTest {
         }
     }
 
-    /// The broker's mistakes against the protocol are Protocol Error: a property the packet may not carry, a property
+    /// The gateway's mistakes against the protocol are Protocol Error: a property the packet may not carry, a property
     /// twice, a flag property above 1, and a packet type this client does not speak; a Topic Alias, which this client
     /// never allows, is Topic Alias invalid.
     @Test

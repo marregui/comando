@@ -37,7 +37,7 @@ himself. Each instance's kit and brain stay its own: only messages cross.
 | peers | the other instances: a session acts on a peer's request to talk, to create sessions and to relay to a session without asking the user; something destructive (deleting files, killing processes, pushing) needs main or the user |
 | what crosses | only messages; an instance never reads or writes another instance's folders, kit or brain |
 | messages | written as markdown (short lines, headings, lists, tables): the user reads them in the receiving panel |
-| where it is said | the system prompt appended to every session (`UiInstructions.text(<instance name>)`), which ends saying whether its instance is main or a surrogate, and the descriptions of `instance_ask` and `session_send`; the fabric is named frontear ([record 184](0184-frontear-comandos-own-mqtt-fabric.md)) |
+| where it is said | the system prompt appended to every session (`UiInstructions.text(<instance name>)`), which ends saying whether its instance is main or a surrogate, and the descriptions of `instance_ask` and `session_send`; the octopus network is named frontear ([record 184](0184-frontear-comandos-own-mqtt-octopus-network.md)) |
 | presence | the key saying whether an instance hosts frontear is `host`; `edge`, from before, is still written beside it with the same value and read when `host` is missing, for one release |
 | names | only main, which has no name, is `main` to the others and marked the overseer: an instance does not start with a name equal to `main`, `overseer` or `comando` in any case, one whose id is `main`, or one holding `·`, which would pass for a role or a session in a header |
 

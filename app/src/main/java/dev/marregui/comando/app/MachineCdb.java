@@ -111,7 +111,10 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
      * How long {@link #isRunning} trusts its last live check: each costs an HTTP request; the window asks every second.
      */
     private static final Duration CHECK_EVERY = Duration.ofSeconds(2);
-    /** After SIGKILL, how long the process is given to be gone; kept from the broker comando once ran, not measured. */
+    /**
+     * After SIGKILL, how long the process is given to be gone; kept from the gateway comando once ran, not
+     * measured.
+     */
     private static final Duration KILL_WAIT = Duration.ofSeconds(5);
     /** The token's answer counts only within this (record 146, liveness). */
     private static final Duration LIVE_WITHIN = Duration.ofSeconds(2);

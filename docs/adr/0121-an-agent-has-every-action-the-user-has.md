@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted; increment 1 built, increments 2–4 proposed (§3); amended 2026-11-01 (see Amendments: rule 1 covers the asker's whole creation family); superseded in part by [record 185](0185-frontear-is-the-only-fabric.md) | Miguel and Claude |
+| 2026-10-29 | accepted; increment 1 built, increments 2–4 proposed (§3); amended 2026-11-01 (see Amendments: rule 1 covers the asker's whole creation family); superseded in part by [record 185](0185-frontear-is-the-only-octopus-network.md) | Miguel and Claude |
 
 ## 1. Context
 

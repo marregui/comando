@@ -28,7 +28,7 @@ import static org.awaitility.Awaitility.await;
 /// The client against [FakeGateway] on a real socket: connect, subscriptions with their options and unsubscribes,
 /// publishes both ways at QoS 0 and 1, PUBACKs in that wait for the handler, the bound on QoS 0 messages in that wait
 /// for it, the Receive Maximum both ways, keep alive
-/// and its timeout, a broker that drops, refuses or disconnects, a malformed or too large packet in, a connect reason
+/// and its timeout, a gateway that drops, refuses or disconnects, a malformed or too large packet in, a connect reason
 /// code outside the table, and the client's own disconnect.
 class MqttClientTest {
 
@@ -65,7 +65,7 @@ class MqttClientTest {
     }
 
     /// The CONNECT carries the options: client id, a clean start whose session ends with the connection, the keep
-    /// alive, the largest packet the client reads and the will; once the broker accepts it the handler hears of it.
+    /// alive, the largest packet the client reads and the will; once the gateway accepts it the handler hears of it.
     @Test
     void connectCarriesTheOptions() throws Exception {
         final Packet.Publish will = new Packet.Publish("peers/a/presence", bytes("gone"), 1, true, false, 0, null,
@@ -80,7 +80,7 @@ class MqttClientTest {
         }
     }
 
-    /// Messages in reach the handler in the order the broker sent them, QoS 0 and 1 mixed, and each QoS 1 one is
+    /// Messages in reach the handler in the order the gateway sent them, QoS 0 and 1 mixed, and each QoS 1 one is
     /// acknowledged with its own packet id.
     @Test
     void messagesInReachTheHandlerInOrderAndQos1OnesAreAcknowledged() throws Exception {
@@ -105,7 +105,7 @@ class MqttClientTest {
         }
     }
 
-    /// A QoS 1 publish completes when its PUBACK arrives, not before, and fails with the broker's reason code when the
+    /// A QoS 1 publish completes when its PUBACK arrives, not before, and fails with the gateway's reason code when the
     /// PUBACK refuses it.
     @Test
     void aQos1PublishCompletesOnItsAcknowledgement() throws Exception {
@@ -140,7 +140,7 @@ class MqttClientTest {
         }
     }
 
-    /// Before the broker accepts a connect a publish and a subscribe fail at once; QoS 2 is refused outright.
+    /// Before the gateway accepts a connect a publish and a subscribe fail at once; QoS 2 is refused outright.
     @Test
     void publishingOrSubscribingWhileNotConnectedFailsAtOnce() {
         try (MqttClient client = client(60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null)) {
@@ -151,7 +151,7 @@ class MqttClientTest {
         }
     }
 
-    /// Past the broker's Receive Maximum a QoS 1 publish waits, unsent, until an acknowledgement frees a slot; then it
+    /// Past the gateway's Receive Maximum a QoS 1 publish waits, unsent, until an acknowledgement frees a slot; then it
     /// goes out in its turn.
     @Test
     void publishesPastTheReceiveMaximumWaitForASlot() throws Exception {
@@ -178,8 +178,8 @@ class MqttClientTest {
         }
     }
 
-    /// The broker's Server Keep Alive replaces the client's: at 1 s the client pings within each second of quiet and
-    /// stays connected while the broker answers.
+    /// The gateway's Server Keep Alive replaces the client's: at 1 s the client pings within each second of quiet and
+    /// stays connected while the gateway answers.
     @Test
     void theClientPingsWithinTheServersKeepAlive() throws Exception {
         gateway.serverKeepAliveSeconds(1);
@@ -207,7 +207,7 @@ class MqttClientTest {
         }
     }
 
-    /// Only a PINGRESP answers a ping: a broker that keeps sending messages but never answers is timed out with Keep
+    /// Only a PINGRESP answers a ping: a gateway that keeps sending messages but never answers is timed out with Keep
     /// Alive timeout all the same (§3.12.4).
     @Test
     void aGatewayThatSendsMessagesButNeverAnswersAPingIsTimedOut() throws Exception {
@@ -227,7 +227,7 @@ class MqttClientTest {
         }
     }
 
-    /// A broker that drops the connection fails the publish in flight, is reported as an accepted connection ended,
+    /// A gateway that drops the connection fails the publish in flight, is reported as an accepted connection ended,
     /// and is connected to again after the handler's delay.
     @Test
     void aDroppedConnectionFailsWhatWasInFlightAndReconnects() throws Exception {
@@ -276,7 +276,7 @@ class MqttClientTest {
     }
 
     /// A refused connect is retried as the handler asks, its attempts counted from 1; when the handler stops asking
-    /// the first-connect future fails with the broker's reason code.
+    /// the first-connect future fails with the gateway's reason code.
     @Test
     void aRefusedConnectIsRetriedUntilTheHandlerStops() throws Exception {
         gateway.connectCode(0x87);
@@ -379,7 +379,7 @@ class MqttClientTest {
         }
     }
 
-    /// A DISCONNECT from the broker ends the connection with the broker's reason code, unanswered.
+    /// A DISCONNECT from the gateway ends the connection with the gateway's reason code, unanswered.
     @Test
     void theGatewaysDisconnectEndsTheConnection() throws Exception {
         recorder.retry = null;
@@ -393,7 +393,7 @@ class MqttClientTest {
         }
     }
 
-    /// The client's disconnect sends DISCONNECT Normal, so the broker drops the will, without calling the handler;
+    /// The client's disconnect sends DISCONNECT Normal, so the gateway drops the will, without calling the handler;
     /// every later call returns the same future and the client stays down.
     @Test
     void theClientsDisconnectSendsDisconnectAndStops() throws Exception {
@@ -410,7 +410,7 @@ class MqttClientTest {
         }
     }
 
-    /// A subscription the broker refuses fails with its reason code; the connection stays up.
+    /// A subscription the gateway refuses fails with its reason code; the connection stays up.
     @Test
     void aRefusedSubscriptionFails() throws Exception {
         gateway.subscribeCode(0x87);
@@ -441,7 +441,7 @@ class MqttClientTest {
     }
 
     /// A subscription goes out with its options, No Local, Retain As Published and Retain Handling, and an
-    /// unsubscribe completes on its acknowledgement, for a filter the broker held no subscription for as well (0x11).
+    /// unsubscribe completes on its acknowledgement, for a filter the gateway held no subscription for as well (0x11).
     @Test
     void subscriptionOptionsAndUnsubscribesGoOnTheWire() throws Exception {
         try (MqttClient client = connected()) {
@@ -486,7 +486,7 @@ class MqttClientTest {
         }
     }
 
-    /// The CONNECT carries the client's Receive Maximum, and a broker that sends more QoS 1 messages than that
+    /// The CONNECT carries the client's Receive Maximum, and a gateway that sends more QoS 1 messages than that
     /// unacknowledged is answered with DISCONNECT Receive Maximum exceeded.
     @Test
     void moreMessagesInUnacknowledgedThanTheClientsReceiveMaximumIsAnsweredWithDisconnect() throws Exception {
@@ -545,7 +545,7 @@ class MqttClientTest {
         }
     }
 
-    /// The client reports the broker's Receive Maximum while connected, 0 otherwise.
+    /// The client reports the gateway's Receive Maximum while connected, 0 otherwise.
     @Test
     void theClientReportsTheGatewaysReceiveMaximum() throws Exception {
         gateway.receiveMaximum(7);

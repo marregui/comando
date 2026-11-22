@@ -24,7 +24,7 @@ public final class Actions {
     private static final Arg SESSION = Arg.required("session", Type.STRING, "the session's name");
     private static final Arg PANEL = Arg.required("panel", Type.STRING, "the panel's title or id");
     private static final Arg SERVER = Arg.required("server", Type.STRING,
-            "frontear: comando's fabric between instances; cdb: the machine's cdb")
+            "frontear: comando's octopus network between instances; cdb: the machine's cdb")
             .among(List.of("frontear", "cdb"));
 
     /** Every action, in the order the tools are listed. */

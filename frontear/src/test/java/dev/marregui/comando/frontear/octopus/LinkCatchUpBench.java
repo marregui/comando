@@ -27,7 +27,7 @@ import dev.marregui.comando.frontear.store.LogOptions;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// How fast a link that fell behind catches up: a link's log is preloaded with N durable records while the link is
-/// down, then the link to a second broker starts and drains the backlog to a subscriber there that answers at once.
+/// down, then the link to a second gateway starts and drains the backlog to a subscriber there that answers at once.
 /// The rate is the messages after the first over the time from the first arrival to the last, so the connect is not
 /// counted. Small segments put most of the backlog in sealed segments; Frontear's 64 MiB ones keep it in the active
 /// segment. Runs only with `-Dfrontear.bench=true`.

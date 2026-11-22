@@ -52,7 +52,7 @@ class LabToolsTest {
         assertThat(out.path("links").size()).isZero();
     }
 
-    /// overview: the node, the broker's totals, the counts of what was lost, and per link its state and rates; the
+    /// overview: the node, the gateway's totals, the counts of what was lost, and per link its state and rates; the
     /// first call opens the watch and asks for no packets.
     @Test
     void overviewAnswersTheNodeTotalsCountsAndRates() {

@@ -28,7 +28,7 @@
     <text x="210" y="290">one claude -p</text><text x="210" y="308">per session, its</text><text x="210" y="326">stream to blocks</text>
     <text x="366" y="290">the tools Claude</text><text x="366" y="308">calls, approvals,</text><text x="366" y="326">other instances</text>
     <text x="522" y="290">Gradle runs,</text><text x="522" y="308">folder reads,</text><text x="522" y="326">git</text>
-    <text x="678" y="290">MQTT 5 client,</text><text x="678" y="308">broker, links</text><text x="678" y="326">between brokers</text>
+    <text x="678" y="290">MQTT 5 client,</text><text x="678" y="308">gateway, links</text><text x="678" y="326">between gateways</text>
     <text x="834" y="290">a lane per</text><text x="834" y="308">connection,</text><text x="834" y="326">results, schema</text>
     <text x="834" y="448">comando's own</text><text x="834" y="466">database</text>
   </g>

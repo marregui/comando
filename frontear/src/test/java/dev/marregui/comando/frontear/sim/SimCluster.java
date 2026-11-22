@@ -51,21 +51,21 @@ import dev.marregui.comando.frontear.protocol.Topics;
 import static org.awaitility.Awaitility.await;
 
 /// The nodes of a [Schedule]'s topology as real frontear nodes on loopback, running the schedule: every link's peer
-/// address is a [Relay] in front of the far node's broker, every link is put with its OUT and IN filters, removed and
+/// address is a [Relay] in front of the far node's gateway, every link is put with its OUT and IN filters, removed and
 /// refiltered by a control message signed with a pod's key, and each node has a control client, a publishing client,
 /// a subscribing client on `sim/#` and two internal subscribers with different filters that live as long as the run,
-/// a restart included. [#run] plays the steps, checks the bounds after each, heals the mesh (links put back, every
+/// a restart included. [#run] plays the steps, checks the bounds after each, heals the octopus (links put back, every
 /// log drained) and returns every violation the [Ledger] and the bounds show; a schedule checked on every walk first
 /// waits until each link's IN filters carry a probe. One thread drives it.
 final class SimCluster implements AutoCloseable {
 
     /// How long an acknowledgement or a control reply may take: milliseconds on this machine, seconds on a loaded one.
     private static final Duration WAIT = Duration.ofSeconds(15);
-    /// How long the mesh may show no change while it heals: a link whose peer refused a window and then a resend waits
-    /// the links' longest backoff (30 s) before it sends again; 5 s more for a loaded machine.
+    /// How long the octopus may show no change while it heals: a link whose peer refused a window and then a resend
+    /// waits the links' longest backoff (30 s) before it sends again; 5 s more for a loaded machine.
     private static final Duration STILL = Duration.ofSeconds(35);
-    /// How long the mesh may take to settle after the last step, moving all along: measured up to 46 s on an Apple M2
-    /// Max, where a node whose own links wait refuses another link's resend so the waits chain; about twice that.
+    /// How long the octopus may take to settle after the last step, moving all along: measured up to 46 s on an Apple
+    /// M2 Max, where a node whose own links wait refuses another link's resend so the waits chain; about twice that.
     private static final Duration HEAL = Duration.ofSeconds(90);
     private static final Duration POLL = Duration.ofMillis(25);
     /// How often a probe is published again until it comes back: a probe published before its filter was in place
@@ -401,8 +401,8 @@ final class SimCluster implements AutoCloseable {
     }
 
     /// Puts back every removed link and waits until each subscriber has what it must get, every link is connected
-    /// with nothing queued and every node has exactly its clients' and links' connections. A mesh that shows no change
-    /// for [#STILL], or has not settled within [#HEAL], is a violation.
+    /// with nothing queued and every node has exactly its clients' and links' connections. An octopus that shows no
+    /// change for [#STILL], or has not settled within [#HEAL], is a violation.
     private void heal() {
         for (final Planned p : links.values()) {
             if (!p.present) {
@@ -431,7 +431,7 @@ final class SimCluster implements AutoCloseable {
             });
             healMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - healNanos);
             if (still[0]) {
-                violation("heal: the mesh stopped moving before it settled [stillMillis=" + STILL.toMillis()
+                violation("heal: the octopus stopped moving before it settled [stillMillis=" + STILL.toMillis()
                         + ", healMillis=" + healMillis + ", missing=" + missing[0] + ", unsettled=" + unsettled[0]
                         + ']');
             } else {
@@ -439,7 +439,7 @@ final class SimCluster implements AutoCloseable {
             }
         } catch (final ConditionTimeoutException _) {
             healMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - healNanos);
-            violation("heal: the mesh did not settle [healMillis=" + HEAL.toMillis() + ", missing=" + missing[0]
+            violation("heal: the octopus did not settle [healMillis=" + HEAL.toMillis() + ", missing=" + missing[0]
                     + ", unsettled=" + unsettled[0] + ']');
         }
         sample("healed");
@@ -448,7 +448,7 @@ final class SimCluster implements AutoCloseable {
         }
     }
 
-    /// What keeps the mesh from being settled: a link not connected or with messages queued, a node with other than
+    /// What keeps the octopus from being settled: a link not connected or with messages queued, a node with other than
     /// its connections; empty when settled.
     private String unsettled() {
         final StringBuilder b = new StringBuilder();
@@ -469,7 +469,7 @@ final class SimCluster implements AutoCloseable {
         return b.toString().strip();
     }
 
-    /// Checks the bounds of every broker and link now, and keeps each link's `reordered`.
+    /// Checks the bounds of every gateway and link now, and keeps each link's `reordered`.
     private void sample(final String when) {
         markOverflowed();
         for (final Node n : nodes.values()) {
@@ -594,7 +594,7 @@ final class SimCluster implements AutoCloseable {
         private final List<Ledger.Sink> recorders = new ArrayList<>();
         private final Ledger.Sink client;
         private final Map<String, CompletableFuture<JsonNode>> replies = new ConcurrentHashMap<>();
-        /// The probes that came in through a link, `"<origin> <payload>"`; from the broker's threads.
+        /// The probes that came in through a link, `"<origin> <payload>"`; from the gateway's threads.
         private final Set<String> probes = ConcurrentHashMap.newKeySet();
         private Frontear frontear;
         private ExecutorService callbacks;

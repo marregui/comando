@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The frontear protocol: MQTT 5 on the wire, one record per packet, a Codec that writes them and checks every rule a receiver must while reading, the reason codes for what frontear declines, an MQTT 5 client used by the links and by comando, and the names and topic rules frontear reserves</title>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="760" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">FRONTEAR · THE PROTOCOL</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">MQTT 5 on the wire: the packets, the codec, the client, the reserved names</text>
+
+<!-- 1 one publish -->
+<text x="40" y="114" font-size="13" fill="#9AA0A6" letter-spacing="2">1 · ONE QoS 1 PUBLISH, BYTE BY BYTE</text>
+<rect x="40" y="128" width="120" height="70" fill="#2B2618" stroke="#E7C55A" stroke-width="1.2"/>
+<rect x="160" y="128" width="170" height="70" fill="#242424" stroke="#4A4A4A"/>
+<rect x="330" y="128" width="220" height="70" fill="#242424" stroke="#4A4A4A"/>
+<rect x="550" y="128" width="140" height="70" fill="#242424" stroke="#4A4A4A"/>
+<rect x="690" y="128" width="230" height="70" fill="#242424" stroke="#4A4A4A"/>
+<rect x="920" y="128" width="240" height="70" fill="#242424" stroke="#4A4A4A"/>
+<g font-size="13" text-anchor="middle">
+<text x="100" y="156" fill="#E7C55A" font-family="Menlo, Consolas, monospace">0x32</text>
+<text x="100" y="180" fill="#9AA0A6">PUBLISH, QoS 1</text>
+<text x="245" y="156" fill="#E8E8E8">Remaining Length</text>
+<text x="245" y="180" fill="#9AA0A6">Variable Byte Integer</text>
+<text x="440" y="156" fill="#E8E8E8">topic</text>
+<text x="440" y="180" fill="#9AA0A6">UTF-8 string, 2-byte length</text>
+<text x="620" y="156" fill="#E8E8E8">packet id</text>
+<text x="620" y="180" fill="#9AA0A6">2 bytes</text>
+<text x="805" y="156" fill="#E8E8E8">properties</text>
+<text x="805" y="180" fill="#9AA0A6">their length, then each</text>
+<text x="1040" y="156" fill="#E8E8E8">payload</text>
+<text x="1040" y="180" fill="#9AA0A6">the rest of the packet</text>
+</g>
+<text x="40" y="222" font-size="13" fill="#9AA0A6"><tspan fill="#E7C55A">fixed header</tspan> · variable header · payload. <tspan font-family="Menlo, Consolas, monospace">PublishRecord</tspan> keeps exactly these bytes, fixed header included: the link log's record, readable by any MQTT tool.</text>
+
+<!-- 2 the packets -->
+<rect x="40" y="248" width="330" height="236" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="272" font-size="13" fill="#9AA0A6" letter-spacing="2">2 · THE PACKETS · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">Packet</tspan></text>
+<g font-size="13" font-family="Menlo, Consolas, monospace" fill="#E8E8E8">
+<text x="56" y="302">CONNECT</text><text x="226" y="302">CONNACK</text>
+<text x="56" y="326">PUBLISH</text><text x="226" y="326">PUBACK</text>
+<text x="56" y="350">SUBSCRIBE</text><text x="226" y="350">SUBACK</text>
+<text x="56" y="374">UNSUBSCRIBE</text><text x="226" y="374">UNSUBACK</text>
+<text x="56" y="398">PINGREQ</text><text x="226" y="398">PINGRESP</text>
+<text x="56" y="422">DISCONNECT</text>
+</g>
+<g stroke="#9AA0A6" stroke-width="1.2">
+<line x1="164" y1="298" x2="216" y2="298" marker-end="url(#a)"/>
+<line x1="164" y1="322" x2="216" y2="322" marker-end="url(#a)"/>
+<line x1="164" y1="346" x2="216" y2="346" marker-end="url(#a)"/>
+<line x1="164" y1="370" x2="216" y2="370" marker-end="url(#a)"/>
+<line x1="164" y1="394" x2="216" y2="394" marker-end="url(#a)"/>
+</g>
+<text x="56" y="450" font-size="13" fill="#9AA0A6">one record each; QoS 0 and 1, so no</text>
+<text x="56" y="468" font-size="13" fill="#9AA0A6">QoS 2 packets</text>
+
+<!-- 3 the codec -->
+<rect x="390" y="248" width="430" height="236" rx="8" fill="#2B2618" stroke="#E7C55A" stroke-width="1.4"/>
+<text x="406" y="272" font-size="13" fill="#E7C55A" letter-spacing="2">3 · THE CODEC · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">Codec</tspan></text>
+<text x="406" y="298" font-size="13" fill="#E8E8E8">writes a packet and reads one back; reading checks</text>
+<text x="406" y="316" font-size="13" fill="#E8E8E8">every rule a receiver must:</text>
+<g font-size="13" fill="#E8E8E8">
+<text x="420" y="340">· the fixed header's flags</text>
+<text x="420" y="360">· each property allowed in its packet, not repeated</text>
+<text x="420" y="380">· the strings well-formed</text>
+<text x="420" y="400">· the packet within the size the reader allows</text>
+</g>
+<text x="406" y="426" font-size="13" fill="#E8E8E8">a break fails with <tspan font-family="Menlo, Consolas, monospace">0x81</tspan> malformed or <tspan font-family="Menlo, Consolas, monospace">0x82</tspan> protocol error</text>
+<text x="406" y="450" font-size="13" fill="#9AA0A6">a property neither side acts on is read, checked and</text>
+<text x="406" y="468" font-size="13" fill="#9AA0A6">dropped; one at its default is not written</text>
+
+<!-- declined -->
+<rect x="840" y="248" width="320" height="236" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="856" y="272" font-size="13" fill="#9AA0A6" letter-spacing="2">WHAT FRONTEAR DECLINES</text>
+<g font-size="13" fill="#E8E8E8">
+<text x="856" y="302">CONNECT with a user name</text>
+<text x="856" y="320">or password</text>
+<text x="856" y="346">CONNECT with an</text>
+<text x="856" y="364">Authentication Method</text>
+<text x="856" y="390">CONNECT at a level other than 5</text>
+<text x="856" y="416">PUBLISH with a Topic Alias</text>
+<text x="856" y="442">SUBSCRIBE with a</text>
+<text x="856" y="460">Subscription Identifier</text>
+</g>
+<g font-size="13" fill="#E7C55A" font-family="Menlo, Consolas, monospace" text-anchor="end">
+<text x="1144" y="320">0x86</text>
+<text x="1144" y="364">0x8C</text>
+<text x="1144" y="390">0x84</text>
+<text x="1144" y="416">0x94</text>
+<text x="1144" y="460">0xA1</text>
+</g>
+
+<!-- 4 the client -->
+<rect x="40" y="506" width="560" height="160" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="56" y="530" font-size="13" fill="#AEB6C1" letter-spacing="2">4 · THE CLIENT · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">MqttClient</tspan></text>
+<text x="584" y="530" font-size="13" fill="#9AA0A6" text-anchor="end">used by every link and by comando</text>
+<text x="56" y="556" font-size="13" fill="#E8E8E8"><tspan font-family="Menlo, Consolas, monospace">mqtt-&lt;client id&gt;</tspan> reads, keeps alive, reconnects; once connected, never writes</text>
+<text x="56" y="576" font-size="13" fill="#E8E8E8"><tspan font-family="Menlo, Consolas, monospace">mqtt-writer-&lt;client id&gt;</tspan> writes, in the order queued</text>
+<text x="56" y="600" font-size="13" fill="#E8E8E8">with a TLS context: a TLS 1.3 handshake before CONNECT</text>
+<text x="56" y="624" font-size="13" fill="#E8E8E8">QoS 1 is at least once within a connection; every session starts</text>
+<text x="56" y="644" font-size="13" fill="#E8E8E8">clean and expires on disconnect, so at most once across them</text>
+
+<!-- 5 names and topics -->
+<rect x="620" y="506" width="540" height="160" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="636" y="530" font-size="13" fill="#9AA0A6" letter-spacing="2">5 · NAMES · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">Names</tspan> AND <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">Topics</tspan></text>
+<text x="636" y="556" font-size="13" fill="#E8E8E8"><tspan font-family="Menlo, Consolas, monospace" fill="#E7C55A">$frontear/</tspan> is reserved: <tspan font-family="Menlo, Consolas, monospace">presence/ state/ control/</tspan></text>
+<text x="636" y="576" font-size="13" fill="#E8E8E8">user property <tspan font-family="Menlo, Consolas, monospace">frontear-origin</tspan>; JSON as <tspan font-family="Menlo, Consolas, monospace">application/json</tspan></text>
+<text x="636" y="600" font-size="13" fill="#E8E8E8">a name holds no wildcard; in a filter <tspan font-family="Menlo, Consolas, monospace">+</tspan> fills its level alone</text>
+<text x="636" y="620" font-size="13" fill="#E8E8E8">and <tspan font-family="Menlo, Consolas, monospace">#</tspan> the last one; <tspan font-family="Menlo, Consolas, monospace">a/#</tspan> matches <tspan font-family="Menlo, Consolas, monospace">a</tspan></text>
+<text x="636" y="644" font-size="13" fill="#E8E8E8">a <tspan font-family="Menlo, Consolas, monospace">$</tspan> topic is not matched by a filter that starts with a wildcard</text>
+
+<text x="40" y="694" font-size="13" fill="#9AA0A6"><tspan font-family="Menlo, Consolas, monospace">MqttException</tspan> carries the MQTT 5 reason code of every failure, read, written, refused or lost: the code, not the message, says what happened.</text>
+
+<line x1="40" y1="712" x2="1160" y2="712" stroke="#2A2A2A" stroke-width="1"/>
+<rect x="40" y="726" width="14" height="14" rx="3" fill="#E7C55A"/><text x="60" y="738" font-size="13" fill="#9AA0A6">the codec, the bytes it writes</text>
+<rect x="260" y="726" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="280" y="738" font-size="13" fill="#9AA0A6">the client</text>
+<text x="1160" y="738" font-size="13" fill="#9AA0A6" text-anchor="end">comando · docs/frontear.md</text>
+</svg>

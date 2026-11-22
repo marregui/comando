@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The frontear topic tree: every subscription's filter sits in a tree of levels; the topic jobs/7/done walks it level by level, a plus matches one level, a hash matches its level and everything below, and the entries found merge to one match per subscriber at its highest QoS</title>
+<rect width="1200" height="720" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">FRONTEAR · THE TOPIC TREE</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">A topic walks the tree of filters, one level at a time</text>
+
+<!-- the subscriptions -->
+<rect x="40" y="104" width="300" height="196" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="56" y="128" font-size="13" fill="#9AA0A6" letter-spacing="2">1 · THE SUBSCRIPTIONS</text>
+<g font-size="13" font-family="Menlo, Consolas, monospace">
+<text x="56" y="156" fill="#E8E8E8">s1</text><text x="96" y="156" fill="#E8E8E8">jobs/#</text><text x="324" y="156" fill="#9AA0A6" text-anchor="end">QoS 0</text>
+<text x="56" y="180" fill="#E8E8E8">s1</text><text x="96" y="180" fill="#E8E8E8">jobs/+/done</text><text x="324" y="180" fill="#9AA0A6" text-anchor="end">QoS 1</text>
+<text x="56" y="204" fill="#E8E8E8">s2</text><text x="96" y="204" fill="#E8E8E8">jobs/7/done</text><text x="324" y="204" fill="#9AA0A6" text-anchor="end">QoS 0</text>
+<text x="56" y="228" fill="#E8E8E8">s3</text><text x="96" y="228" fill="#E8E8E8">results/a</text><text x="324" y="228" fill="#9AA0A6" text-anchor="end">QoS 1</text>
+<text x="56" y="252" fill="#E8E8E8">s4</text><text x="96" y="252" fill="#E8E8E8">#</text><text x="324" y="252" fill="#9AA0A6" text-anchor="end">QoS 0</text>
+</g>
+<text x="56" y="282" font-size="13" fill="#9AA0A6">each one an entry where its filter ends</text>
+
+<!-- the tree -->
+<text x="380" y="128" font-size="13" fill="#9AA0A6" letter-spacing="2">2 · THE TREE · A PUBLISH TO <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0" fill="#E7C55A">jobs/7/done</tspan></text>
+<g font-size="13" fill="#9AA0A6">
+<text x="430" y="152" text-anchor="middle">root</text>
+<text x="580" y="152" text-anchor="middle">level 1</text>
+<text x="760" y="152" text-anchor="middle">level 2</text>
+<text x="940" y="152" text-anchor="middle">level 3</text>
+</g>
+<!-- edges -->
+<g fill="none" stroke="#3A3A3A" stroke-width="1.4">
+<path d="M460,276 L540,330"/>
+<path d="M620,190 L720,180"/>
+<path d="M620,330 L720,330"/>
+</g>
+<g fill="none" stroke="#E7C55A" stroke-width="2">
+<path d="M460,276 L540,190"/>
+<path d="M460,276 L540,266"/>
+<path d="M620,190 L720,236"/>
+<path d="M620,190 L720,292"/>
+<path d="M800,236 L900,236"/>
+<path d="M800,292 L900,292"/>
+</g>
+<!-- nodes -->
+<g font-size="14" font-family="Menlo, Consolas, monospace" text-anchor="middle">
+<rect x="400" y="258" width="60" height="36" rx="18" fill="#242424" stroke="#9AA0A6"/>
+<text x="430" y="281" fill="#9AA0A6">·</text>
+<rect x="540" y="172" width="80" height="36" rx="6" fill="#2B2618" stroke="#E7C55A"/><text x="580" y="195" fill="#E7C55A">jobs</text>
+<rect x="540" y="248" width="80" height="36" rx="6" fill="#2B2618" stroke="#E7C55A"/><text x="580" y="271" fill="#E7C55A">#</text>
+<rect x="540" y="312" width="80" height="36" rx="6" fill="#242424" stroke="#3A3A3A"/><text x="580" y="335" fill="#E8E8E8">results</text>
+<rect x="720" y="162" width="80" height="36" rx="6" fill="#2B2618" stroke="#E7C55A"/><text x="760" y="185" fill="#E7C55A">#</text>
+<rect x="720" y="218" width="80" height="36" rx="6" fill="#2B2618" stroke="#E7C55A"/><text x="760" y="241" fill="#E7C55A">+</text>
+<rect x="720" y="274" width="80" height="36" rx="6" fill="#2B2618" stroke="#E7C55A"/><text x="760" y="297" fill="#E7C55A">7</text>
+<rect x="720" y="312" width="80" height="36" rx="6" fill="#242424" stroke="#3A3A3A"/><text x="760" y="335" fill="#E8E8E8">a</text>
+<rect x="900" y="218" width="80" height="36" rx="6" fill="#2B2618" stroke="#E7C55A"/><text x="940" y="241" fill="#E7C55A">done</text>
+<rect x="900" y="274" width="80" height="36" rx="6" fill="#2B2618" stroke="#E7C55A"/><text x="940" y="297" fill="#E7C55A">done</text>
+</g>
+<path d="M620,190 L720,180" fill="none" stroke="#E7C55A" stroke-width="2"/>
+<text x="380" y="396" font-size="13" fill="#E8E8E8">At each node the walk collects the entries of its <tspan font-family="Menlo, Consolas, monospace">#</tspan>, then follows the child</text>
+<text x="380" y="416" font-size="13" fill="#E8E8E8">the topic's next level names and the <tspan font-family="Menlo, Consolas, monospace">+</tspan> child. Where the topic ends,</text>
+<text x="380" y="436" font-size="13" fill="#E8E8E8">it collects the entries of the node it reached.</text>
+<!-- entries -->
+<g font-size="13" font-family="Menlo, Consolas, monospace">
+<text x="630" y="271" fill="#E8E8E8">s4 q0</text>
+<text x="810" y="185" fill="#E8E8E8">s1 q0</text>
+<text x="990" y="241" fill="#E8E8E8">s1 q1</text>
+<text x="990" y="297" fill="#E8E8E8">s2 q0</text>
+<text x="810" y="335" fill="#9AA0A6">s3 q1</text>
+</g>
+
+<!-- the match -->
+<rect x="40" y="320" width="300" height="160" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.4"/>
+<text x="56" y="344" font-size="13" fill="#E7C55A" letter-spacing="2">3 · ONE MATCH PER SUBSCRIBER</text>
+<g font-size="13" font-family="Menlo, Consolas, monospace">
+<text x="56" y="372" fill="#E8E8E8">s1</text><text x="96" y="372" fill="#E7C55A">QoS 1</text>
+<text x="56" y="396" fill="#E8E8E8">s2</text><text x="96" y="396" fill="#E8E8E8">QoS 0</text>
+<text x="56" y="420" fill="#E8E8E8">s4</text><text x="96" y="420" fill="#E8E8E8">QoS 0</text>
+</g>
+<text x="160" y="372" font-size="13" fill="#9AA0A6">two filters, one delivery</text>
+<text x="160" y="396" font-size="13" fill="#9AA0A6">its exact filter</text>
+<text x="160" y="420" font-size="13" fill="#9AA0A6"><tspan font-family="Menlo, Consolas, monospace">#</tspan> at the root</text>
+<text x="56" y="448" font-size="13" fill="#9AA0A6">s3 gets nothing: <tspan font-family="Menlo, Consolas, monospace">results</tspan> is not</text>
+<text x="56" y="466" font-size="13" fill="#9AA0A6">the topic's first level</text>
+
+<!-- the rules -->
+<rect x="40" y="504" width="270" height="140" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="528" font-size="13" fill="#9AA0A6" letter-spacing="2">PLUS · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0" fill="#E8E8E8">+</tspan></text>
+<text x="56" y="552" font-size="13" fill="#E8E8E8">matches exactly one level</text>
+<text x="56" y="578" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">jobs/+/done</text>
+<text x="56" y="598" font-size="13" fill="#9AA0A6">matches <tspan font-family="Menlo, Consolas, monospace">jobs/7/done</tspan></text>
+<text x="56" y="618" font-size="13" fill="#9AA0A6">not <tspan font-family="Menlo, Consolas, monospace">jobs/7/8/done</tspan></text>
+
+<rect x="326" y="504" width="270" height="140" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="342" y="528" font-size="13" fill="#9AA0A6" letter-spacing="2">HASH · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0" fill="#E8E8E8">#</tspan></text>
+<text x="342" y="552" font-size="13" fill="#E8E8E8">last in a filter; matches its</text>
+<text x="342" y="572" font-size="13" fill="#E8E8E8">parent level and all below</text>
+<text x="342" y="598" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">jobs/#</text>
+<text x="342" y="618" font-size="13" fill="#9AA0A6">matches <tspan font-family="Menlo, Consolas, monospace">jobs</tspan>, <tspan font-family="Menlo, Consolas, monospace">jobs/7</tspan>, <tspan font-family="Menlo, Consolas, monospace">jobs/7/done</tspan></text>
+
+<rect x="612" y="504" width="270" height="140" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="628" y="528" font-size="13" fill="#9AA0A6" letter-spacing="2">DOLLAR · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0" fill="#E8E8E8">$</tspan></text>
+<text x="628" y="552" font-size="13" fill="#E8E8E8">a topic starting with <tspan font-family="Menlo, Consolas, monospace">$</tspan> is not</text>
+<text x="628" y="572" font-size="13" fill="#E8E8E8">matched by a filter that starts</text>
+<text x="628" y="592" font-size="13" fill="#E8E8E8">with <tspan font-family="Menlo, Consolas, monospace">+</tspan> or <tspan font-family="Menlo, Consolas, monospace">#</tspan>: s4 never gets</text>
+<text x="628" y="612" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">$frontear/presence/…</text>
+
+<rect x="898" y="504" width="262" height="140" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="914" y="528" font-size="13" fill="#9AA0A6" letter-spacing="2">COPY ON WRITE</text>
+<text x="914" y="552" font-size="13" fill="#E8E8E8">a SUBSCRIBE copies the path</text>
+<text x="914" y="572" font-size="13" fill="#E8E8E8">it changes and swaps the root</text>
+<text x="914" y="592" font-size="13" fill="#E8E8E8">in one store; a PUBLISH reads</text>
+<text x="914" y="612" font-size="13" fill="#E8E8E8">the root once, with no lock</text>
+
+<text x="40" y="674" font-size="13" fill="#9AA0A6">An entry with No Local does not match a message its own owner published; a link subscribes on its peer that way, so its sends never come back.</text>
+
+<line x1="40" y1="688" x2="1160" y2="688" stroke="#2A2A2A" stroke-width="1"/>
+<rect x="40" y="698" width="14" height="14" rx="3" fill="#E7C55A"/><text x="60" y="710" font-size="13" fill="#9AA0A6">the levels the topic matches</text>
+<rect x="270" y="698" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="290" y="710" font-size="13" fill="#9AA0A6">subscribers</text>
+<text x="1160" y="710" font-size="13" fill="#9AA0A6" text-anchor="end">comando · docs/frontear.md</text>
+</svg>

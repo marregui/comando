@@ -3,8 +3,8 @@ package dev.marregui.comando.frontear.watch;
 import java.nio.charset.StandardCharsets;
 
 /**
- * A message the broker routed: published by {@code origin} (a client id, or an internal publisher's) on {@code topic},
- * its payload {@code bytes} long, reaching {@code matches} subscriptions, after {@code hops} hops between brokers (-1
+ * A message the gateway routed: published by {@code origin} (a client id, or an internal publisher's) on {@code topic},
+ * its payload {@code bytes} long, reaching {@code matches} subscriptions, after {@code hops} hops between gateways (-1
  * when its count is not a number). {@code correlation} is a copy of at most {@link Watch#CORRELATION_BYTES} of its
  * correlation data, null when it has none; {@code payload} is the message's own payload, by reference, which nothing
  * writes into after the message is built, so the publisher's thread neither copies nor decodes it ({@link #head} and

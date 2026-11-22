@@ -107,7 +107,7 @@ public final class HealthRows {
     }
 
     /**
-     * The node's faults in one line, only the counters that are not zero, or "" when there are none: the broker's
+     * The node's faults in one line, only the counters that are not zero, or "" when there are none: the gateway's
      * drops, refusals and backlog disconnects, the packets the watch lost to its window and its ring, and the rows cdb
      * dropped. {@code missed} counts the packets the tab's own reads found gone.
      */
@@ -202,7 +202,7 @@ public final class HealthRows {
                     ? "the machine is unreachable: check it runs comando, listens, and has this machine paired "
                     + "(Machines…)"
                     : "instance " + l.id() + " is not running, or its frontear is off: start it";
-            case LOG_FULL -> "the broker writes faster than the log takes it: look for a client flooding a topic in "
+            case LOG_FULL -> "the gateway writes faster than the log takes it: look for a client flooding a topic in "
                     + "Traffic";
             case BACKING_UP -> "the peer takes messages slower than they come: check its sessions are not stuck";
             case DROPPING -> "messages to this peer were given up: Traffic, kind Dropped, gives each reason";

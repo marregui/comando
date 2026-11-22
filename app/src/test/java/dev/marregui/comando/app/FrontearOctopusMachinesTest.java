@@ -38,14 +38,14 @@ import dev.marregui.comando.testkit.RecordingSink;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// [FrontearOctopus] across machines (record 189): the node of `main` is the machine's gateway. The links a node keeps
+/// [FrontearOctopus] across machines (record 189): the node of `main` is the border gateway. The links a node keeps
 /// are worked out from the registry and the pairings ([FrontearOctopus#wanted]) for three instances, `main`, `alice`
 /// and `bob`, on machine `a` paired with `b` and `c`; the live tests run the nodes in this process on ports from a
 /// free one up, each machine's folder, remotes file and registry in a temporary folder, never the user's.
 /// - nothing paired, every node keeps the links it keeps on one machine
-/// - the gateway links each paired machine over TLS, hop limit 2, and carries to each instance its topics on this
-///   machine and the paired machines' presences, hop limit 3
-/// - every other node carries the paired machines' inbox and reply topics and its own presence to the gateway
+/// - the border gateway links each paired machine over TLS, hop limit 2, and carries to each instance its topics on
+/// this   machine and the paired machines' presences, hop limit 3
+/// - every other node carries the paired machines' inbox and reply topics and its own presence to the border gateway
 /// - unpairing a machine removes its link and its topics from every link
 /// - a look puts the machines' topics on the links and takes them off once unpaired
 /// - a question published on one machine reaches an instance on the other, its origin the asking machine (disabled
@@ -81,7 +81,7 @@ class FrontearOctopusMachinesTest {
     }
 
     /// With nothing paired, each node links the others with the peer's inbox and reply topics and its own presence
-    /// out, hop limit 1, the gateway too, and the gateway links no machine.
+    /// out, hop limit 1, the border gateway too, and the border gateway links no machine.
     @Test
     void nothingPairedKeepsTheLinksOfOneMachine() {
         for (final String slug : NODES.keySet()) {
@@ -98,7 +98,7 @@ class FrontearOctopusMachinesTest {
         }
     }
 
-    /// The gateway keeps a link `main@<m>` to each paired machine `m`, over TLS to its host and port, with `m`'s
+    /// The border gateway keeps a link `main@<m>` to each paired machine `m`, over TLS to its host and port, with `m`'s
     /// inbox and reply topics and this machine's presences out, nothing in, hop limit 2; its link to each instance
     /// `X` adds `X`'s inbox and reply topics on this machine and each paired machine's presences, hop limit 3.
     @Test
@@ -121,9 +121,9 @@ class FrontearOctopusMachinesTest {
                         "comando/v1/a/instance/+/presence"), Set.of(), 2, true));
     }
 
-    /// A node other than the gateway adds to its link to the gateway each paired machine's inbox and reply topics and
-    /// its own presence on this machine, hop limit still 1; its links to the other instances stay as they are, and it
-    /// links no machine itself.
+    /// A node other than the border gateway adds to its link to the border gateway each paired machine's inbox and
+    /// reply topics and its own presence on this machine, hop limit still 1; its links to the other instances stay as
+    /// they are, and it links no machine itself.
     @Test
     void anInstanceCarriesThePairedMachinesTopicsToTheBorderGateway() {
         final Map<String, LinkSpec> wanted = FrontearOctopus.wanted("alice", NODES, "a", PAIRED);
@@ -140,8 +140,8 @@ class FrontearOctopusMachinesTest {
                 false));
     }
 
-    /// Unpairing machine `c` on `a` takes its link off the gateway's, and its topics off every node's links, as the
-    /// pairings read after it say.
+    /// Unpairing machine `c` on `a` takes its link off the border gateway's, and its topics off every node's links, as
+    /// the pairings read after it say.
     @Test
     void unpairRemovesTheLinkSpec() throws Exception {
         final Machines a = machine("a");
@@ -166,8 +166,9 @@ class FrontearOctopusMachinesTest {
     }
 
     /// Two nodes of machine `a`, `main` and `alice`, with `b` paired: a look of each puts on `alice`'s link to the
-    /// gateway the paired machine's topics and its own presence on `a`, and on the gateway's link to `alice` hop limit
-    /// 3 and `alice`'s topics on `a`; once `b` is unpaired, the next looks put both back as on one machine.
+    /// border gateway the paired machine's topics and its own presence on `a`, and on the border gateway's link to
+    /// `alice` hop limit 3 and `alice`'s topics on `a`; once `b` is unpaired, the next looks put both back as on one
+    /// machine.
     @Test
     void aLookPutsTheMachinesTopicsOnTheLinksAndUnpairTakesThemOff() throws Exception {
         final Machines a = machine("a");
@@ -175,7 +176,7 @@ class FrontearOctopusMachinesTest {
         a.listen(LOOPBACK);
         b.listen(LOOPBACK);
         a.pair(b.self().token(), Grant.PEER);
-        final Path registry = dir.resolve("a-fabric.json");
+        final Path registry = dir.resolve("a-octopus.json");
         final int base = freePort();
         final FrontearOctopus main = octopus("a-main", MAIN, registry, base, a);
         final FrontearOctopus alice = octopus("a-alice", "alice", registry, base, a);
@@ -210,10 +211,10 @@ class FrontearOctopusMachinesTest {
                 Peers.presenceTopic(MAIN));
     }
 
-    /// Machines `a` and `b`, each with a gateway and one other instance, `alice` on `a` and `carol` on `b`, each
-    /// listening on the loopback and paired with the other's token: once the gateways' links to each other connect,
-    /// a question published on `alice`'s node to `carol`'s inbox on `b` reaches a client of `carol`'s node, its
-    /// origin `@a`, as `b`'s gateway stamps it on what comes from `a`.
+    /// Machines `a` and `b`, each with a border gateway and one other instance, `alice` on `a` and `carol` on `b`, each
+    /// listening on the loopback and paired with the other's token: once the border gateways' links to each other
+    /// connect, a question published on `alice`'s node to `carol`'s inbox on `b` reaches a client of `carol`'s node,
+    /// its origin `@a`, as `b`'s border gateway stamps it on what comes from `a`.
     @Test
     void aQuestionOnOneMachineReachesAnInstanceOnTheOther() throws Exception {
         final Machines a = machine("a");
@@ -222,8 +223,8 @@ class FrontearOctopusMachinesTest {
         b.listen(LOOPBACK);
         a.pair(b.self().token(), Grant.PEER);
         b.pair(a.self().token(), Grant.PEER);
-        final Path registryA = dir.resolve("a-fabric.json");
-        final Path registryB = dir.resolve("b-fabric.json");
+        final Path registryA = dir.resolve("a-octopus.json");
+        final Path registryB = dir.resolve("b-octopus.json");
         final int baseA = freePort();
         final int baseB = freePort();
         final FrontearOctopus mainA = octopus("a-main", MAIN, registryA, baseA, a);
@@ -261,10 +262,10 @@ class FrontearOctopusMachinesTest {
         assertThat(question.meta().userProperties()).contains(new Packet.UserProperty("frontear-origin", "@a"));
     }
 
-    /// Machine `a` pairs `c` and a `b` whose token holds `b`'s key but `c`'s port, so the gateway's link `main@b`
-    /// reaches `c`'s listener, which shows `c`'s certificate, pinned on `a` for `c`: the link trusts `b`'s key alone,
-    /// so its handshake fails, as `c`'s gateway counts it, and it never connects, while `main@c` to the same listener
-    /// does. A link that took `c`'s key would finish its handshake and only then be refused its CONNECT.
+    /// Machine `a` pairs `c` and a `b` whose token holds `b`'s key but `c`'s port, so the border gateway's link
+    /// `main@b` reaches `c`'s listener, which shows `c`'s certificate, pinned on `a` for `c`: the link trusts `b`'s key
+    /// alone, so its handshake fails, as `c`'s border gateway counts it, and it never connects, while `main@c` to the
+    /// same listener does. A link that took `c`'s key would finish its handshake and only then be refused its CONNECT.
     @Test
     void aLinkToOnePairedMachineRefusesTheCertificateOfAnother() throws Exception {
         final Machines a = machine("a");
@@ -278,8 +279,8 @@ class FrontearOctopusMachinesTest {
         a.pair(new Token(real.machine(), real.host(), atC.port(), real.fingerprint()).text(), Grant.PEER);
         a.pair(c.self().token(), Grant.PEER);
         c.pair(a.self().token(), Grant.PEER);
-        final FrontearOctopus mainA = octopus("a-main", MAIN, dir.resolve("a-fabric.json"), freePort(), a);
-        final FrontearOctopus mainC = octopus("c-main", MAIN, dir.resolve("c-fabric.json"), freePort(), c);
+        final FrontearOctopus mainA = octopus("a-main", MAIN, dir.resolve("a-octopus.json"), freePort(), a);
+        final FrontearOctopus mainC = octopus("c-main", MAIN, dir.resolve("c-octopus.json"), freePort(), c);
         host(mainA);
         host(mainC);
 
@@ -299,13 +300,13 @@ class FrontearOctopusMachinesTest {
                 .orElse(new LinkState(id, false, 0, 0, 0, 0, 0));
     }
 
-    /// Machine `id`: its folder and remotes file in the temporary folder, a free port for its gateway.
+    /// Machine `id`: its folder and remotes file in the temporary folder, a free port for its border gateway.
     private Machines machine(final String id) throws IOException {
         return new Machines(dir.resolve(id + "-machine"), dir.resolve(id + "-remotes.json"), freePort(), () -> id,
                 Instant::now);
     }
 
-    /// The fabric of instance `name` on data root `root` in the temporary folder, of the machine whose registry is
+    /// The octopus of instance `name` on data root `root` in the temporary folder, of the machine whose registry is
     /// `registry`, its ports from `base` up, reading `machines`.
     private FrontearOctopus octopus(final String root, final String name, final Path registry, final int base,
             final Machines machines) {

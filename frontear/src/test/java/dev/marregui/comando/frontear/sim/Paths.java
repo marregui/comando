@@ -7,7 +7,7 @@ import java.util.Map;
 
 import dev.marregui.comando.frontear.protocol.Topics;
 
-/// The delivery paths of a mesh whose filters do not change: every walk a message on a topic can make from the node
+/// The delivery paths of an octopus whose filters do not change: every walk a message on a topic can make from the node
 /// that published it, one carrier at a time, as the link contract routes it. A carrier is a link's OUT side, from its
 /// near node to its far node for a topic its OUT filters match, or its IN side, from its far node back to its near
 /// node for a topic its IN filters match. A walk has at most the hop limit's carriers, since a link carries on only a

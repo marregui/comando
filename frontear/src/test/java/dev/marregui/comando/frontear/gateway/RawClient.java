@@ -20,10 +20,10 @@ import dev.marregui.comando.frontear.protocol.Packet;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// An MQTT client written by hand on a socket: it sends what a test builds, raw bytes included, and reads back each
-/// packet the broker sends, every read bounded so a missing answer fails the test instead of hanging it.
+/// packet the gateway sends, every read bounded so a missing answer fails the test instead of hanging it.
 final class RawClient implements AutoCloseable {
 
-    // a read waiting longer than this fails the test; the broker answers a local client in milliseconds
+    // a read waiting longer than this fails the test; the gateway answers a local client in milliseconds
     private static final int READ_MILLIS = 10_000;
     private static final HexFormat HEX = HexFormat.ofDelimiter(" ");
 
@@ -59,12 +59,12 @@ final class RawClient implements AutoCloseable {
         return c;
     }
 
-    /// A client the broker accepted as `clientId`, with a clean start and a session that ends with the connection.
+    /// A client the gateway accepted as `clientId`, with a clean start and a session that ends with the connection.
     static RawClient connected(final int port, final String clientId) throws IOException {
         return connected(port, connect(clientId, true, 0));
     }
 
-    /// A client the broker accepted for `connect`.
+    /// A client the gateway accepted for `connect`.
     static RawClient connected(final int port, final Packet.Connect connect) throws IOException {
         final RawClient c = open(port, connect);
         assertThat(c.read(Packet.ConnAck.class).reasonCode()).isEqualTo(Packet.SUCCESS);
@@ -94,16 +94,16 @@ final class RawClient implements AutoCloseable {
         out.flush();
     }
 
-    /// The next packet the broker sent.
+    /// The next packet the gateway sent.
     Packet read() throws IOException {
         final int header = in.read();
         if (header < 0) {
-            throw new EOFException("broker closed the connection");
+            throw new EOFException("gateway closed the connection");
         }
         return Codec.read(in, header, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE);
     }
 
-    /// The next packet the broker sent, which must be a `type`.
+    /// The next packet the gateway sent, which must be a `type`.
     <T extends Packet> T read(final Class<T> type) throws IOException {
         final Packet p = read();
         assertThat(p).isInstanceOf(type);
@@ -135,7 +135,7 @@ final class RawClient implements AutoCloseable {
         return a.reasonCodes();
     }
 
-    /// Sends PINGREQ and returns what came before its PINGRESP: everything the broker had queued for this client.
+    /// Sends PINGREQ and returns what came before its PINGRESP: everything the gateway had queued for this client.
     List<Packet> ping() throws IOException {
         send(new Packet.PingReq());
         final List<Packet> before = new ArrayList<>();
@@ -145,7 +145,7 @@ final class RawClient implements AutoCloseable {
         return before;
     }
 
-    /// Reads until the broker closes the connection and returns what it sent before that.
+    /// Reads until the gateway closes the connection and returns what it sent before that.
     List<Packet> untilClosed() throws IOException {
         final List<Packet> before = new ArrayList<>();
         try {
@@ -153,7 +153,7 @@ final class RawClient implements AutoCloseable {
                 before.add(read());
             }
         } catch (final EOFException | SocketException | SSLException _) {
-            // the broker closed it, by FIN or by reset, or a TLS one by an alert
+            // the gateway closed it, by FIN or by reset, or a TLS one by an alert
             return before;
         }
     }

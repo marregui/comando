@@ -26,9 +26,9 @@ import dev.marregui.comando.mcp.PeerGateway;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// The instances' broker on comando's own MQTT client (record 123): its message mapping and handler routing without
-/// a broker, its connect, will, resubscription, publish and following of frontear against a fake broker on a local
-/// port, and its renewal after a cut against the real broker `COMANDO_MQTT_BROKER` names.
+/// The instances' gateway on comando's own MQTT client (record 123): its message mapping and handler routing without
+/// a gateway, its connect, will, resubscription, publish and following of frontear against a fake gateway on a local
+/// port, and its renewal after a cut against the MQTT 5 server `COMANDO_MQTT_SERVER` names.
 class MqttPeerGatewayTest {
 
     private static final String INBOX = "comando/v1/local/instance/b/inbox";
@@ -78,7 +78,7 @@ class MqttPeerGatewayTest {
         assertThat(presence.correlation()).isNull();
     }
 
-    /// The machine a message came from is the `frontear-origin` user property the broker stamped, the last one when a
+    /// The machine a message came from is the `frontear-origin` user property the gateway stamped, the last one when a
     /// client sent its own before it; a message without one is of this machine, its origin null, and the other user
     /// properties do not count.
     @Test
@@ -94,7 +94,7 @@ class MqttPeerGatewayTest {
                 .isNull();
     }
 
-    /// A publish with an expiry reaches the broker with that MQTT 5 message expiry, and the five-argument publish with
+    /// A publish with an expiry reaches the gateway with that MQTT 5 message expiry, and the five-argument publish with
     /// none.
     @Test
     void aPublishWithAnExpirySendsItAndOneWithoutSendsNone() throws Exception {
@@ -165,7 +165,7 @@ class MqttPeerGatewayTest {
     }
 
     /// Following a running frontear connects with the client id, a 60 s keep alive and the will as a retained QoS 1
-    /// message; the connect listeners run, then the subscriptions made before are sent; after the broker drops the
+    /// message; the connect listeners run, then the subscriptions made before are sent; after the gateway drops the
     /// connection the client is back about a second later, and the listeners and subscriptions run again.
     @Test
     void itConnectsWithItsWillAndRenewsListenersAndSubscriptionsAfterADrop() {
@@ -228,7 +228,7 @@ class MqttPeerGatewayTest {
             await().atMost(WAIT).until(() -> fake.received(Packet.Subscribe.class).size() == 6);
             await().during(Duration.ofMillis(500)).atMost(WAIT).until(() -> heard.size() == 2);
 
-            // the broker takes them again: the next look renews the round on the same connection, and the generation
+            // the gateway takes them again: the next look renews the round on the same connection, and the generation
             // of that look is heard
             generation.set(9L);
             fake.subscribeCode(1);
@@ -243,8 +243,8 @@ class MqttPeerGatewayTest {
         }
     }
 
-    /// A publish completes when the broker acknowledges it, carrying its response topic and correlation data; messages
-    /// in reach the subscribed handler in the order the broker sent them.
+    /// A publish completes when the gateway acknowledges it, carrying its response topic and correlation data; messages
+    /// in reach the subscribed handler in the order the gateway sent them.
     @Test
     void aPublishCompletesOnItsAcknowledgementAndMessagesArriveInOrder() throws Exception {
         fake.ackPublishes(false);
@@ -271,7 +271,7 @@ class MqttPeerGatewayTest {
         }
     }
 
-    /// Once frontear stops running, following disconnects with DISCONNECT Normal, so the broker drops the will, and a
+    /// Once frontear stops running, following disconnects with DISCONNECT Normal, so the gateway drops the will, and a
     /// publish fails at once.
     @Test
     void whenFrontearStopsItDisconnects() {
@@ -313,15 +313,15 @@ class MqttPeerGatewayTest {
         }
     }
 
-    /// Against the broker the environment variable `COMANDO_MQTT_BROKER` names as `host:port`, skipped without it,
-    /// through a relay whose link is cut as a failed network would cut it: the broker publishes the will, the client is
-    /// back about a second later, the connect listeners run again, and the subscription is renewed, so a message
-    /// published after the cut arrives.
+    /// Against the MQTT 5 server the environment variable `COMANDO_MQTT_SERVER` names as `host:port`, skipped without
+    /// it, through a relay whose link is cut as a failed network would cut it: the server publishes the will, the
+    /// client is back about a second later, the connect listeners run again, and the subscription is renewed, so a
+    /// message published after the cut arrives.
     @Test
     void aCutConnectionToARealServerIsRenewedAndItsWillPublished() throws Exception {
-        final String at = System.getenv("COMANDO_MQTT_BROKER");
+        final String at = System.getenv("COMANDO_MQTT_SERVER");
         Assumptions.assumeTrue(at != null && at.lastIndexOf(':') > 0,
-                "set COMANDO_MQTT_BROKER=host:port to run against a broker");
+                "set COMANDO_MQTT_SERVER=host:port to run against an MQTT 5 server");
         final String host = at.substring(0, at.lastIndexOf(':'));
         final int port = Integer.parseInt(at.substring(at.lastIndexOf(':') + 1));
         final String id = "comando-interop-" + ProcessHandle.current().pid() + '-' + System.nanoTime();

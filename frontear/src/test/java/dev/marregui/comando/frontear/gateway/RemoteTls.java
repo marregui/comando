@@ -38,7 +38,7 @@ final class RemoteTls {
     private static final char[] PASSWORD = "frontear-test".toCharArray();
     // keytool makes one Ed25519 key in about half a second; a minute is room for a loaded machine
     private static final long KEYTOOL_SECONDS = 60;
-    // a read waiting longer than this fails the test; the broker answers a loopback client in milliseconds
+    // a read waiting longer than this fails the test; the gateway answers a loopback client in milliseconds
     private static final int READ_MILLIS = 10_000;
 
     private RemoteTls() {

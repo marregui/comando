@@ -20,7 +20,7 @@ Look at the picture above. It holds six things.
 | A session | one `claude -p` process per running session: Claude Code without its own screen | two pipes, and HTTP back to comando |
 | The machine's cdb | comando's own database as a server; one per machine, it outlives comando | the PG wire protocol, on `127.0.0.1` |
 | Your databases | PostgreSQL or QuestDB servers you connect to | the PG wire protocol (JDBC) |
-| frontear | a local MQTT broker on `127.0.0.1`, one node inside each instance's JVM, each on a port from 18883 up, linked to the others | MQTT 5 |
+| frontear | a local MQTT gateway on `127.0.0.1`, one node inside each instance's JVM, each on a port from 18883 up, linked to the others | MQTT 5 |
 | Other instances | more comandos, each its own JVM and data root | messages through frontear |
 
 Nothing here listens on the network: every server comando starts binds `127.0.0.1`.
@@ -42,7 +42,7 @@ cycles.
 | `core` | the state, the intents, the reducer, the effects, the ports, the thread kit, JSON | the JDK | [core](modules/core.md) |
 | `testkit` | fakes for the ports, fixtures; used by tests only | `core` | [testkit](modules/testkit.md) |
 | `cdb` | comando's own database: columnar, partitioned by time, with SQL | the JDK | [cdb](modules/cdb.md) |
-| `frontear` | an MQTT 5 client, a broker, and links between brokers | `core` | [frontear](modules/frontear.md) |
+| `frontear` | an MQTT 5 client, a gateway, and links between gateways | `core` | [frontear](modules/frontear.md) |
 | `db` | one lane per connection, results, schema reads | `core`, `cdb`, the PostgreSQL JDBC driver | [db](modules/db.md) |
 | `claude` | one `claude -p` process per session, its stream turned into transcript blocks | `core` | [claude](modules/claude.md) |
 | `mcp` | the MCP server: the tools Claude calls, approvals, questions between instances | `core` | [mcp](modules/mcp.md) |
@@ -331,7 +331,7 @@ What a session can do, and every tool it has: [Claude Code in comando](claude-co
 You can run several comandos on one machine. Each is an *instance*: its own JVM, its own data root, its own window.
 `COMANDO_HOME` names the data root, and `comando.lock` in it refuses a second start on the same root.
 
-Instances find and ask each other through frontear, a local MQTT broker of linked nodes. Each instance uses three topics
+Instances find and ask each other through frontear, a local MQTT gateway of linked nodes. Each instance uses three topics
 under `comando/v1/local/instance/<id>/`.
 
 | Topic | Carries |
@@ -351,17 +351,17 @@ subscribed its topics on it, so what was queued for that instance finds its subs
 stops with its instance.
 `-Dcomando.peers=false` turns the whole feature off ([why](adr/0187-frontear-lab-node-per-instance.md)).
 
-Using instances: [Workbench](workbench.md). The broker comando wrote for itself: [frontear](frontear.md). Why
+Using instances: [Workbench](workbench.md). The gateway comando wrote for itself: [frontear](frontear.md). Why
 instances consult each other: [the record](adr/0123-instances-consult-each-other.md).
 
 > **Learn: publish and subscribe.** In a phone call you must know who to dial. In *publish/subscribe* you do not. A
-> sender publishes a message to a named *topic*; a broker delivers it to whoever subscribed to that topic. Sender and
+> sender publishes a message to a named *topic*; a gateway delivers it to whoever subscribed to that topic. Sender and
 > receiver never meet, and either can start first. MQTT is a small protocol for exactly this. A *retained* message is
-> one the broker keeps, so a late subscriber still learns the last value. That is how a new instance sees who is here.
+> one the gateway keeps, so a late subscriber still learns the last value. That is how a new instance sees who is here.
 
 ## 9. Data on disk
 
-![comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, fabric) and the instance's identity; outside it sit the machine's cdb, the fabric registry, and Claude Code's root with the kit and the conversations](images/arch-disk.svg)
+![comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, octopus network) and the instance's identity; outside it sit the machine's cdb, the octopus network registry, and Claude Code's root with the kit and the conversations](images/arch-disk.svg)
 
 Everything an instance keeps is under one folder, the *data root*: `-Dcomando.home`, else `COMANDO_HOME`, else
 `~/.comando`.
@@ -375,14 +375,14 @@ Everything an instance keeps is under one folder, the *data root*: `-Dcomando.ho
 | `logs/` | `comando-<n>.log`, and the intent log when recording |
 | `audit/` | every MCP tool call and approval decision, one file per day |
 | `cache/` | drawn diagrams and pictures; safe to delete |
-| `cdb/`, `fabric/` | the data of the local cdb, of this instance's frontear node |
+| `cdb/`, `fabric/` | the data of the local cdb, of this instance's frontear node (`fabric/` is a legacy name, kept so that an existing data root's keys and logs are found) |
 | `instance.json`, `comando.lock`, `agents.json`, `instances-seen.json` | who this instance is, and who it talks to |
 
 Three things live outside it.
 
 - **`~/.comando-cdb/`**: the machine's cdb, one server for every instance. Its registry `server.json` holds the pid,
   the ports and the token.
-- **`~/.comando-fabric.json`**: the registry of the one frontear node, shared by every instance; `~/.comando-fabric.json.lock` serialises its changes across processes.
+- **`~/.comando-fabric.json`** (a legacy name, kept so that running instances still find each other): the registry of the one frontear node, shared by every instance; `~/.comando-fabric.json.lock` serialises its changes across processes.
 - **Claude Code's own root**: the kit and each session's conversation. comando reads them; Claude Code writes them.
   See [Kit and brain](kit-and-brain.md).
 

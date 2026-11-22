@@ -39,9 +39,9 @@ configurations.runtimeClasspath {
 tasks.withType<Test>().configureEach {
     systemProperty("comando.peers", "false")
     systemProperty("comando.metrics", "false")
-    // FrontearOctopusTest's stale-entry takeovers: COMANDO_FABRIC_SEED0/1 replay a printed seed pair
-    System.getenv("COMANDO_FABRIC_SEED0")?.let { systemProperty("comando.fabric.seed0", it) }
-    System.getenv("COMANDO_FABRIC_SEED1")?.let { systemProperty("comando.fabric.seed1", it) }
+    // FrontearOctopusTest's stale-entry takeovers: COMANDO_OCTOPUS_SEED0/1 replay a printed seed pair
+    System.getenv("COMANDO_OCTOPUS_SEED0")?.let { systemProperty("comando.octopus.seed0", it) }
+    System.getenv("COMANDO_OCTOPUS_SEED1")?.let { systemProperty("comando.octopus.seed1", it) }
 }
 
 tasks.jar {

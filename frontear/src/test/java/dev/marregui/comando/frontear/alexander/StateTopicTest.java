@@ -59,7 +59,7 @@ class StateTopicTest {
                 .containsExactly(1L, 2L, 3L, 4L, 5L, 6L);
     }
 
-    /// An empty mesh publishes an empty list once, and an unchanged state is not published again, however late.
+    /// An empty octopus publishes an empty list once, and an unchanged state is not published again, however late.
     @Test
     void anUnchangedStateIsNotRepublished() {
         assertThat(topic.publishIfChanged()).isTrue();

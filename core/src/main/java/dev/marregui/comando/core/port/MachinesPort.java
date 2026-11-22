@@ -7,8 +7,8 @@ import java.util.regex.Pattern;
 
 /**
  * This machine and the machines paired with it (record 189): the Machines dialog and the {@code machines} tool read
- * and change them. Pairing stores another machine's token in {@code ~/.comando-remotes.json}; the gateway reads a
- * change at its next look. Never blocks on the network.
+ * and change them. Pairing stores another machine's token in {@code ~/.comando-remotes.json}; the border gateway reads
+ * a change at its next look. Never blocks on the network.
  */
 public interface MachinesPort {
 
@@ -107,15 +107,15 @@ public interface MachinesPort {
     }
 
     /**
-     * This machine: its id, the address its gateway listens on (empty while none is set), the port, its key's
+     * This machine: its id, the address its border gateway listens on (empty while none is set), the port, its key's
      * fingerprint (SHA-256 of the public key, lowercase hex), and its token, the line another machine pairs with.
      */
     record Self(String machine, String host, int port, String fingerprint, String token) {
     }
 
     /**
-     * A paired machine: its id, host, port, fingerprint, grant; whether its gateway link is connected now, and when
-     * it was last connected, epoch milliseconds, 0 for never.
+     * A paired machine: its id, host, port, fingerprint, grant; whether its border gateway link is connected now, and
+     * when it was last connected, epoch milliseconds, 0 for never.
      */
     record Paired(String machine, String host, int port, String fingerprint, Grant grant, boolean connected,
             long lastConnectedMillis) {
@@ -128,7 +128,7 @@ public interface MachinesPort {
     List<Paired> paired();
 
     /**
-     * Sets the address this machine's gateway listens on, empty to stop listening; refused with an
+     * Sets the address this machine's border gateway listens on, empty to stop listening; refused with an
      * {@link IllegalArgumentException} when it is the wildcard address or not an address of this machine.
      */
     void listen(String host);
@@ -140,8 +140,8 @@ public interface MachinesPort {
     Paired pair(String token, Grant grant);
 
     /**
-     * Unpairs {@code machine}, saved at once: at the gateway's next look its link closes and its instances are no
-     * longer reachable; false when not paired.
+     * Unpairs {@code machine}, saved at once: at the border gateway's next look its link closes and its instances are
+     * no longer reachable; false when not paired.
      */
     boolean unpair(String machine);
 

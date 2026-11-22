@@ -32,11 +32,11 @@ import dev.marregui.comando.frontear.watch.NodeSnapshot;
 import dev.marregui.comando.frontear.watch.Watch;
 
 /**
- * One frontear node: an MQTT 5 broker, the links to its peers and the control plane that changes them, started
+ * One frontear node: an MQTT 5 gateway, the links to its peers and the control plane that changes them, started
  * together and closed in reverse. Configuration arrives only as signed control messages; the start takes the node's
  * name, its port, its data folder (the links' logs) and the control keys it trusts.
  *
- * <p>Its {@link #watch()} keeps, while on, what the broker routes, what its links do and their logs' force rounds;
+ * <p>Its {@link #watch()} keeps, while on, what the gateway routes, what its links do and their logs' force rounds;
  * {@link #snapshot()} reads its parts' state now. Neither makes a publisher wait.</p>
  */
 public final class Frontear implements AutoCloseable {
@@ -87,7 +87,7 @@ public final class Frontear implements AutoCloseable {
 
     /**
      * As above. With {@code linksNameNodes}, every link's id is the name of the node it reaches (ADR 0187 §2.1), so
-     * this node's broker refuses with 0x85 a link client, client id {@code <peer>~<linkId>}, whose link id is not
+     * this node's gateway refuses with 0x85 a link client, client id {@code <peer>~<linkId>}, whose link id is not
      * {@code node}: a link aimed at another node's port connects to none and delivers nothing there.
      */
     public static Frontear start(final String node, final int port, final Path dataDir, final Set<PublicKey> trusted,
@@ -96,7 +96,7 @@ public final class Frontear implements AutoCloseable {
     }
 
     /**
-     * As above. With {@code linksHeld}, which needs {@code linksNameNodes}, the broker refuses every link client 0x88
+     * As above. With {@code linksHeld}, which needs {@code linksNameNodes}, the gateway refuses every link client 0x88
      * (Server unavailable) until {@link #openLinks()}: a peer's link that queued for this node while it was down
      * retries after its backoff, and drains once the host has subscribed what it reads, not before into no subscriber.
      *
@@ -168,12 +168,12 @@ public final class Frontear implements AutoCloseable {
         }
     }
 
-    /** The broker's port. */
+    /** The gateway's port. */
     public int port() {
         return gateway.port();
     }
 
-    /** The broker, for a host that runs frontear in its own process (comando). */
+    /** The gateway, for a host that runs frontear in its own process (comando). */
     public Gateway gateway() {
         return gateway;
     }
@@ -184,7 +184,7 @@ public final class Frontear implements AutoCloseable {
     }
 
     /**
-     * Opens the broker's remote listener {@code r} (ADR 0189 §2.1), behind a {@link RemoteGate} around the control
+     * Opens the gateway's remote listener {@code r} (ADR 0189 §2.1), behind a {@link RemoteGate} around the control
      * plane's gate, and returns its port; {@link Gateway#listenRemote} says what it takes.
      *
      * @throws IllegalStateException when the remote listener is open, or the node closed
@@ -194,7 +194,7 @@ public final class Frontear implements AutoCloseable {
         return gateway.listenRemote(r);
     }
 
-    /** Closes the broker's remote listener and ends its connections; nothing when it is not open. */
+    /** Closes the gateway's remote listener and ends its connections; nothing when it is not open. */
     public void closeRemote() {
         gateway.closeRemote();
     }
@@ -223,7 +223,7 @@ public final class Frontear implements AutoCloseable {
     }
 
     /**
-     * The node now: the broker's figures and connections, the links' states and their logs'. Each part is read on its
+     * The node now: the gateway's figures and connections, the links' states and their logs'. Each part is read on its
      * own, under no lock a publisher holds for longer than a copy.
      */
     public NodeSnapshot snapshot() {
@@ -232,9 +232,9 @@ public final class Frontear implements AutoCloseable {
     }
 
     /**
-     * Stops taking control messages, then the broker (no client can publish after it, so no message a link's filter
+     * Stops taking control messages, then the gateway (no client can publish after it, so no message a link's filter
      * covers is published once its link is gone), then the links (their logs force). A message a link takes from its
-     * peer after the broker closed is refused, and the peer sends it again later. Idempotent.
+     * peer after the gateway closed is refused, and the peer sends it again later. Idempotent.
      */
     @Override
     public void close() {

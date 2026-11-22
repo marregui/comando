@@ -44,22 +44,22 @@ import dev.marregui.comando.frontear.watch.LinkStep;
 import dev.marregui.comando.frontear.watch.Watch;
 
 /**
- * frontear's MQTT 5 broker: the clients that connect over TCP and the subscribers inside the process share one topic
+ * frontear's MQTT 5 gateway: the clients that connect over TCP and the subscribers inside the process share one topic
  * tree, one retained store and the sessions, all in memory. It speaks MQTT 5 with QoS 0 and 1, and states in CONNACK
  * what it declines: QoS 2, subscription identifiers and shared subscriptions; it grants no topic alias. A client's
  * QoS 1 PUBLISH is acknowledged once every internal subscriber it reached completed, with the worst of their codes.
  * <p>
- * Delivery: QoS 0 is at-most-once. QoS 1 is at-least-once while the broker runs and within a session's bounds: past
+ * Delivery: QoS 0 is at-most-once. QoS 1 is at-least-once while the gateway runs and within a session's bounds: past
  * them a message is dropped and counted ({@code droppedFull} in {@link #stats()}), and the sessions are in memory, so a
  * restart loses what they held.
  * <p>
- * Presence: when a client's CONNACK goes out the broker publishes {@code {"online":true}} retained on
+ * Presence: when a client's CONNACK goes out the gateway publishes {@code {"online":true}} retained on
  * {@code $frontear/presence/<client-id>}, and when the connection ends (a disconnect, a will, a takeover) an empty
  * retained message there. Presence and wills are published in the order the session lock saw their causes, so a
  * connection's late end never clears the presence of the one that took its session over. Until a {@link Gate} is
  * installed, no client may publish or subscribe under {@code $frontear/}.
  * <p>
- * Bounds: what a client can make the broker hold is bounded by {@link GatewayOptions}, each bound's usage in
+ * Bounds: what a client can make the gateway hold is bounded by {@link GatewayOptions}, each bound's usage in
  * {@link #stats()}: a session's bytes, a connection's unsent bytes, the retained messages and their bytes, the levels
  * of a topic, and the filters of a SUBSCRIBE and of a session. A message's bytes are what holding it costs,
  * {@link Packet.Publish#weight()}, its user properties and the objects around it included.
@@ -69,13 +69,13 @@ import dev.marregui.comando.frontear.watch.Watch;
  * session lock, then a session's own; the retained store's lock alone; no lock is held while a message is routed, so
  * no internal subscriber and no gate is called under one.
  * <p>
- * Watch: every message routed is kept in the broker's {@link Watch} while it is on, and one a link client published
- * (its client id {@code <node>~<link>}) as that link's arrival too. A broker started as a node refuses a link client
+ * Watch: every message routed is kept in the gateway's {@link Watch} while it is on, and one a link client published
+ * (its client id {@code <node>~<link>}) as that link's arrival too. A gateway started as a node refuses a link client
  * aimed at another node, and one started holding its links refuses every link client until {@link #openLinks()}.
  * <p>
  * Other machines: {@link #listenRemote} opens a second listener, TLS 1.3 with both sides authenticated, whose
  * connections speak for the machine their certificate names (ADR 0189 §2.1). The gate decides what such a connection
- * may do, through the methods that take a principal, and the broker stamps each message it publishes with that
+ * may do, through the methods that take a principal, and the gateway stamps each message it publishes with that
  * machine ({@link Names#ORIGIN}). A remote link client {@code <slug>~<node>} holds the session
  * {@code <slug>@<machine>~<node>}, so two machines' links to one node, or a remote link and a local one, never take
  * each other's session over, and its arrivals are those of this node's link {@code <slug>@<machine>}.
@@ -84,9 +84,9 @@ public final class Gateway implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(Gateway.class.getName());
 
-    /** The highest QoS the broker grants and accepts (§3.2.2.3.4). */
+    /** The highest QoS the gateway grants and accepts (§3.2.2.3.4). */
     static final int MAXIMUM_QOS = 1;
-    /** The prefix of a shared subscription's filter (§4.8.2), which the broker refuses with 0x9E. */
+    /** The prefix of a shared subscription's filter (§4.8.2), which the gateway refuses with 0x9E. */
     static final String SHARED = "$share/";
     private static final String GATEWAY_ORIGIN = "$frontear";
     private static final String CLIENT_KEY = "c/";
@@ -96,7 +96,7 @@ public final class Gateway implements AutoCloseable {
     private static final char LINK_MARK = '~';
     private static final byte[] ONLINE = "{\"online\":true}".getBytes(StandardCharsets.UTF_8);
     private static final Packet.Meta ONLINE_META = new Packet.Meta(-1, -1, Names.JSON, List.of());
-    // what CONNACK says the broker declines: Maximum QoS 1, no subscription identifiers, no shared subscriptions
+    // what CONNACK says the gateway declines: Maximum QoS 1, no subscription identifiers, no shared subscriptions
     private static final Packet.Capabilities CAPABILITIES = new Packet.Capabilities(MAXIMUM_QOS, true, true, false,
             false);
     // the accept queue the operating system holds for the listening socket; java.net.ServerSocket's own default
@@ -127,7 +127,7 @@ public final class Gateway implements AutoCloseable {
     private final String owner;
     private final TopicTree tree;
     private final Watch watch;
-    // the node's name, which a link client's id must end with; null for a broker that is no node, which takes any
+    // the node's name, which a link client's id must end with; null for a gateway that is no node, which takes any
     private final String node;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, InternalSubscriber> internals = new ConcurrentHashMap<>();
@@ -141,7 +141,7 @@ public final class Gateway implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean();
     // guards remote's changes, and the remote accept strand's admission of a connection against them
     private final Object remoteLock = new Object();
-    // runs the accept loop, its one task for the broker's life: the operating system holds the clients waiting to be
+    // runs the accept loop, its one task for the gateway's life: the operating system holds the clients waiting to be
     // accepted, ACCEPT_BACKLOG of them
     private final ExecutorService acceptor;
     // runs the sweep, one periodic task that holds one place in its queue; the ends offLocks hands it, at most one
@@ -157,9 +157,9 @@ public final class Gateway implements AutoCloseable {
     // (each holds a session, a takeover detaches the one before): the queue grows only while connections come and go
     // faster than the strand routes, so its depth is bounded by that rate, not by a count. A task never blocks (a
     // session's queue drops past its bound, an internal subscriber must not block). Its depth and peak are read
-    // under the strand's name in the queue readings, frontear-broker-publish-<port>.
+    // under the strand's name in the queue readings, frontear-gateway-publish-<port>.
     private final ExecutorService publisher;
-    // told the client id of each CONNECT the broker accepted, on that connection's reader, outside the sessions lock;
+    // told the client id of each CONNECT the gateway accepted, on that connection's reader, outside the sessions lock;
     // added and removed by any thread
     private final List<Consumer<String>> connectListeners = new CopyOnWriteArrayList<>();
     // the bytes of the retained messages, against options.maxRetainedBytes(); guarded by retainedLock
@@ -167,7 +167,7 @@ public final class Gateway implements AutoCloseable {
     // written by gate(); read by every connection's reader when a client publishes, subscribes or connects with a
     // will. A reader sees the gate installed before its read or the one after; either is a whole gate.
     private volatile Gate gate = new Reserved();
-    // set at construction for a broker whose host lets the links in later, cleared by openLinks(); read by every
+    // set at construction for a gateway whose host lets the links in later, cleared by openLinks(); read by every
     // connection's reader at its CONNECT. A CONNECT read after the clear is let in; one read before it is refused and
     // its link comes again after its backoff, about a second for a frontear link refused 0x88.
     private volatile boolean linksHeld;
@@ -185,10 +185,10 @@ public final class Gateway implements AutoCloseable {
         this.tree = new TopicTree(options.maxTopicLevels());
         this.server = server;
         this.port = server.getLocalPort();
-        this.owner = "frontear-broker-" + port;
-        this.acceptor = Threads.strand("frontear-broker-accept-" + port);
-        this.sweeper = Threads.timedStrand("frontear-broker-sweep-" + port);
-        this.publisher = Threads.strand("frontear-broker-publish-" + port);
+        this.owner = "frontear-gateway-" + port;
+        this.acceptor = Threads.strand("frontear-gateway-accept-" + port);
+        this.sweeper = Threads.timedStrand("frontear-gateway-sweep-" + port);
+        this.publisher = Threads.strand("frontear-gateway-publish-" + port);
     }
 
     /** Binds {@code options.bind()} and starts accepting clients. */
@@ -233,13 +233,13 @@ public final class Gateway implements AutoCloseable {
         final Gateway gateway = new Gateway(options, server, watch, node, holdLinks);
         gateway.acceptor.execute(gateway::acceptLoop);
         gateway.sweeper.scheduleAtFixedRate(gateway::sweep, SWEEP_MILLIS, SWEEP_MILLIS, TimeUnit.MILLISECONDS);
-        LOG.log(System.Logger.Level.INFO, "broker started [port=" + gateway.port + ", receiveMaximum="
+        LOG.log(System.Logger.Level.INFO, "gateway started [port=" + gateway.port + ", receiveMaximum="
                 + options.receiveMaximum() + ", maximumPacketSize=" + options.maximumPacketSize() + ", maxSessions="
                 + options.maxSessions() + ", node=" + node + ", linksHeld=" + holdLinks + ']');
         return gateway;
     }
 
-    /** The port the broker listens on. */
+    /** The port the gateway listens on. */
     public int port() {
         return port;
     }
@@ -251,7 +251,7 @@ public final class Gateway implements AutoCloseable {
      * {@code r.handshake()}, and one whose key names no machine, are closed unanswered and counted in
      * {@link #remoteStats()}, each kind logged at most once a minute.
      *
-     * @throws IllegalStateException when the remote listener is open, or the broker closed
+     * @throws IllegalStateException when the remote listener is open, or the gateway closed
      */
     public int listenRemote(final RemoteListen r) throws IOException {
         Objects.requireNonNull(r, "listen");
@@ -275,7 +275,7 @@ public final class Gateway implements AutoCloseable {
                 throw e;
             }
             remotePort = listening.getLocalPort();
-            final Remote opened = new Remote(r, listening, Threads.strand("frontear-broker-accept-remote-" + port));
+            final Remote opened = new Remote(r, listening, Threads.strand("frontear-gateway-accept-remote-" + port));
             remote = opened;
             opened.acceptor().execute(() -> acceptRemote(opened));
         }
@@ -357,7 +357,7 @@ public final class Gateway implements AutoCloseable {
 
     /**
      * The remote listener: its port (0 while it is closed), the remote connections held now against its bound, and
-     * since the broker started the clients refused past that bound, the handshakes that failed or outlasted theirs,
+     * since the gateway started the clients refused past that bound, the handshakes that failed or outlasted theirs,
      * and the peers whose key no machine is paired with.
      */
     @TestOnly
@@ -374,7 +374,7 @@ public final class Gateway implements AutoCloseable {
     }
 
     /**
-     * Lets link clients connect from here on, on a broker started holding them; nothing on one that is not, or when
+     * Lets link clients connect from here on, on a gateway started holding them; nothing on one that is not, or when
      * called again. A link refused before comes again after its own backoff: a frontear link retries a 0x88 refusal
      * after about a second, another client by its own policy.
      */
@@ -399,7 +399,7 @@ public final class Gateway implements AutoCloseable {
     }
 
     /**
-     * Registers subscriber {@code id} on {@code filter}, or replaces it: the broker keeps one subscriber per id, the
+     * Registers subscriber {@code id} on {@code filter}, or replaces it: the gateway keeps one subscriber per id, the
      * last given, for all of the id's filters. Its owner is {@code id}: with {@code noLocal}, a message whose origin is
      * {@code id} does not reach it.
      *
@@ -415,7 +415,7 @@ public final class Gateway implements AutoCloseable {
         }
         if (Topics.levels(filter) > options.maxTopicLevels()) {
             // refused before the subscriber is kept, so a refused filter leaves nothing behind
-            throw new IllegalArgumentException("filter deeper than the broker allows [levels=" + Topics.levels(filter)
+            throw new IllegalArgumentException("filter deeper than the gateway allows [levels=" + Topics.levels(filter)
                     + ", max=" + options.maxTopicLevels() + ']');
         }
         final Entry entry = new Entry(INTERNAL_KEY + id, id, qos, noLocal, true);
@@ -455,7 +455,7 @@ public final class Gateway implements AutoCloseable {
         return accept(Objects.requireNonNull(message, "message"), Objects.requireNonNull(origin, "origin"), false);
     }
 
-    /** What the broker holds and what it dropped since it started. */
+    /** What the gateway holds and what it dropped since it started. */
     public Stats stats() {
         final int retainedCount;
         final long retainedHeld;
@@ -496,7 +496,7 @@ public final class Gateway implements AutoCloseable {
     }
 
     /**
-     * Sends DISCONNECT 0x8B to every connected client, closes every connection and stops the broker's threads; no
+     * Sends DISCONNECT 0x8B to every connected client, closes every connection and stops the gateway's threads; no
      * will and no presence is published. Every later call does nothing.
      */
     @Override
@@ -532,7 +532,7 @@ public final class Gateway implements AutoCloseable {
         // after the readers: a connection that ended before the close may still hand its publishes over, refused here
         ExecutorStop.now(owner, publisher);
         connections.clear();
-        LOG.log(System.Logger.Level.INFO, "broker closed [port=" + port + ", connections=" + all.size() + ']');
+        LOG.log(System.Logger.Level.INFO, "gateway closed [port=" + port + ", connections=" + all.size() + ']');
     }
 
     GatewayOptions options() {
@@ -677,16 +677,16 @@ public final class Gateway implements AutoCloseable {
         }
     }
 
-    /** Runs {@code task} on the broker's timed strand, off every lock the caller holds; dropped once it closed. */
+    /** Runs {@code task} on the gateway's timed strand, off every lock the caller holds; dropped once it closed. */
     void offLocks(final Runnable task) {
         try {
             sweeper.execute(task);
         } catch (final RejectedExecutionException _) {
-            // the broker closed, and its close ends every connection
+            // the gateway closed, and its close ends every connection
         }
     }
 
-    /** Connection {@code conn}'s socket closed: the broker forgets it. */
+    /** Connection {@code conn}'s socket closed: the gateway forgets it. */
     void closed(final Connection conn) {
         connections.remove(conn);
     }
@@ -758,7 +758,7 @@ public final class Gateway implements AutoCloseable {
                 p.meta());
     }
 
-    /** The accept strand's one task: every client that connects gets a connection, until the broker closes. */
+    /** The accept strand's one task: every client that connects gets a connection, until the gateway closes. */
     private void acceptLoop() {
         while (!closed.get()) {
             final Socket socket;
@@ -766,7 +766,7 @@ public final class Gateway implements AutoCloseable {
                 socket = server.accept();
             } catch (final IOException e) {
                 if (!closed.get()) {
-                    LOG.log(System.Logger.Level.ERROR, "accept failed, broker takes no more clients [port=" + port
+                    LOG.log(System.Logger.Level.ERROR, "accept failed, gateway takes no more clients [port=" + port
                             + ']', e);
                 }
                 return;
@@ -841,7 +841,7 @@ public final class Gateway implements AutoCloseable {
         }
     }
 
-    /** The remote connections the broker holds, their sockets not yet closed, handshaking ones included. */
+    /** The remote connections the gateway holds, their sockets not yet closed, handshaking ones included. */
     private int remoteConnections() {
         int count = 0;
         for (final Connection c : connections) {
@@ -961,7 +961,7 @@ public final class Gateway implements AutoCloseable {
 
     /**
      * Hands what the session lock held back to the publisher strand, under that lock: the strand publishes it after
-     * everything handed over before, outside every lock. Dropped once the broker closed, as its close publishes no
+     * everything handed over before, outside every lock. Dropped once the gateway closed, as its close publishes no
      * will and no presence.
      */
     private void later(final List<Deferred> deferred) {
@@ -1130,7 +1130,7 @@ public final class Gateway implements AutoCloseable {
     }
 
     /**
-     * What the broker holds and what it dropped: QoS 1 messages past a session's bounds ({@code droppedFull}),
+     * What the gateway holds and what it dropped: QoS 1 messages past a session's bounds ({@code droppedFull}),
      * messages past their expiry ({@code droppedExpired}), messages larger than a client's maximum packet size
      * ({@code droppedOversize}), and internal subscribers that failed a delivery. Beside each byte bound of
      * {@link GatewayOptions}, its usage: the retained messages' bytes and the retained publishes refused past the
@@ -1148,15 +1148,15 @@ public final class Gateway implements AutoCloseable {
 
     /**
      * The remote listener: its port, 0 while it is closed; the remote connections held now and their bound, 0 while
-     * closed; and since the broker started, the clients refused past the bound, the handshakes that failed or outlasted
-     * theirs, and the peers whose key no machine is paired with.
+     * closed; and since the gateway started, the clients refused past the bound, the handshakes that failed or
+     * outlasted theirs, and the peers whose key no machine is paired with.
      */
     @TestOnly
     public record RemoteStats(int port, int connections, int maxConnections, long refused, long handshakeFailures,
             long unpinned) {
     }
 
-    /** A retained message and when the broker received it, for its expiry. */
+    /** A retained message and when the gateway received it, for its expiry. */
     private record Retained(Packet.Publish message, long receivedMillis) {
     }
 

@@ -39,8 +39,8 @@ import dev.marregui.comando.frontear.tls.MachineKey;
  * {@link #self} with the host's short name as the id. {@code ~/.comando-remotes.json}, owner-only, holds the pairings,
  * {@code {"version":1,"machines":{"<id>":{"host","port","fingerprint","grant"}}}}. Both are read without a lock, as
  * every write replaces a file whole, and changed read-modify-write under the lock file beside the remotes file, taken
- * as the fabric takes its registry's. Every instance of this machine reads the same two files; the gateway's fabric
- * reads them at each look.
+ * as the octopus takes its registry's. Every instance of this machine reads the same two files; the border gateway's
+ * octopus reads them at each look.
  * <p>
  * A pairing token is {@code comando-pair:1:<machine>:<host>:<port>:<fingerprint>}. Nothing here touches the network:
  * a listen address is an IP literal checked against this machine's interfaces.
@@ -54,7 +54,7 @@ final class Machines implements MachinesPort {
 
     /** The machine file's and the remotes file's version (record 133's rule: a later one is read by none). */
     static final int VERSION = 1;
-    /** The gateway's remote port while {@code port} of {@code machine.json} names none (ADR 0189 §2.1). */
+    /** The border gateway's remote port while {@code port} of {@code machine.json} names none (ADR 0189 §2.1). */
     static final int PORT = 18_893;
     /** This machine's folder: its key and {@code machine.json}. */
     static final Path FOLDER = AppConfig.machineRoot().resolve(".comando-machine");
@@ -76,13 +76,16 @@ final class Machines implements MachinesPort {
     private final int port;
     private final Supplier<String> defaultId;
     private final InstantSource clock;
-    /** Whether each paired machine's gateway link is connected, as the gateway's last reconcile read it. */
+    /**
+     * Whether each paired machine's border gateway link is connected, as the border gateway's last reconcile read
+     * it.
+     */
     private final Map<String, Boolean> linkUp = new ConcurrentHashMap<>();
-    /** When each paired machine's gateway link was last seen connected, epoch milliseconds. */
+    /** When each paired machine's border gateway link was last seen connected, epoch milliseconds. */
     private final Map<String, Long> lastConnectedMillis = new ConcurrentHashMap<>();
     /**
-     * The pairings as last read or written: written by the gateway's look thread through {@link #remotes}, by the
-     * Machines window's {@code machines-*} errands and by the MCP request threads through {@link #pair} and
+     * The pairings as last read or written: written by the border gateway's look thread through {@link #remotes}, by
+     * the Machines window's {@code machines-*} errands and by the MCP request threads through {@link #pair} and
      * {@link #unpair}; read by {@link #grantOf} on the peers' threads.
      */
     private volatile Map<String, Remote> known;
@@ -186,8 +189,8 @@ final class Machines implements MachinesPort {
     }
 
     /**
-     * Sets the address this machine's gateway listens on, an IP literal of one of its interfaces, never the wildcard;
-     * empty to stop listening. The gateway reads it at its next look.
+     * Sets the address this machine's border gateway listens on, an IP literal of one of its interfaces, never the
+     * wildcard; empty to stop listening. The border gateway reads it at its next look.
      *
      * @throws UncheckedIOException when the machine file does not read or write
      */
@@ -209,7 +212,8 @@ final class Machines implements MachinesPort {
     }
 
     /**
-     * Pairs the machine of {@code token}, replacing an earlier pairing of it; the gateway links it at its next look.
+     * Pairs the machine of {@code token}, replacing an earlier pairing of it; the border gateway links it at its next
+     * look.
      *
      * @throws UncheckedIOException when a file does not read or write
      */
@@ -239,7 +243,7 @@ final class Machines implements MachinesPort {
     }
 
     /**
-     * Unpairs {@code machine}; the gateway removes its link at its next look.
+     * Unpairs {@code machine}; the border gateway removes its link at its next look.
      *
      * @throws UncheckedIOException when the remotes file does not read or write
      */
@@ -290,8 +294,8 @@ final class Machines implements MachinesPort {
     }
 
     /**
-     * Whether each paired machine's gateway link is connected, by machine id, as the gateway read its links; a
-     * machine not named is not connected. Called by the gateway's reconciles and its stop.
+     * Whether each paired machine's border gateway link is connected, by machine id, as the border gateway read its
+     * links; a machine not named is not connected. Called by the border gateway's reconciles and its stop.
      */
     void connected(final Map<String, Boolean> byMachine) {
         final long now = clock.millis();
@@ -495,7 +499,7 @@ final class Machines implements MachinesPort {
     record Remote(String machine, String host, int port, String fingerprint, Grant grant) {
     }
 
-    /** This machine's file: its id, the address its gateway listens on (empty for none) and its port. */
+    /** This machine's file: its id, the address its border gateway listens on (empty for none) and its port. */
     record MachineFile(String machine, String host, int port) {
     }
 

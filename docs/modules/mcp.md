@@ -175,7 +175,7 @@ Run them with `./gradlew :mcp:test`.
 | `SqlPolicyTest` | What counts as read-only. |
 | `ViewSpecsPlotTest`, `ViewSpecsDeliverablesTest` | Valid and invalid view data. |
 | `McpToolsAuditTest`, `AuditLogTest` | Credentials written as `***`; the folder and files are your user's alone. |
-| `PeersTest` | Instances consulting each other through a broker in memory. |
+| `PeersTest` | Instances consulting each other through a gateway in memory. |
 | `SelfAllowTest`, `PermissionRulesTest` | What a bypass session allows itself; the rule an approval saves. |
 
 ## Where next

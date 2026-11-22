@@ -9,7 +9,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
 
 /**
  * Where a {@link Gateway} listens and the limits it states in CONNACK and holds to. {@code receiveMaximum} is the QoS 1
- * publishes a client may leave unacknowledged (§3.2.2.3.3); {@code maximumPacketSize} the largest packet the broker
+ * publishes a client may leave unacknowledged (§3.2.2.3.3); {@code maximumPacketSize} the largest packet the gateway
  * reads (§3.2.2.3.6); {@code maxSessions} the sessions it keeps, connected or not, before it refuses a new client
  * with 0x97; {@code maxQueued} the QoS 1 messages a session holds beyond its client's receive maximum, the newest
  * dropped and counted when full. {@code clock} is what message expiry, will delay and session expiry are measured
@@ -29,12 +29,12 @@ public record GatewayOptions(InetSocketAddress bind, int receiveMaximum, int max
         long maxRetainedBytes, int maxTopicLevels, int maxFiltersPerSubscribe, int maxSubscriptions) {
 
     // frontear's choice for a node: a link sends up to its peer's receive maximum unacknowledged (one window per
-    // link), and 1,024 small messages cover a LAN round trip without letting one client hold more of the broker
+    // link), and 1,024 small messages cover a LAN round trip without letting one client hold more of the gateway
     private static final int DEFAULT_RECEIVE_MAXIMUM = 1_024;
     // ClientInteropTest moves 5 MiB payloads; 16 MiB keeps room above that and bounds what one read allocates
     private static final int DEFAULT_MAXIMUM_PACKET_SIZE = 16 * 1024 * 1024;
     // a node serves its own comando instances and its links, tens at most; the bound keeps a client that connects
-    // under ever new ids from growing the broker without limit
+    // under ever new ids from growing the gateway without limit
     private static final int DEFAULT_MAX_SESSIONS = 1_000;
     // an offline session's backlog, as many messages as a client's window; past it the newest is dropped and counted
     private static final int DEFAULT_MAX_QUEUED = 1_000;
@@ -73,7 +73,7 @@ public record GatewayOptions(InetSocketAddress bind, int receiveMaximum, int max
                 DEFAULT_MAX_FILTERS_PER_SUBSCRIBE, DEFAULT_MAX_SUBSCRIPTIONS);
     }
 
-    /** Refuses a limit MQTT cannot state or a broker cannot hold to. */
+    /** Refuses a limit MQTT cannot state or a gateway cannot hold to. */
     public GatewayOptions {
         Objects.requireNonNull(bind, "bind");
         Objects.requireNonNull(clock, "clock");

@@ -14,7 +14,7 @@ import dev.marregui.comando.frontear.protocol.Topics;
 
 /// The simulation's oracle: what each node published, which links covered each message when it was published and the
 /// PUBACK its publisher got, and what each subscriber received, in the order it received it. [#violations] checks the
-/// mesh's contract against that record:
+/// octopus's contract against that record:
 ///
 /// - lost: a message acknowledged 0x00 for a topic a link's OUT filters covered arrives at every checked subscriber
 ///   of the link's far node whose filters match it, a filter change after it was queued notwithstanding;
@@ -28,7 +28,7 @@ import dev.marregui.comando.frontear.protocol.Topics;
 /// checked for loss and order, since whether a message goes on past its first hop depends on timing (a filter or link
 /// change on the next node).
 ///
-/// A ledger made with the mesh's [Paths], for a mesh whose filters do not change, checks every hop instead:
+/// A ledger made with the octopus's [Paths], for an octopus whose filters do not change, checks every hop instead:
 ///
 /// - path: every arrival has a walk that admits it, a walk of its hop count from its source to the subscriber's node
 ///   (so nothing loops past No Local or the hop limit); with `exact`, no arrival comes more often than the walks of
@@ -56,7 +56,7 @@ final class Ledger {
     private final List<Sink> sinks = new ArrayList<>();
     private final Map<String, Long> reordered = new HashMap<>();
 
-    /// A ledger for a mesh whose links all have hop limit `hopLimit`.
+    /// A ledger for an octopus whose links all have hop limit `hopLimit`.
     Ledger(final int hopLimit) {
         this.hopLimit = hopLimit;
         this.paths = null;

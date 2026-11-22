@@ -19,14 +19,14 @@ import dev.marregui.comando.frontear.protocol.Packet;
  * What a connection of another machine may do (ADR 0189 §2.1), and for a client of this machine what {@code local}
  * says. A client of machine {@code m} connects only as a link, client id {@code <slug>~<node>}, its slug free of
  * {@code ~} and {@code @}, its node bare or {@code <name>@<this machine>} (whether that node is this one is the
- * broker's to check); it publishes only to {@code comando/v1/m/instance/<slug>/presence} and to
+ * gateway's to check); it publishes only to {@code comando/v1/m/instance/<slug>/presence} and to
  * {@code comando/v1/<this machine>/instance/<slug>/inbox} or {@code .../reply}, each level matched exactly and the
  * instance's slug one level; it subscribes to nothing. So a remote machine announces only its own instances and asks
  * and answers only this machine's, and nothing under {@code $frontear/} is open to it.
  * <p>
- * A remote machine has the broker retain at most {@link #MAX_PRESENCES} presences at once, distinct topics whose
+ * A remote machine has the gateway retain at most {@link #MAX_PRESENCES} presences at once, distinct topics whose
  * retained message neither was cleared by an empty one nor passed its message expiry; a retained presence past them
- * is refused and counted, so a machine cannot fill the broker's retained store with made-up instances.
+ * is refused and counted, so a machine cannot fill the gateway's retained store with made-up instances.
  * <p>
  * The topic layout parsed here is the one the instances' peers build ({@code dev.marregui.comando.mcp.Peers}, a
  * module frontear does not see): a change to one is a change to both.
@@ -123,7 +123,7 @@ public final class RemoteGate implements Gate {
     /**
      * A client of this machine retains as the local gate says. A remote machine's retained presence on a topic it
      * holds none on is refused once it holds {@link #MAX_PRESENCES}; an empty one clears its topic and is never
-     * refused. Any other topic a remote machine may publish to is retained as the broker's bounds allow.
+     * refused. Any other topic a remote machine may publish to is retained as the gateway's bounds allow.
      */
     @Override
     public boolean mayRetain(final String principal, final String clientId, final Packet.Publish message) {
@@ -173,7 +173,7 @@ public final class RemoteGate implements Gate {
         return !level.isEmpty() && level.indexOf('+') < 0 && level.indexOf('#') < 0;
     }
 
-    /** A retained presence: when the gate let it in, and its message expiry, -1 for none, as the broker keeps it. */
+    /** A retained presence: when the gate let it in, and its message expiry, -1 for none, as the gateway keeps it. */
     private record Held(long sinceNanos, long expirySeconds) {
 
         boolean expired(final long nowNanos) {

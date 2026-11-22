@@ -13,8 +13,8 @@ import dev.marregui.comando.core.port.MachinesPort;
 public final class Pins {
 
     /**
-     * Written by the gateway's look thread, which reconciles the pairings with the remotes file at each look; read by
-     * every handshake's thread and by the broker's recheck of its remote connections.
+     * Written by the border gateway's look thread, which reconciles the pairings with the remotes file at each look;
+     * read by every handshake's thread and by the gateway's recheck of its remote connections.
      */
     private volatile Map<String, String> machineByFingerprint = Map.of();
 

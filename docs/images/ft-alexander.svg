@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>Alexander, the control plane of a frontear node: it decides the node's links and their filters through the Octopus interface, checks the Ed25519 seal of every request against the keys it trusts, gates what local clients and remote machines may publish, and publishes its replies and the retained state of the links</title>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="780" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">FRONTEAR · ALEXANDER, THE CONTROL PLANE</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">What it decides, what it checks, what it gates, what it publishes</text>
+
+<!-- the pod -->
+<rect x="470" y="104" width="260" height="128" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="486" y="128" font-size="13" fill="#6FAEE8" letter-spacing="2">THE CONTROL POD</text>
+<text x="486" y="152" font-size="13" fill="#E8E8E8">each comando instance, for</text>
+<text x="486" y="172" font-size="13" fill="#E8E8E8">its own node, with its key</text>
+<text x="486" y="192" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">pod.key · pod.pub</text>
+<text x="486" y="216" font-size="13" fill="#E8E8E8">writes, signs, publishes</text>
+<line x1="600" y1="232" x2="600" y2="296" stroke="#6FAEE8" stroke-width="1.4"/>
+<path d="M594,288 L600,297 L606,288" fill="none" stroke="#6FAEE8" stroke-width="1.4"/>
+
+<!-- the centre -->
+<rect x="470" y="300" width="260" height="120" rx="10" fill="#2B2618" stroke="#E7C55A" stroke-width="1.6"/>
+<text x="600" y="328" font-size="13" fill="#E7C55A" letter-spacing="2" text-anchor="middle">ALEXANDER</text>
+<text x="600" y="350" font-size="13" fill="#E8E8E8" text-anchor="middle" font-family="Menlo, Consolas, monospace">ControlPlane</text>
+<text x="600" y="374" font-size="13" fill="#E8E8E8" text-anchor="middle">one per node, beside its gateway;</text>
+<text x="600" y="392" font-size="13" fill="#E8E8E8" text-anchor="middle">one strand handles every request</text>
+<text x="600" y="410" font-size="13" fill="#9AA0A6" text-anchor="middle" font-family="Menlo, Consolas, monospace">frontear-control-&lt;node&gt;</text>
+<g stroke="#9AA0A6" stroke-width="1.2">
+<line x1="470" y1="320" x2="444" y2="290" marker-end="url(#a)"/>
+<line x1="730" y1="320" x2="756" y2="290" marker-end="url(#a)"/>
+<line x1="470" y1="400" x2="444" y2="430" marker-end="url(#a)"/>
+<line x1="730" y1="400" x2="756" y2="430" marker-end="url(#a)"/>
+</g>
+
+<!-- 1 decides -->
+<rect x="40" y="104" width="400" height="182" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="128" font-size="13" fill="#E7C55A" letter-spacing="2">1 · DECIDES · THE LINKS</text>
+<text x="56" y="150" font-size="13" fill="#9AA0A6">a request is a topic and a JSON body:</text>
+<text x="56" y="170" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">$frontear/control/&lt;node&gt;/&lt;Method&gt;</text>
+<g font-size="13" font-family="Menlo, Consolas, monospace">
+<text x="56" y="196" fill="#E8E8E8">PutLink</text><text x="160" y="196" fill="#9AA0A6">id host port out in hopLimit tls</text>
+<text x="56" y="216" fill="#E8E8E8">RemoveLink</text><text x="160" y="216" fill="#9AA0A6">id</text>
+<text x="56" y="236" fill="#E8E8E8">SetFilters</text><text x="160" y="236" fill="#9AA0A6">id direction filters</text>
+<text x="56" y="256" fill="#E8E8E8">GetState</text><text x="160" y="256" fill="#9AA0A6">nothing</text>
+</g>
+<text x="56" y="276" font-size="13" fill="#9AA0A6">applied through <tspan font-family="Menlo, Consolas, monospace">Octopus</tspan>, one request at a time</text>
+
+<!-- 2 signs and checks -->
+<rect x="760" y="104" width="400" height="182" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="776" y="128" font-size="13" fill="#6FAEE8" letter-spacing="2">2 · SIGNS AND CHECKS · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">Seal</tspan></text>
+<text x="776" y="152" font-size="13" fill="#E8E8E8">the control pod signs with <tspan font-family="Menlo, Consolas, monospace">Signer</tspan>, Ed25519,</text>
+<text x="776" y="172" font-size="13" fill="#E8E8E8">over the topic, time, nonce, content type,</text>
+<text x="776" y="192" font-size="13" fill="#E8E8E8">response topic, correlation data and body:</text>
+<text x="776" y="212" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">frontear-key  frontear-ts</text>
+<text x="776" y="230" font-size="13" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">frontear-nonce  frontear-sig</text>
+<text x="776" y="254" font-size="13" fill="#E8E8E8">alexander accepts a trusted key, a time within</text>
+<text x="776" y="274" font-size="13" fill="#E8E8E8">30 s, a valid signature, then a new nonce</text>
+
+<!-- 3 gates -->
+<rect x="40" y="434" width="400" height="236" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="458" font-size="13" fill="#E7C55A" letter-spacing="2">3 · GATES · WHO MAY PUBLISH WHAT</text>
+<text x="56" y="484" font-size="13" fill="#9AA0A6" letter-spacing="2">LOCAL CLIENTS · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">ControlGate</tspan></text>
+<text x="56" y="506" font-size="13" fill="#E8E8E8">anything outside <tspan font-family="Menlo, Consolas, monospace">$frontear/</tspan>; under it only</text>
+<text x="56" y="526" font-size="13" fill="#E8E8E8"><tspan font-family="Menlo, Consolas, monospace">$frontear/control/</tspan>, where the seal decides;</text>
+<text x="56" y="546" font-size="13" fill="#E8E8E8">presence and state are the gateway's to write</text>
+<text x="56" y="576" font-size="13" fill="#9AA0A6" letter-spacing="2">ANOTHER MACHINE · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">RemoteGate</tspan></text>
+<text x="56" y="598" font-size="13" fill="#E8E8E8">connects only as a link, <tspan font-family="Menlo, Consolas, monospace">&lt;slug&gt;~&lt;node&gt;</tspan>; publishes</text>
+<text x="56" y="618" font-size="13" fill="#E8E8E8">only its instances' presence and this machine's</text>
+<text x="56" y="638" font-size="13" fill="#E8E8E8">inbox or reply topics; subscribes to nothing;</text>
+<text x="56" y="658" font-size="13" fill="#E8E8E8">at most 64 retained presences</text>
+
+<!-- 4 publishes -->
+<rect x="760" y="434" width="400" height="236" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1.2"/>
+<text x="776" y="458" font-size="13" fill="#E7C55A" letter-spacing="2">4 · PUBLISHES</text>
+<text x="776" y="484" font-size="13" fill="#9AA0A6" letter-spacing="2">THE REPLY, TO THE SENDER</text>
+<text x="776" y="506" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">{"ok":true}</text>
+<text x="776" y="526" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">{"ok":false,"reason":…,"detail":…}</text>
+<text x="776" y="546" font-size="13" fill="#9AA0A6">on its response topic, with its correlation data</text>
+<text x="776" y="576" font-size="13" fill="#9AA0A6" letter-spacing="2">THE STATE, TO ANYONE · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">StateTopic</tspan></text>
+<text x="776" y="598" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">$frontear/state/&lt;node&gt;/links</text>
+<text x="776" y="618" font-size="13" fill="#E8E8E8">retained: every link and its counters,</text>
+<text x="776" y="638" font-size="13" fill="#E8E8E8">published when they changed, at most</text>
+<text x="776" y="658" font-size="13" fill="#E8E8E8">once a second</text>
+
+<!-- refusals, in the middle -->
+<rect x="470" y="452" width="260" height="218" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="486" y="476" font-size="13" fill="#9AA0A6" letter-spacing="2">REFUSALS · PUBACK</text>
+<g font-size="13" font-family="Menlo, Consolas, monospace">
+<text x="486" y="500" fill="#6FAEE8">unsigned</text><text x="714" y="500" fill="#9AA0A6" text-anchor="end">0x87</text>
+<text x="486" y="518" fill="#6FAEE8">malformed</text><text x="714" y="518" fill="#9AA0A6" text-anchor="end">0x87</text>
+<text x="486" y="536" fill="#6FAEE8">unknown-key</text><text x="714" y="536" fill="#9AA0A6" text-anchor="end">0x87</text>
+<text x="486" y="554" fill="#6FAEE8">stale</text><text x="714" y="554" fill="#9AA0A6" text-anchor="end">0x87</text>
+<text x="486" y="572" fill="#6FAEE8">bad-signature</text><text x="714" y="572" fill="#9AA0A6" text-anchor="end">0x87</text>
+<text x="486" y="590" fill="#6FAEE8">replayed</text><text x="714" y="590" fill="#9AA0A6" text-anchor="end">0x87</text>
+<text x="486" y="608" fill="#E8E8E8">busy</text><text x="714" y="608" fill="#9AA0A6" text-anchor="end">0x97</text>
+<text x="486" y="626" fill="#E8E8E8">unknown-method</text><text x="714" y="626" fill="#9AA0A6" text-anchor="end">0x90</text>
+<text x="486" y="644" fill="#E8E8E8">bad-request</text><text x="714" y="644" fill="#9AA0A6" text-anchor="end">0x99</text>
+<text x="486" y="662" fill="#E8E8E8">failed</text><text x="714" y="662" fill="#9AA0A6" text-anchor="end">0x83</text>
+</g>
+
+<text x="40" y="700" font-size="13" fill="#9AA0A6">At most 1,000 requests and 16 MiB wait for the strand, a quarter of each per publishing client; past them a request is refused as busy.</text>
+<text x="40" y="720" font-size="13" fill="#9AA0A6">A time earlier than the node's start is stale, so a request captured before a restart cannot be replayed after it.</text>
+
+<line x1="40" y1="738" x2="1160" y2="738" stroke="#2A2A2A" stroke-width="1"/>
+<rect x="40" y="752" width="14" height="14" rx="3" fill="#E7C55A"/><text x="60" y="764" font-size="13" fill="#9AA0A6">alexander</text>
+<rect x="160" y="752" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="180" y="764" font-size="13" fill="#9AA0A6">the control pod, and the checks of who signed</text>
+<rect x="520" y="752" width="14" height="14" rx="3" fill="#AEB6C1"/><text x="540" y="764" font-size="13" fill="#9AA0A6">read by any client</text>
+<text x="1160" y="764" font-size="13" fill="#9AA0A6" text-anchor="end">comando · docs/frontear.md</text>
+</svg>

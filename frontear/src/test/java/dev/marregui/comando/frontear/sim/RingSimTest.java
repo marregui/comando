@@ -14,7 +14,7 @@ class RingSimTest {
     /// After every schedule: each message acknowledged 0x00 for a topic a link covered arrived at every subscriber of
     /// the far node whose filters match it, a filter change notwithstanding; over each link without a counted
     /// refusal, first arrivals keep publish order and none overtakes an earlier one; no message made more hops than
-    /// the limit or came from nowhere; the brokers' and links' readings stayed within their bounds after every step.
+    /// the limit or came from nowhere; the gateways' and links' readings stayed within their bounds after every step.
     @Test
     void theRingKeepsTheContractUnderFaults(@TempDir final Path dir) throws Exception {
         Soak.run(Schedule.Topology.RING, "RingSimTest", dir);

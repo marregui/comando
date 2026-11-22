@@ -13,8 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 /// [IndexParser] reads the open tasks of a scratchpad index, tolerating what sessions write by hand.
-/// - Only the tasks under `## Open` count, in order, each with its topic folder, its State, Next and Ask lines, the paths
-///   in backticks of its Documents and the decisions it holds for the user.
+/// - Only the tasks under `## Open` count, in order, each with its topic folder, its State, Next and Ask lines, the
+/// paths   in backticks of its Documents and the decisions it holds for the user.
 /// - A key is a bullet or a bare line; its value continues until the next key, a heading or a blank line.
 /// - Needs you gives one decision per sub-item, or its inline text, and nothing when it says none.
 /// - A task that waits on Miguel or holds a decision needs the user; the others do not.
@@ -195,7 +195,7 @@ class IndexParserTest {
         assertThat(List.of(
                 headed("EDG-1227: Sam's review of the EDG-1217 plan, 34 findings (Miguel, 2026-11-04)"),
                 headed("Friction log batch 2026-11-08..10, second (Miguel, 2026-11-10 /reflect: \"Now\")"),
-                headed("EDG-1232 follow-up: Martin's hivemq-mesh #1804 + testsuite #1701 "
+                headed("EDG-1232 follow-up: Martin's acme-relay #1804 + testsuite #1701 "
                         + "(Martin, `#C08JYBMQ821` ts `1794243728.342979`, 2026-11-09)"),
                 headed("Some synthetic follow-up (Martin's ask, 2026-10-27)"),
                 headed("EDG-1176: polling adapter stops after 10 poll timeouts (Dominic, `#edge-team`, 2026-10-26)")))
@@ -205,7 +205,7 @@ class IndexParserTest {
                                 "Miguel, 2026-11-04"),
                         tuple("Friction log batch 2026-11-08..10, second", "Miguel", "2026-11-10",
                                 "Miguel, 2026-11-10 /reflect: \"Now\""),
-                        tuple("EDG-1232 follow-up: Martin's hivemq-mesh #1804 + testsuite #1701", "Martin",
+                        tuple("EDG-1232 follow-up: Martin's acme-relay #1804 + testsuite #1701", "Martin",
                                 "2026-11-09",
                                 "Martin, `#C08JYBMQ821` ts `1794243728.342979`, 2026-11-09"),
                         tuple("Some synthetic follow-up", "Martin", "2026-10-27", "Martin's ask, 2026-10-27"),
@@ -234,7 +234,7 @@ class IndexParserTest {
     @Test
     void aParentheticalThatNamesNeitherIsPartOfTheName() {
         final List<String> titles = List.of(
-                "Protocol pack and mesh demo (from task 2, closed 2026-11-03)",
+                "Protocol pack and relay demo (from task 2, closed 2026-11-03)",
                 "Southbound design for Edge 2 (EDG-1211, supersedes EDG-813; EDG-1112)",
                 "Nevsky plan (living plan)",
                 "EDG-839 hot-reload plan v03: review ahead of Sam's ask",
@@ -247,8 +247,8 @@ class IndexParserTest {
     /// A parenthetical that does not close the title is no attribution, the last one is, and a date alone is one.
     @Test
     void onlyTheParentheticalThatClosesTheTitleIsTheAttribution() {
-        final LogbookTask t = headed("hivemq-mesh2#122 (EDG-1148 + EDG-1146): open, waiting on approval (2026-11-04)");
-        assertThat(t.name()).isEqualTo("hivemq-mesh2#122 (EDG-1148 + EDG-1146): open, waiting on approval");
+        final LogbookTask t = headed("acme-relay2#122 (EDG-1148 + EDG-1146): open, waiting on approval (2026-11-04)");
+        assertThat(t.name()).isEqualTo("acme-relay2#122 (EDG-1148 + EDG-1146): open, waiting on approval");
         assertThat(t.started()).isEqualTo("2026-11-04");
         assertThat(t.by()).isEmpty();
         assertThat(headed("Draft (Miguel, 2026-11-04) then more").from()).isEmpty();

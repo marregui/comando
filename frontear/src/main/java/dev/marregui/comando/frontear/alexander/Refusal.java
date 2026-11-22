@@ -29,7 +29,7 @@ public enum Refusal {
     UNKNOWN_METHOD("unknown-method", Refusal.TOPIC_NAME_INVALID),
     /** The body is not the method's JSON object, or its content type is not {@code application/json}. */
     BAD_REQUEST("bad-request", Refusal.PAYLOAD_FORMAT_INVALID),
-    /** The mesh refused the change. */
+    /** The octopus refused the change. */
     FAILED("failed", Refusal.IMPLEMENTATION_SPECIFIC);
 
     // MQTT 5 reason codes (§2.4) a PUBACK carries for a refusal, those Packet does not name

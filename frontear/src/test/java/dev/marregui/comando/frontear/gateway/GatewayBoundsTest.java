@@ -18,7 +18,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// What one client can make the broker hold, each bound set small and reached: a connection's outbound backlog in
+/// What one client can make the gateway hold, each bound set small and reached: a connection's outbound backlog in
 /// bytes, the retained store in count and bytes, an offline session's queue in bytes, the filters of a SUBSCRIBE and
 /// of a session, and the depth of a topic or a filter; each refusal with its reason code and counted in the stats.
 /// And a connection whose reader fails with an `Error` ends, so no client is left on a reader that stopped.
@@ -207,7 +207,7 @@ class GatewayBoundsTest {
         try (TestGateway test = TestGateway.start(new TestGateway.Bounds(LOOSE_COUNT, LOOSE_BYTES, backlog, LOOSE_COUNT,
                 LOOSE_BYTES, LOOSE_LEVELS));
                 Socket flood = new Socket()) {
-            // a small window, so the broker's PINGRESPs wait on its writer rather than in this socket's buffer
+            // a small window, so the gateway's PINGRESPs wait on its writer rather than in this socket's buffer
             flood.setReceiveBufferSize(1024);
             flood.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), test.port()));
             flood.setSoTimeout((int) TestGateway.WAIT.toMillis());
@@ -223,7 +223,7 @@ class GatewayBoundsTest {
                     out.write(pings);
                 }
             } catch (final IOException _) {
-                // the broker ended the connection while the flood was still writing
+                // the gateway ended the connection while the flood was still writing
             }
             await().atMost(TestGateway.WAIT).until(() -> test.gateway.stats().backlogDisconnects() == 1);
         }
@@ -272,7 +272,7 @@ class GatewayBoundsTest {
         }
     }
 
-    /// A topic or a filter deeper than the broker's bound is refused before the tree sees it: SUBACK 0x8F for the
+    /// A topic or a filter deeper than the gateway's bound is refused before the tree sees it: SUBACK 0x8F for the
     /// filter, PUBACK 0x90 for the topic, CONNACK 0x90 for a will's topic, each counted; the connection stays up.
     @Test
     void aTopicOrFilterDeeperThanTheBoundIsRefused() throws IOException {

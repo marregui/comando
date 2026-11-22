@@ -30,14 +30,14 @@ import dev.marregui.comando.frontear.protocol.Topics;
 
 /**
  * One client's network connection: a reader strand that reads its packets in order and answers them, and a writer
- * strand that writes what the broker sends it, in the order sent. The first packet must be a CONNECT, within
+ * strand that writes what the gateway sends it, in the order sent. The first packet must be a CONNECT, within
  * {@link #CONNECT_WAIT_MILLIS}; after it, a connection silent for one and a half times its keep alive is closed
  * (§3.1.2.10). The connection ends once, whichever side ends it: {@link #end} runs its effects a single time.
  * <p>
  * A connection of the remote listener first finishes its TLS handshake within its listener's bound, a deadline from
- * its accept that the broker's timed strand holds, however the client spreads its bytes, and speaks for the machine
+ * its accept that the gateway's timed strand holds, however the client spreads its bytes, and speaks for the machine
  * its certificate names, its principal: every PUBLISH and will it sends carries that machine as its one
- * {@link Names#ORIGIN} user property, whatever the client set there. When the pairings change, the broker checks its
+ * {@link Names#ORIGIN} user property, whatever the client set there. When the pairings change, the gateway checks its
  * certificate again ({@link #stillPinned}) and ends it when its key is no longer pinned to that machine.
  */
 final class Connection {
@@ -68,7 +68,7 @@ final class Connection {
     private final InputStream in;
     private final OutputStream out;
     // runs the read loop, its one task: what waits to be read waits in the socket's receive buffer, and a client past
-    // the broker's Receive Maximum is refused once its PUBLISH is read
+    // the gateway's Receive Maximum is refused once its PUBLISH is read
     private final ExecutorService reader;
     // runs the writes in the order sent; its queue is bounded in bytes, not in count: a send past maxBacklogBytes of
     // what waits (pendingBytes, PACKET_OVERHEAD_BYTES a packet included) is dropped and ends the connection, and the
@@ -77,27 +77,27 @@ final class Connection {
     // null while the connection lives; set once, by the first thread that ends it
     private final AtomicReference<End> endCause = new AtomicReference<>();
     private final AtomicLong pendingBytes = new AtomicLong();
-    // set once, by the first send past the broker's maxBacklogBytes; every send after it is dropped
+    // set once, by the first send past the gateway's maxBacklogBytes; every send after it is dropped
     private final AtomicBoolean overBacklog = new AtomicBoolean();
     // the client's QoS 1 publishes not yet acknowledged, in arrival order; guarded by itself
     private final ArrayDeque<InboundAck> acks = new ArrayDeque<>();
-    // written by the reader under the broker's session lock when the CONNECT is accepted; read by the reader, and by
-    // the threads that end the connection (a takeover under the same lock, the broker's close after the reader set it)
+    // written by the reader under the gateway's session lock when the CONNECT is accepted; read by the reader, and by
+    // the threads that end the connection (a takeover under the same lock, the gateway's close after the reader set it)
     private volatile Session session;
     private volatile String clientId;
-    // written with session by the reader when the CONNECT is accepted; read by the broker's connections(), a snapshot
+    // written with session by the reader when the CONNECT is accepted; read by the gateway's connections(), a snapshot
     // that pairs them with the session it read first, so at worst a moment's mismatch
     private volatile int keepAliveSeconds;
     private volatile long acceptedMillis;
-    // written once by the thread that ends the connection; read by the broker's sweep to close a writer stuck on a
+    // written once by the thread that ends the connection; read by the gateway's sweep to close a writer stuck on a
     // client that does not read
     private volatile long endedAtNanos;
     // written by the writer strand when a write fails; read by the threads that send, to stop queueing bytes
     private volatile boolean writeFailed;
-    // a remote connection's handshake, settled once: by the reader when it ends in time, or by the broker's deadline
+    // a remote connection's handshake, settled once: by the reader when it ends in time, or by the gateway's deadline
     // task when the bound passes first, which then closes the socket under it; set by whichever thread is first
     private final AtomicBoolean handshakeSettled = new AtomicBoolean();
-    // the broker's deadline task for a remote connection's handshake, cancelled once the reader settles it; written by
+    // the gateway's deadline task for a remote connection's handshake, cancelled once the reader settles it; written by
     // the remote accept strand before start(), which hands it to the reader, and read by the reader alone
     private ScheduledFuture<?> handshakeDeadline;
     // the certificate a remote connection's peer presented, null for a local one and before its handshake ends;
@@ -124,8 +124,8 @@ final class Connection {
         this.in = new BufferedInputStream(socket.getInputStream(), BUFFER_BYTES);
         this.out = new BufferedOutputStream(socket.getOutputStream(), BUFFER_BYTES);
         final String owner = gateway.port() + "-" + number;
-        this.reader = Threads.strand("frontear-broker-reader-" + owner);
-        this.writer = Threads.strand("frontear-broker-writer-" + owner);
+        this.reader = Threads.strand("frontear-gateway-reader-" + owner);
+        this.writer = Threads.strand("frontear-gateway-writer-" + owner);
     }
 
     /** Starts reading the connection's packets. */
@@ -134,7 +134,7 @@ final class Connection {
     }
 
     /**
-     * Starts reading a remote connection's packets, {@code deadline} the broker's task that runs
+     * Starts reading a remote connection's packets, {@code deadline} the gateway's task that runs
      * {@link #handshakeOverdue} once its handshake bound has passed since its accept.
      */
     void start(final ScheduledFuture<?> deadline) {
@@ -143,7 +143,7 @@ final class Connection {
     }
 
     /**
-     * The broker's deadline for a remote connection's handshake has passed: when the reader has not settled it yet,
+     * The gateway's deadline for a remote connection's handshake has passed: when the reader has not settled it yet,
      * the socket closes under the handshake, whose read then fails and ends the connection, counted. Gateway's timed
      * strand.
      */
@@ -169,7 +169,7 @@ final class Connection {
         return now != null && (machine == null || machine.equals(now));
     }
 
-    /** The client id the connection's CONNECT gave or the broker assigned; null before CONNECT. */
+    /** The client id the connection's CONNECT gave or the gateway assigned; null before CONNECT. */
     String clientId() {
         return clientId;
     }
@@ -220,14 +220,14 @@ final class Connection {
         return keepAliveSeconds;
     }
 
-    /** When its CONNECT was accepted, by the broker's clock; 0 before. */
+    /** When its CONNECT was accepted, by the gateway's clock; 0 before. */
     long acceptedMillis() {
         return acceptedMillis;
     }
 
     /**
      * Queues {@code bytes} on the writer; dropped once a write failed or the connection ended its writer. Bytes that
-     * would take what waits on the writer, each packet counted at its length and a fixed overhead, past the broker's
+     * would take what waits on the writer, each packet counted at its length and a fixed overhead, past the gateway's
      * {@code maxBacklogBytes} are dropped, and the connection is ended with DISCONNECT 0x97, counted: off the caller's
      * locks, as a send may hold the session lock that an end takes.
      */
@@ -279,7 +279,7 @@ final class Connection {
 
     /**
      * Ends the connection because another took its session over (§3.1.4): DISCONNECT 0x8E, then the socket closes.
-     * The caller, holding the broker's session lock, detaches it from the session. False when it had already ended.
+     * The caller, holding the gateway's session lock, detaches it from the session. False when it had already ended.
      */
     boolean takenOver() {
         return endHeld(Packet.SESSION_TAKEN_OVER);
@@ -287,7 +287,7 @@ final class Connection {
 
     /**
      * Ends the connection, its will kept, with DISCONNECT {@code disconnectCode} ({@link #NO_DISCONNECT} for none),
-     * then the socket closes. The caller, holding the broker's session lock, detaches it from its session. False when
+     * then the socket closes. The caller, holding the gateway's session lock, detaches it from its session. False when
      * it had already ended.
      */
     boolean endHeld(final int disconnectCode) {
@@ -295,7 +295,7 @@ final class Connection {
             return false;
         }
         finish(disconnectCode);
-        LOG.log(System.Logger.Level.DEBUG, "connection ended by the broker [client=" + clientId + ", connection="
+        LOG.log(System.Logger.Level.DEBUG, "connection ended by the gateway [client=" + clientId + ", connection="
                 + number + ", disconnectCode=" + disconnectCode + ']');
         return true;
     }
@@ -315,7 +315,7 @@ final class Connection {
         return writer;
     }
 
-    /** A packet the broker builds: one it cannot write is a defect here, not the client's. */
+    /** A packet the gateway builds: one it cannot write is a defect here, not the client's. */
     static byte[] encode(final Packet packet) {
         try {
             return Codec.encode(packet);
@@ -414,8 +414,8 @@ final class Connection {
     /**
      * A remote connection's TLS handshake, within its listener's bound from the accept: true once the peer's
      * certificate names a paired machine, the connection's principal from then on. A handshake that fails or outlasts
-     * the bound (the per-read timeout, or the broker's deadline closing the socket), and a peer whose key no machine is
-     * paired with, are counted by the broker and end the connection unanswered.
+     * the bound (the per-read timeout, or the gateway's deadline closing the socket), and a peer whose key no machine
+     * is paired with, are counted by the gateway and end the connection unanswered.
      */
     private boolean handshake() throws IOException {
         if (!(socket instanceof final SSLSocket tls)) {
@@ -454,9 +454,9 @@ final class Connection {
     }
 
     /**
-     * Reads the first packet and hands a CONNECT to the broker: true when the broker accepted it and sent its CONNACK.
-     * A CONNECT that cannot be read, or that the broker refuses, is answered with a CONNACK carrying the reason; any
-     * other first packet closes the connection unanswered (§3.1.0).
+     * Reads the first packet and hands a CONNECT to the gateway: true when the gateway accepted it and sent its
+     * CONNACK. A CONNECT that cannot be read, or that the gateway refuses, is answered with a CONNACK carrying the
+     * reason; any other first packet closes the connection unanswered (§3.1.0).
      */
     private boolean connect() throws IOException {
         final int header = in.read();
@@ -531,7 +531,7 @@ final class Connection {
 
     /**
      * A client PUBLISH: QoS 2 ends the connection with 0x9B, as CONNACK said Maximum QoS 1 (§3.3.1.4); a QoS 1 publish
-     * past the broker's receive maximum with 0x93 (§3.3.4). A publish the gate refuses is acknowledged 0x87 and
+     * past the gateway's receive maximum with 0x93 (§3.3.4). A publish the gate refuses is acknowledged 0x87 and
      * routed nowhere; any other is retained when it asks, routed, and acknowledged once every internal subscriber it
      * reached completed, with the worst of their codes. Acknowledgements go out in the order the publishes came. A
      * remote connection's publish is routed {@link #stamped} with its machine.
@@ -573,9 +573,9 @@ final class Connection {
     }
 
     /**
-     * A SUBSCRIBE: a filter past the broker's {@code maxFiltersPerSubscribe} in the packet is refused with 0x97 before
+     * A SUBSCRIBE: a filter past the gateway's {@code maxFiltersPerSubscribe} in the packet is refused with 0x97 before
      * anything else is asked of it, a {@code $share/} filter with 0x9E (Shared Subscription Available 0), one deeper
-     * than the broker's {@code maxTopicLevels} with 0x8F, one the gate refuses with 0x87, a new one past the session's
+     * than the gateway's {@code maxTopicLevels} with 0x8F, one the gate refuses with 0x87, a new one past the session's
      * {@code maxSubscriptions} with 0x97 (§3.9.3), and any other granted at the QoS asked, at most 1. The SUBACK goes
      * first, then the retained messages each granted filter asks for by its Retain Handling (§3.3.1.3): at every
      * subscribe (0), only when the subscription is new (1), or never (2). A session's SUBSCRIBEs are read by its
@@ -674,13 +674,13 @@ final class Connection {
         }
     }
 
-    /** Why a connection ends, which decides its will: kept for every end but a clean one and the broker's close. */
+    /** Why a connection ends, which decides its will: kept for every end but a clean one and the gateway's close. */
     enum End {
         /** The client's DISCONNECT 0x00: the will is discarded. */
         NORMAL,
         /** Any other end the client or the network causes: the will is published. */
         WILL,
-        /** The broker closes: no will, no presence. */
+        /** The gateway closes: no will, no presence. */
         SHUTDOWN
     }
 

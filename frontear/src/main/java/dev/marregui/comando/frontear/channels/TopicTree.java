@@ -14,7 +14,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Topics;
 
 /**
- * A broker's subscriptions: Topic Filters (MQTT 5 §4.7) in a tree of levels, each node holding the entries of the
+ * A gateway's subscriptions: Topic Filters (MQTT 5 §4.7) in a tree of levels, each node holding the entries of the
  * filters that end there, and the entries that match a Topic Name merged to one {@link Match} per subscriber. A
  * subscriber's overlapping filters therefore deliver a message once, at the highest QoS among them.
  *
@@ -28,7 +28,7 @@ import dev.marregui.comando.frontear.protocol.Topics;
  * children and entries included, so a write costs the width of the levels it passes. An {@link #add} of a new filter
  * and a {@link #remove} also copy the subscriber's set of filters, so they cost that set's size too: a subscriber's
  * n-th filter costs n, its first n cost n squared over two, and its owner bounds how many filters one subscriber
- * may hold (the broker's {@code maxSubscriptions} per client session).
+ * may hold (the gateway's {@code maxSubscriptions} per client session).
  *
  * <p>A match allocates only for what it finds: levels are compared in place in the topic, and the map that merges
  * a subscriber's matches is made at the first entry that matches.

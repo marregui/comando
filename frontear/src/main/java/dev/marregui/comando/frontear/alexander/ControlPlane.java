@@ -54,7 +54,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
  * quarter of both ({@link #ORIGIN_PENDING_MAX}, {@link #ORIGIN_PENDING_BYTES_MAX}); past a bound a request is refused
  * as {@link Refusal#BUSY} without a reply, so one client's forged requests cannot refuse another client's genuine
  * one. {@link #stats} shows what waits. The state is looked at after each change and every {@link StateTopic#EVERY}.
- * The plane installs a {@link ControlGate} on the broker and leaves it there on close.
+ * The plane installs a {@link ControlGate} on the gateway and leaves it there on close.
  */
 public final class ControlPlane implements AutoCloseable {
 
@@ -97,7 +97,7 @@ public final class ControlPlane implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean();
     /** Guards {@link #pending}, {@link #pendingBytes} and {@link #byOrigin}; held for no call out of the class. */
     private final Object admission = new Object();
-    /** The requests admitted and not yet handled; written by the broker's delivering threads and the strand. */
+    /** The requests admitted and not yet handled; written by the gateway's delivering threads and the strand. */
     private int pending;
     /** Their bytes, {@link Packet.Publish#weight()} counted. */
     private long pendingBytes;
@@ -122,8 +122,8 @@ public final class ControlPlane implements AutoCloseable {
      */
     public ControlPlane(final Gateway gateway, final Octopus octopus, final String node, final Set<PublicKey> trusted,
             final InstantSource clock) {
-        this.gateway = Objects.requireNonNull(gateway, "broker");
-        this.octopus = Objects.requireNonNull(octopus, "mesh");
+        this.gateway = Objects.requireNonNull(gateway, "gateway");
+        this.octopus = Objects.requireNonNull(octopus, "octopus");
         this.node = Objects.requireNonNull(node, "node");
         this.clock = Objects.requireNonNull(clock, "clock");
         if (node.isEmpty() || node.indexOf('/') >= 0 || node.indexOf('+') >= 0 || node.indexOf('#') >= 0
@@ -289,7 +289,7 @@ public final class ControlPlane implements AutoCloseable {
                 case Request.GetState() -> reply.setAll(StateTopic.json(octopus.state()));
             }
         } catch (final RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "mesh refused a control request [node=" + node + ", method="
+            LOG.log(System.Logger.Level.WARNING, "octopus network refused a control request [node=" + node + ", method="
                     + method + ", nonce=" + nonce(message) + ']', e);
             return refuse(message, origin, Refusal.FAILED, String.valueOf(e.getMessage()));
         }
@@ -343,7 +343,7 @@ public final class ControlPlane implements AutoCloseable {
         try {
             state.publishIfChanged();
         } catch (final RuntimeException e) {
-            // a failed look at the mesh must not end the timer, which would stop the state topic for good
+            // a failed look at the octopus must not end the timer, which would stop the state topic for good
             LOG.log(System.Logger.Level.WARNING, "cannot publish link state [node=" + node + ']', e);
         }
     }

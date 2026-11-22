@@ -14,7 +14,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// CONNECT and the session over TCP: what CONNACK states and declines, the client ids and connects the broker
+/// CONNECT and the session over TCP: what CONNACK states and declines, the client ids and connects the gateway
 /// refuses with their reason codes, keep alive, ping, takeover, Clean Start, and sessions that outlive their
 /// connection with a bounded queue of QoS 1 messages until their expiry.
 class GatewayConnectTest {
@@ -31,7 +31,7 @@ class GatewayConnectTest {
         test.close();
     }
 
-    /// CONNACK states the broker's Receive Maximum and Maximum Packet Size, no topic alias, and the capabilities it
+    /// CONNACK states the gateway's Receive Maximum and Maximum Packet Size, no topic alias, and the capabilities it
     /// declines: Maximum QoS 1, no subscription identifiers, no shared subscriptions.
     @Test
     void connAckStatesTheLimitsAndTheDeclinedCapabilities() throws IOException {
@@ -69,7 +69,7 @@ class GatewayConnectTest {
         }
     }
 
-    /// Each feature of CONNECT the broker declines gets its CONNACK reason code, then the connection closes: a user
+    /// Each feature of CONNECT the gateway declines gets its CONNACK reason code, then the connection closes: a user
     /// name or password 0x86, an authentication method 0x8C, a protocol level other than 5 0x84.
     @Test
     void declinedConnectFeaturesAreRefusedWithTheirCodes() throws IOException {
@@ -83,7 +83,7 @@ class GatewayConnectTest {
         refusedWith("10 0D 00 04 4D 51 54 54 04 02 00 0A 00 00 00", Packet.UNSUPPORTED_PROTOCOL_VERSION);
     }
 
-    /// A will at QoS 2 is refused with 0x9B, as the broker's Maximum QoS is 1 (§3.2.2.3.4).
+    /// A will at QoS 2 is refused with 0x9B, as the gateway's Maximum QoS is 1 (§3.2.2.3.4).
     @Test
     void aWillAtQos2IsRefused() throws IOException {
         final Packet.Publish will = new Packet.Publish("w", new byte[] {1}, 2, false, false, 0, null, null);
@@ -104,7 +104,7 @@ class GatewayConnectTest {
         assertThat(test.gateway.stats().sessions()).isZero();
     }
 
-    /// Past its session limit the broker refuses a new client with 0x97 Quota Exceeded; a client whose session it
+    /// Past its session limit the gateway refuses a new client with 0x97 Quota Exceeded; a client whose session it
     /// holds still connects.
     @Test
     void sessionsPastTheLimitAreRefused() throws IOException {
@@ -230,7 +230,7 @@ class GatewayConnectTest {
         }
     }
 
-    /// A session past its expiry ends: it is gone from the broker, and its client returns to no session.
+    /// A session past its expiry ends: it is gone from the gateway, and its client returns to no session.
     @Test
     void aSessionPastItsExpiryEnds() throws IOException {
         try (RawClient a = RawClient.connected(test.port(), RawClient.connect("a", true, 5))) {

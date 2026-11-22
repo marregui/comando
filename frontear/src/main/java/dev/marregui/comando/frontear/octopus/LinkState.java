@@ -6,9 +6,9 @@ import org.jetbrains.annotations.TestOnly;
  * A link at one moment: whether the peer accepted its connection, the messages {@code queued} in its log between the
  * {@code cursor} (the next to deliver) and the {@code tail} (the next offset an append takes), and since the link
  * started the messages {@code sent} to the peer, {@code dropped} (refused by the peer for good, expired, past the hop
- * limit, or a QoS 0 message, the broker's or the peer's, over the link's queue bound) and {@code reordered}: the
+ * limit, or a QoS 0 message, the gateway's or the peer's, over the link's queue bound) and {@code reordered}: the
  * messages the peer refused for now (0x97, 0x89) and took only after it had accepted a later one of the same window,
- * so the peer holds that later message before the refused one. {@code queuedDeliveries} is how many of the broker's
+ * so the peer holds that later message before the refused one. {@code queuedDeliveries} is how many of the gateway's
  * messages wait for the link to append them, beside {@code queueMax}, the bound past which one is refused
  * ({@link LinkOptions#queueMax}). {@code reason} says why a link is down: empty while it is up or connecting, else its
  * last failure, or that a TLS link waits for a TLS context.

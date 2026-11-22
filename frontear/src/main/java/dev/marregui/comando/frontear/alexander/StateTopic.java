@@ -16,8 +16,8 @@ import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 
 /**
- * A node's retained {@code $frontear/state/<node>/links}: the mesh's links as {@link #json}, published when they
- * changed and at most once per {@link #EVERY}, read by the {@code clock} it was given. The mesh is asked at each
+ * A node's retained {@code $frontear/state/<node>/links}: the octopus's links as {@link #json}, published when they
+ * changed and at most once per {@link #EVERY}, read by the {@code clock} it was given. The octopus is asked at each
  * {@link #publishIfChanged}; its owner calls that after each change it makes and on a timer, which catches the changes
  * the links make themselves (a connect, a message sent). Used by one thread at a time.
  */
@@ -49,7 +49,7 @@ final class StateTopic {
     }
 
     /**
-     * Publishes the mesh's links when they differ from the last published and {@link #EVERY} has passed since; a
+     * Publishes the octopus's links when they differ from the last published and {@link #EVERY} has passed since; a
      * clock that stepped back counts as passed. Returns whether it published.
      */
     boolean publishIfChanged() {

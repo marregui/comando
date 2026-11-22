@@ -636,24 +636,24 @@ to it. Its SQL, its access secrets, backup and restore are in [cdb](cdb.md) and 
 
 You may run more than one comando on a machine. Each instance is a specialist with its own name, data root, kit and
 brain ([why](adr/0122-instances-name-kit-brain-data-root-edge.md)). The instances find each other through frontear:
-each runs a local MQTT broker node of its own, and the nodes are linked. Through them, a session of one instance asks
+each runs a local MQTT gateway node of its own, and the nodes are linked. Through them, a session of one instance asks
 another instance a question.
 
 ### 4.1 frontear
 
-frontear is comando's fabric between instances: an MQTT 5 broker of comando's own. Every instance runs one node of it
+frontear is comando's octopus network between instances: an MQTT 5 gateway of comando's own. Every instance runs one node of it
 inside its own process, named as the instance's id, and connects to that node alone. Each node keeps a link to every
 other instance's node, which carries that instance's messages there and queues them while it is down
 ([why](adr/0187-frontear-lab-node-per-instance.md)). It runs by itself: no click is needed for the instances to find
-each other ([why](adr/0185-frontear-is-the-only-fabric.md)). The antenna button in the corner starts and stops this
-instance's node; so does the Connections tab's menu. How the broker works is in [frontear](frontear.md).
+each other ([why](adr/0185-frontear-is-the-only-octopus-network.md)). The antenna button in the corner starts and stops this
+instance's node; so does the Connections tab's menu. How the gateway works is in [frontear](frontear.md).
 
 | Fact | Value |
 |---|---|
 | Port | MQTT on `127.0.0.1`: the lowest port from 18883 up that is free and no other instance holds, kept for that instance from then on |
-| Registry | `~/.comando-fabric.json` holds every instance's node: its port, its process while it runs, its name and its data root. Each instance's node links to the others it names |
+| Registry | `~/.comando-fabric.json` (a legacy name, kept so that running instances still find each other) holds every instance's node: its port, its process while it runs, its name and its data root. Each instance's node links to the others it names |
 | Links | to each other node: this instance's presence, and the other's inbox and reply topics; while that node is down they queue, and its next start receives them once that instance has subscribed |
-| Data | `fabric/` of the instance's data root: its links' logs and the control key pair, `pod.key` (owner-only) and `pod.pub` |
+| Data | `fabric/` of the instance's data root (a legacy name, kept so that existing keys and logs are found): its links' logs and the control key pair, `pod.key` (owner-only) and `pod.pub` |
 | Starts | at launch, and at each later look while it is down (every 5 s) |
 | Stops | its button, an agent's `server_stop frontear`, or the instance's quit; the other instances' nodes keep running. After a stop by hand it starts again only when asked |
 | Log | comando's own log; Help ▸ **Show the log** |
@@ -712,7 +712,7 @@ The Instances tab shows what the other instances do, from their presence alone. 
 - **Its sessions** sit under it, each with a dot and what its turn does.
 - **Another machine's instances**, named `<slug>@<machine>`, sit under their machine's node, after this machine's
   instances; every paired machine has a node, with or without instances. The node says connected, or not connected and
-  when it last was, as the paired machines read every 5 s while the tab shows, the connection as the gateway last saw
+  when it last was, as the paired machines read every 5 s while the tab shows, the connection as the border gateway last saw
   it; green when connected, greyed when not. Its card says its address, grant and fingerprint; its menu opens **Machines…** on it or copies its id.
 - **A click** shows a row's card: an instance's state, role, version, kit, uptime and id; a session's state, turn,
   model, effort, context, folder and branch.
@@ -726,7 +726,7 @@ A header shows only while this instance is not connected, with **Start frontear*
 **The Machines window** (record 189) opens from the tab's menu, a machine's menu and the palette. Its list holds the
 paired machines; beside it:
 
-- **This machine**: its id, the address its gateway listens on (✓ sets it, empty stops listening; frontear reads it
+- **This machine**: its id, the address its border gateway listens on (✓ sets it, empty stops listening; frontear reads it
   within 5 s), the port, its fingerprint and its pairing token, with a button to copy it to the other machine.
 - **The selected machine**: its address, grant, connection and fingerprint. The unplug button under the list unpairs
   it, after a question.
@@ -749,7 +749,7 @@ Each view says above its table what a row is, and each column's header says in i
 
 | View | A row | Columns |
 |---|---|---|
-| Health | a link to a peer, the worst first | **status**: down (for how long), log full (the broker's messages wait at the limit), backing up (the queue grew over 5 s while up), dropping (a message given up within the last minute), slow disk (the 99th percentile force over 50 ms), or ok; red when it is not ok; **msg/s**: what the peer acknowledged over the last 5 s; **queued**: in its log, not yet acknowledged; **delivered / written**: the log's records acknowledged, of those written; **last change**: the last connect or disconnect. Above the table: the node, its port, the broker's sessions, connections and retained messages, then only the faults it counts (the broker's drops and refusals, the packets the watch missed, the rows cdb dropped), else "no faults". Beside it: the selected link's every figure (cursor, tail, sent, dropped, reordered, waiting to append, the log's size, segments and force times), its last reason, and the step that resolves its status |
+| Health | a link to a peer, the worst first | **status**: down (for how long), log full (the gateway's messages wait at the limit), backing up (the queue grew over 5 s while up), dropping (a message given up within the last minute), slow disk (the 99th percentile force over 50 ms), or ok; red when it is not ok; **msg/s**: what the peer acknowledged over the last 5 s; **queued**: in its log, not yet acknowledged; **delivered / written**: the log's records acknowledged, of those written; **last change**: the last connect or disconnect. Above the table: the node, its port, the gateway's sessions, connections and retained messages, then only the faults it counts (the gateway's drops and refusals, the packets the watch missed, the rows cdb dropped), else "no faults". Beside it: the selected link's every figure (cursor, tail, sent, dropped, reordered, waiting to append, the log's size, segments and force times), its last reason, and the step that resolves its status |
 | Traffic | a packet event on this node | **kind** (below); **origin / link**: the client that published, or the peer of the step's link; **hops**: 0 published here, 1 came over a link; **correlation**: hex, pairs a question with its reply. One row is selected at a time; beside the log: what the packet is (a presence, a question or a reply, with the instance it names), a publish's steps on the links with how long after it each came, and the payload, indented when it is JSON |
 
 The kinds of a packet are Published (a client published it on this node), Appended (written to a peer's log, at an
@@ -757,7 +757,7 @@ offset), Sent (the peer acknowledged it), Arrived (it came in from a peer), Drop
 Disconnected (a link's connection, with the reason given).
 
 **Traffic's bar** filters by a part of the topic and by kind. **show control**, off by default, shows frontear's own
-traffic: the topics under `$frontear/` and `comando/v1/local/fabric/`, the links' checks and the nodes' state and
+traffic: the topics under `$frontear/` and `comando/v1/local/fabric/` (a legacy topic name), the links' checks and the nodes' state and
 presence. A run of presences from one origin is one row with its count; **every presence** shows each. **pause** stops
 the rows moving while you read; the node goes on recording. **missed** counts the packets that came while the view could
 not keep them: more than 10 000 since the last read, or more than the node's own record holds. Selecting a publish also

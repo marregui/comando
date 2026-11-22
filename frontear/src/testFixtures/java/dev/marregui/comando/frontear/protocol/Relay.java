@@ -19,13 +19,13 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 
-/// A TCP relay for tests between MQTT clients and a real broker: it listens on `127.0.0.1` at a port of the system's
-/// choosing, opens a connection to the broker for each client that connects, and forwards whole packets both ways
+/// A TCP relay for tests between MQTT clients and a real gateway: it listens on `127.0.0.1` at a port of the system's
+/// choosing, opens a connection to the gateway for each client that connects, and forwards whole packets both ways
 /// unchanged, counting them by type. [#cut] closes every link at once, as a network that failed would: neither side
-/// sends a DISCONNECT, so the broker publishes the will and the client sees its connection end.
+/// sends a DISCONNECT, so the gateway publishes the will and the client sees its connection end.
 public final class Relay implements AutoCloseable {
 
-    /// How long the connect to the broker may take: a broker on this machine answers in milliseconds.
+    /// How long the connect to the gateway may take: a gateway on this machine answers in milliseconds.
     private static final Duration CONNECT_WITHIN = Duration.ofSeconds(10);
     private static final int TYPES = 16;
 
@@ -39,7 +39,7 @@ public final class Relay implements AutoCloseable {
     private final AtomicIntegerArray fromClient = new AtomicIntegerArray(TYPES);
     private final AtomicIntegerArray fromGateway = new AtomicIntegerArray(TYPES);
 
-    /// A relay to the broker at `host`:`port`, accepting clients at once.
+    /// A relay to the gateway at `host`:`port`, accepting clients at once.
     public Relay(final String host, final int port) {
         this.host = host;
         this.port = port;
@@ -57,17 +57,17 @@ public final class Relay implements AutoCloseable {
         return server.getLocalPort();
     }
 
-    /// The links opened so far, one per client connection the broker took.
+    /// The links opened so far, one per client connection the gateway took.
     public int links() {
         return links.get();
     }
 
-    /// The packets of control packet `type` (the fixed header's high four bits) forwarded from clients to the broker.
+    /// The packets of control packet `type` (the fixed header's high four bits) forwarded from clients to the gateway.
     public int fromClient(final int type) {
         return fromClient.get(type);
     }
 
-    /// The packets of control packet `type` forwarded from the broker to clients.
+    /// The packets of control packet `type` forwarded from the gateway to clients.
     public int fromGateway(final int type) {
         return fromGateway.get(type);
     }
@@ -114,7 +114,7 @@ public final class Relay implements AutoCloseable {
             open.add(client);
             open.add(gateway);
             links.incrementAndGet();
-            pump(client, gateway, fromClient, "relay-to-broker");
+            pump(client, gateway, fromClient, "relay-to-gateway");
             pump(gateway, client, fromGateway, "relay-to-client");
         }
     }

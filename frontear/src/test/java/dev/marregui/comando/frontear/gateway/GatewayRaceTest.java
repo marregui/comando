@@ -20,7 +20,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// Races the broker must win every time, each hunted by repeating it: a client's presence after a drop and an
+/// Races the gateway must win every time, each hunted by repeating it: a client's presence after a drop and an
 /// immediate reconnect, and the code a publish gets while its only subscriber comes and goes.
 class GatewayRaceTest {
 
@@ -35,7 +35,7 @@ class GatewayRaceTest {
     private static final Duration SETTLED = Duration.ofMillis(50);
 
     /// A client that drops and reconnects at once, while its old connection's will goes to many subscribers, reads
-    /// online once the broker settles: the old connection's presence clear never lands after the new one's online.
+    /// online once the gateway settles: the old connection's presence clear never lands after the new one's online.
     @Test
     void presenceIsOnlineAfterADropAndAnImmediateReconnect() throws IOException {
         final String presence = Names.PRESENCE + "x";
@@ -84,7 +84,7 @@ class GatewayRaceTest {
         final AtomicBoolean stop = new AtomicBoolean();
         final CountDownLatch started = new CountDownLatch(1);
         try (TestGateway test = TestGateway.start()) {
-            final Thread churn = Thread.ofVirtual().name("broker-race-test-churn").start(() -> {
+            final Thread churn = Thread.ofVirtual().name("gateway-race-test-churn").start(() -> {
                 started.countDown();
                 while (!stop.get()) {
                     test.gateway.subscribe("x", "t", 1, false, counting);

@@ -26,7 +26,7 @@
   <g text-anchor="middle" font-size="13" fill="#9AA0A6">
     <text x="120" y="156">in instance a</text>
     <text x="310" y="156">its MCP server</text>
-    <text x="500" y="156">the MQTT broker</text>
+    <text x="500" y="156">the MQTT gateway</text>
     <text x="690" y="156">its MCP server</text>
     <text x="880" y="156">a session in b</text>
   </g>

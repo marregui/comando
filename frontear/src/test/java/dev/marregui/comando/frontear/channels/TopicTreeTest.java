@@ -42,7 +42,7 @@ class TopicTreeTest {
     // (-Djdk.virtualThreadScheduler.parallelism) a yield in its place let the readers starve a writer the tree's
     // lock had woken, every run for 60 s, and any park lets it run; 10 us keeps a reader matching thousands of times
     private static final long READER_PAUSE_NANOS = TimeUnit.MICROSECONDS.toNanos(10);
-    // the broker's default depth; the depth tests below build their own trees
+    // the gateway's default depth; the depth tests below build their own trees
     private static final int LEVELS = 128;
 
     private Random random;

@@ -73,8 +73,8 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
  * <p>
  * A presence says what the instance is doing, so another knows without asking: whether it hosts frontear, and for
  * each session its state, what its turn is doing and for how long, its model, effort, context, folder and branch, its
- * background tasks, and the first line of its last prompt and of its last reply. Those two lines are the only words of a
- * conversation it carries; on a broker off this machine they leave it. The instances seen are remembered in the data
+ * background tasks, and the first line of its last prompt and of its last reply. Those two lines are the only words of
+ * a conversation it carries; on a gateway off this machine they leave it. The instances seen are remembered in the data
  * root's {@code instances-seen.json}, so one that left stays listed, as last seen, until the user forgets it.
  * <p>
  * The instances, this one's connection and the questions asked and answered reach the window as
@@ -84,7 +84,7 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
  * With this machine's id set ({@link #machine}), the instances of the machines paired with it are reached too (record
  * 189), as {@code <slug>@<machine>}, under {@code comando/v1/<machine>/instance/}. This instance sends them a cut
  * presence, its name, slug, version, role, busy and its sessions' names, retained with a 30 s expiry; one of theirs
- * shows its instance present for 30 s from its arrival. A question from another machine, as the broker stamped its
+ * shows its instance present for 30 s from its arrival. A question from another machine, as the gateway stamped its
  * origin, is taken only from a paired machine, with its payload's {@code from} and its response topic of that machine;
  * it is headed {@code · peer} and answered by a session in plan mode, unless the machine is granted the overseer's
  * authority and the asker is its {@code main}.
@@ -128,8 +128,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
     static final Duration REMOTE_EVERY = REMOTE_EXPIRY.dividedBy(3);
     /**
      * The instances of one other machine kept at once: the instances one machine runs, with room, the bound the
-     * gateway puts on the presences it retains for one machine (record 189 §2.1). A presence of a new instance past it
-     * is dropped and counted once the machine's instances no longer present are gone to make room.
+     * border gateway puts on the presences it retains for one machine (record 189 §2.1). A presence of a new instance
+     * past it is dropped and counted once the machine's instances no longer present are gone to make room.
      */
     static final int MAX_REMOTES = 64;
     /**
@@ -144,7 +144,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private static final Duration SEND_WITHIN = Duration.ofSeconds(10);
     /**
      * How long past the answer's bound a question still waits for its reply before it expires: a margin for a reply in
-     * flight over a broker that reconnects (a few seconds), taken wide so a slow answer is not cut.
+     * flight over a gateway that reconnects (a few seconds), taken wide so a slow answer is not cut.
      */
     private static final Duration EXPIRE_AFTER = Duration.ofSeconds(30);
     /**
@@ -162,7 +162,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             + "start frontear with its toggle at the top of the workspace, right of cdb's; "
             + "presence resumes within seconds once it runs";
     /**
-     * This process's start, as the presence's {@code started} says it and the fabric's registry records it, so a
+     * This process's start, as the presence's {@code started} says it and the octopus's registry records it, so a
      * registry entry whose process is gone names the presence it left ({@link #gone}).
      */
     public static final String PROCESS_STARTED = ProcessHandle.current().info().startInstant().orElseGet(Instant::now)
@@ -270,9 +270,9 @@ public final class Peers implements AutoCloseable, InstancesPort {
      * A question this instance asked, waiting for its reply.
      *
      * @param target    the peer's session the question names; empty for the peer's {@code consult-<this instance>}
-     * @param sentNanos when it was asked, by {@link System#nanoTime}: it expires {@link #EXPIRE_AFTER} past the answer's
-     *                  bound, so a reply lost with its peer (gone while this instance was off frontear) is not waited
-     *                  for until comando quits
+     * @param sentNanos when it was asked, by {@link System#nanoTime}: it expires {@link #EXPIRE_AFTER} past the
+     * answer's                  bound, so a reply lost with its peer (gone while this instance was off frontear) is not
+     * waited                  for until comando quits
      */
     private record Asked(String peer, String peerName, String target, CompletableFuture<Reply> reply, long sentNanos) {
     }
@@ -300,7 +300,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private volatile String role;
     /** Whether this instance's frontear node runs; part of the presence. Set at wiring, read by the ticks' strand. */
     private volatile BooleanSupplier host = () -> false;
-    /** Told each instance forgotten, so its fabric link and registry entry go too; set at wiring, read by forget. */
+    /** Told each instance forgotten, so its octopus link and registry entry go too; set at wiring, read by forget. */
     private volatile Consumer<String> forgotten = _ -> { };
     /**
      * Puts this instance's frontear link to an instance now, so a question to it finds its subscriber; set at wiring,
@@ -325,8 +325,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private final Errands errands = new Errands("peers");
     private final Object presenceLock = new Object();
     /**
-     * The asker and correlation data of the latest questions, oldest first, at most {@link #INBOX_SEEN}: MQTT delivers a
-     * question at least once, and one delivered again is not answered again. Guarded by itself.
+     * The asker and correlation data of the latest questions, oldest first, at most {@link #INBOX_SEEN}: MQTT delivers
+     * a question at least once, and one delivered again is not answered again. Guarded by itself.
      */
     private final Set<String> inboxSeen = Collections.newSetFromMap(new LinkedHashMap<>(16, 0.75f, false) {
         @Override
@@ -343,12 +343,12 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private final Duration resendEvery;
     /**
      * This machine's id, empty while none is set: written by the application thread through {@link #machine}, read by
-     * the ticks' strand, the broker's delivery threads and the callers of the tools.
+     * the ticks' strand, the gateway's delivery threads and the callers of the tools.
      */
     private volatile String machine = "";
     /**
      * The grant of each paired machine, null for one not paired: written by the application thread through
-     * {@link #grants}, read by the broker's delivery threads for each question from another machine.
+     * {@link #grants}, read by the gateway's delivery threads for each question from another machine.
      */
     private volatile Function<String, MachinesPort.Grant> grants = _ -> null;
     /** Whether {@link #start} ran, and the machines whose topics are subscribed; guarded by {@link #machineLock}. */
@@ -473,7 +473,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /**
      * What each paired machine may do here, by its id: null for a machine not paired, whose questions are dropped
-     * (record 189); asked for each question from another machine, on the broker's thread, so it must not block.
+     * (record 189); asked for each question from another machine, on the gateway's thread, so it must not block.
      */
     public void grants(final Function<String, MachinesPort.Grant> grantOf) {
         grants = grantOf == null ? _ -> null : grantOf;
@@ -481,7 +481,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /**
      * Subscribes machine {@code m}'s topics of this instance once, and the presences of every machine with the first;
-     * the broker is called outside the lock, as it may deliver retained messages on this thread. Each is delivered at
+     * the gateway is called outside the lock, as it may deliver retained messages on this thread. Each is delivered at
      * least once (QoS 1), with the consumers of {@link #start} making a repeat harmless; a message whose expiry passed
      * on a link is dropped, so a question or a reply may not arrive at all and its asker's wait ends it.
      */
@@ -530,7 +530,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
                     LOG.log(System.Logger.Level.WARNING, "kept the instances seen as they are, not written and not "
                             + "listed: the file is of a later version [file=" + seenFile + ", version="
                             + root.path("version").asInt() + ", supported=" + FILE_VERSION + ']');
-                    // the user is told once, naming the file, both versions and that nothing is saved to it (record 133)
+                    // the user is told once, naming the file, both versions and that nothing is saved to it (record
+                    // 133)
                     sink.dispatch(new Intent.Notify(Notice.Level.WARN, SEEN_FILE + " is of version " + root.path("version").asInt() + ", written by a "
                             + "later comando; this one reads version " + FILE_VERSION + ". It is kept as it is and nothing is saved to it; the instances "
                             + "seen before are not listed", false));
@@ -617,7 +618,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /**
      * Sets the last will, subscribes, and publishes presence on every connect and every change; call it before the
-     * broker connects. Every subscription is at least once (QoS 1), each consumer idempotent: a question delivered
+     * gateway connects. Every subscription is at least once (QoS 1), each consumer idempotent: a question delivered
      * again (its asker and correlation data) is answered once, a reply completes its waiting ask once and a later one
      * changes nothing, and a presence is retained state that the next one replaces.
      */
@@ -645,7 +646,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /**
      * Sends this instance's presence again at the next tick, changed or not: a peer's node that restarted holds no
-     * retained copy of it, so the fabric calls this when its link to a peer connects.
+     * retained copy of it, so the octopus calls this when its link to a peer connects.
      */
     public void resendPresence() {
         synchronized (presenceLock) {
@@ -689,9 +690,9 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     /**
-     * Publishes presence when it changed since it was last sent, expires the questions whose reply cannot come any more,
-     * and tells the window what changed. The application runs it on the ticks' strand only, so presences are published
-     * in order, outside the lock.
+     * Publishes presence when it changed since it was last sent, expires the questions whose reply cannot come any
+     * more, and tells the window what changed. The application runs it on the ticks' strand only, so presences are
+     * published in order, outside the lock.
      */
     void tick() {
         // an exception escaping a periodic task cancels every later run
@@ -701,8 +702,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
             if (closed || !gateway.connected()) {
                 return;
             }
-            // the presence is built, compared and handed to the broker under one lock, so two ticks on different
-            // threads (a test's, the strand's) cannot hand the broker an older presence after the newer one it keeps
+            // the presence is built, compared and handed to the gateway under one lock, so two ticks on different
+            // threads (a test's, the strand's) cannot hand the gateway an older presence after the newer one it keeps
             synchronized (presenceLock) {
                 final String now = presenceJson();
                 if (!now.equals(lastPresence)) {
@@ -746,7 +747,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 REMOTE_EXPIRY.toSeconds()));
     }
 
-    /** Logs a presence the broker did not take. */
+    /** Logs a presence the gateway did not take. */
     private static void sent(final CompletableFuture<Void> publish) {
         publish.whenComplete((v, e) -> {
             if (e != null) {
@@ -913,9 +914,9 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /**
      * A presence of an instance of another machine, {@code comando/v1/<machine>/instance/<slug>/presence}: kept with
      * when it came, as {@link #keepRemote} bounds it, or dropped with an empty payload, the questions asked of it
-     * failed. This machine's and {@code local}'s are not another machine's; one whose origin, as the broker stamped
-     * it, is not its topic's machine is dropped. It is neither remembered nor linked to: the gateway's link to its
-     * machine carries it.
+     * failed. This machine's and {@code local}'s are not another machine's; one whose origin, as the gateway stamped
+     * it, is not its topic's machine is dropped. It is neither remembered nor linked to: the border gateway's link to
+     * its machine carries it.
      */
     private void remotePresence(final PeerGateway.Message m) {
         final String[] t = m.topic().split("/", -1);
@@ -1339,7 +1340,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /**
      * Why {@code from} is refused, from {@code agents.json}'s {@code peers.deny}; an unreadable file refuses. The asker
-     * is the one the question names: the broker does not say who published it, so the list refuses a cooperating
+     * is the one the question names: the gateway does not say who published it, so the list refuses a cooperating
      * instance, not a local process that names another (record 123 accepts any local publisher until the peer channel
      * has credentials).
      */
@@ -1372,7 +1373,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (a == null) {
             return;
         }
-        // a reply comes from the machine asked, as the broker stamped it: none for this machine's (record 189)
+        // a reply comes from the machine asked, as the gateway stamped it: none for this machine's (record 189)
         final String asked = InstanceName.machineOf(a.peer());
         final String from = asked.isEmpty() ? null : InstanceName.origin(asked);
         if (from == null ? m.origin() != null : !from.equals(m.origin())) {
@@ -1880,8 +1881,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     /**
-     * Clears this instance's presence, stops answering and fails the questions still waiting; call it before the broker
-     * closes.
+     * Clears this instance's presence, stops answering and fails the questions still waiting; call it before the
+     * gateway closes.
      */
     @Override
     public void close() {

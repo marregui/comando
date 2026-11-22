@@ -3,10 +3,10 @@ package dev.marregui.comando.frontear.octopus;
 import dev.marregui.comando.frontear.protocol.MqttClient;
 
 /**
- * The bounds every link of a mesh holds to. {@code queueMax} is the most messages the broker hands a link that wait
- * for its strand to append them to the log, and the most QoS 0 messages from its peer that wait for the strand to
+ * The bounds every link of an octopus holds to. {@code queueMax} is the most messages the gateway hands a link that
+ * wait for its strand to append them to the log, and the most QoS 0 messages from its peer that wait for the strand to
  * publish them: past it a QoS 0 message is dropped and counted in {@link LinkState#dropped}, a QoS 1 one from the
- * broker answered 0x97. {@code windowMax} is the most messages a link keeps in flight
+ * gateway answered 0x97. {@code windowMax} is the most messages a link keeps in flight
  * to its peer, whatever the peer's Receive Maximum; it is at most the client's {@link MqttClient#QUEUE_MAX}, so the
  * sends of a go-back fit in the client's publish queue.
  */

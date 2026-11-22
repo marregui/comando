@@ -1,36 +1,254 @@
 # frontear
 
-![A frontear mesh: three broker nodes joined by links, their MQTT clients, and the control pod that configures them](images/ft-mesh.svg)
+![An octopus network: each comando instance's node is a gateway on 127.0.0.1, linked to every other node and configured through its control plane, alexander; main's node is the border gateway, linked over pinned TLS 1.3 to another machine's border gateway](images/ft-octopus-network.svg)
 
-**In one paragraph.** frontear is an MQTT 5 broker with mesh links. One node is a complete broker for your clients. A
-link joins two nodes and forwards the topics you choose, keeping them on disk until the peer has them. You add, change
-and remove links while the node runs, with signed MQTT messages. comando hosts a node as its message fabric, and you
-can run nodes as plain processes.
+**In one paragraph.** frontear is an MQTT 5 server with links between servers. One node is a complete MQTT 5 server
+for your clients, its *gateway*. A link joins two nodes and forwards the topics you choose, keeping them on disk until
+the peer has them. Nodes joined by links make an *octopus network*. You add, change and remove links while the node
+runs, with signed MQTT messages that alexander, the control plane, checks and applies. comando hosts a node in every
+instance and joins them into one octopus network, and you can run nodes as plain processes.
 
 ## 1. What frontear is
 
-A frontear node has three parts. You reach each one over MQTT.
+A frontear node is a gateway with its links and their logs. You reach every part over MQTT.
 
 | Part | What it does | You use it through |
 |---|---|---|
 | Gateway | Publish and subscribe for clients on `127.0.0.1`: QoS 0 and 1, retained messages, wills, sessions. | Any MQTT 5 client. |
-| Links | Forward chosen topics to and from a peer node. Each link has its own log on disk. | The four control methods (§4). |
-| Control plane | Applies signed requests. Publishes the state of the links and who is connected. | `$frontear/control/…`, `$frontear/state/…`, `$frontear/presence/…` |
+| Links | Forward chosen topics to and from a peer node. Each link has its own log on disk. | The four control methods (§5). |
+| alexander, the control plane | Applies signed requests. Publishes the state of the links. | `$frontear/control/…`, `$frontear/state/…` |
+| Watch | Records what the node does, for whoever looks. It changes nothing. | comando's frontear tab and the MCP tool `frontear_read`. |
 
 > **Learn: publish and subscribe.** In MQTT nobody sends a message to a person. A publisher sends it to a *topic*, a
-> name such as `jobs/1`. A subscriber tells the broker which topics it wants, and may use wildcards: `jobs/#` means
-> everything under `jobs/`. The broker in the middle does the matching, so publishers and subscribers never need to
-> know each other. A frontear node is that broker. A link is a subscriber that carries its matches to the next broker.
+> name such as `jobs/1`. A subscriber tells the server which topics it wants, and may use wildcards: `jobs/#` means
+> everything under `jobs/`. The server in the middle does the matching, so publishers and subscribers never need to
+> know each other. A frontear gateway is that server. A link is a subscriber that carries its matches to the next
+> gateway.
 
 Know these limits before you start:
 
 - A node listens on `127.0.0.1`, without TLS or client authentication: any local process can connect. Inside
-  comando, the node of the instance `main` can also listen on one network address, TLS 1.3 only, for the machines
-  paired with this one (§8.1); nothing else reaches a node from another machine.
-- Only links are on disk: their configuration and their logs. Sessions and retained messages live in memory (§7.3).
-- QoS 2 is not supported (§10).
+  comando, the node of the instance `main`, the *border gateway*, can also listen on one network address, TLS 1.3
+  only, for the machines paired with this one (§9.1); nothing else reaches a node from another machine.
+- Only links are on disk: their configuration and their logs. Sessions and retained messages live in memory (§8.3).
+- QoS 2 is not supported (§11).
 
-## 2. Quick start: one node, one client
+## 2. The components
+
+frontear is eight packages, each one component of a node. This section says what each one is and does. The packages
+and their classes are in [the frontear module page](modules/frontear.md).
+
+| Component | Package | In one line |
+|---|---|---|
+| [The gateway](#21-the-gateway) | `gateway` | The MQTT 5 server of one node. |
+| [Channels](#22-channels-the-topic-tree) | `channels` | Which subscriber a topic reaches. |
+| [The octopus](#23-the-octopus-links-between-gateways) | `octopus` | The links between gateways. |
+| [The store](#24-the-store-link-logs) | `store` | Each link's log on disk. |
+| [alexander](#25-alexander-the-control-plane) | `alexander` | Signed orders that change the links. |
+| [The watch](#26-the-watch) | `watch` | A read-only view of what the node does. |
+| [TLS](#27-tls-between-machines) | `tls` | Pinned, mutual TLS 1.3 between machines. |
+| [The protocol](#28-the-protocol) | `protocol` | MQTT 5 packets as bytes, and a client. |
+
+### 2.1 The gateway
+
+![The gateway: MQTT 5 clients on the loopback, the sessions and retained messages it keeps, the gate it asks, the links and alexander subscribed inside it, and on the border gateway the TLS listener for other machines](images/ft-gateway.svg)
+
+The gateway is the MQTT 5 server each node runs. It accepts connections on `127.0.0.1`, keeps each client's session
+and the retained messages in memory, and hands every publish to the subscribers whose filters match. Some subscribers
+are clients on a TCP connection. Others live inside the node: each link, and alexander. A QoS 1 publish gets its
+PUBACK once every subscriber inside the node that it reached has finished with it, and the PUBACK carries the worst of
+their reason codes. That is how a link makes the publisher wait for the disk (§2.4).
+
+The gateway also says who is connected. It retains `{"online":true}` on `$frontear/presence/<clientId>` while a client
+is connected and clears it when the connection ends (§7.2).
+
+A *gate* decides what each client may do: connect, publish to a topic, subscribe to a filter, retain a message. Topics
+under `$frontear/` belong to the node. alexander installs its gate when the node starts, which opens only
+`$frontear/control/` to clients (§2.5).
+
+The **border gateway** is the gateway of the instance `main`. It alone can also listen on one network address you
+name, never the wildcard address, for the machines paired with this one. That listener speaks TLS 1.3 only, asks every
+client for its certificate (§2.7), and takes at most 64 connections, each with 10 s to finish its handshake. Its gate
+lets another machine connect only as a link and publish only a few named topics (§2.5). Every message that arrives
+over it has its `frontear-origin` user property replaced by `@<machine>`, the machine its certificate names, so a
+receiver knows which machine sent it whatever the sender wrote.
+
+> **Learn: a bound on every queue.** A queue between a fast producer and a slow consumer grows until memory runs out.
+> A bound stops that: past a fixed size the queue says no, and the producer has to wait or give up. Saying no early is
+> better than failing late, because the producer still knows what it sent. MQTT 5 has a reason code for that answer,
+> `0x97`, quota exceeded. The gateway bounds every queue it holds, sessions, queued messages, retained messages,
+> bytes waiting for a slow client, and answers `0x97` or disconnects at the bound (§8.4).
+
+### 2.2 Channels: the topic tree
+
+![The topic tree: filters stored level by level, a topic walking one branch per level, and the matches merged into one per subscriber](images/ft-channels.svg)
+
+Channels answer one question for every publish: which subscribers want this topic? The topic tree stores every filter
+level by level. A publish walks the tree along its topic's levels and collects the subscriptions it meets. A
+subscriber whose filters overlap, say `jobs/#` and `jobs/+`, gets the message once, at the highest QoS among its
+matching filters.
+
+The tree never changes in place. A subscribe or an unsubscribe builds a new tree that shares the unchanged branches,
+then swaps it in with one write. A publish reads the current tree once and takes no lock, so publishing, which is
+frequent, never waits for subscribing, which is rare.
+
+> **Learn: matching a topic against a filter.** A topic is a path of levels separated by `/`, such as
+> `plant/line1/temp`. A filter is a path too, with two wildcards: `+` stands for exactly one level and `#` for all the
+> levels that follow. So `plant/+/temp` matches `plant/line1/temp` but not `plant/line1/motor/temp`, and `plant/#`
+> matches both. Testing every filter against every topic gets slow as filters grow; a tree of levels tests only the
+> branches the topic's levels lead to. frontear's tree also stops at 128 levels, the gateway's bound on a topic.
+
+### 2.3 The octopus: links between gateways
+
+![The octopus: one node's links reaching out to its peers, each with its out filters, its in filters and its hop limit](images/ft-octopus.svg)
+
+The octopus is the set of links of one node, and the links of every node together make the octopus network. A link
+joins this node's gateway to one peer's and has two directions, each with its own topic filters:
+
+- **Out.** The link subscribes inside this gateway to its `out` filters. What matches goes to its log, then to the
+  peer.
+- **In.** The link connects to the peer as the MQTT client `<node>~<id>`, subscribes there to its `in` filters, and
+  publishes on this gateway what arrives.
+
+A link belongs to the node that holds it. alexander adds, changes and removes a node's links through the octopus's
+four operations: put a link, remove one, set the filters of one direction, read the state of all (§5.1). Each link's
+configuration is written to its `link.json` before it takes effect, so a restarted node brings its links back (§8.3).
+
+![The path of one message through a link: publish, match, append to the log and force it, acknowledge, send to the peer, move the cursor, deliver](images/ft-link-path.svg)
+
+How a link carries one message, its order, its retries and its reconnects, is in §6.
+
+> **Learn: a hop limit.** A message passed from hand to hand can come back to where it started and go round forever. A
+> hop count stops it: every hand that passes the message adds one to a number written on it. When the number reaches
+> a limit, the next hand keeps the message instead of passing it on. The limit is the longest path you want a message
+> to travel. Each frontear link adds 1 to the user property `frontear-hops` and does not carry a message that has
+> already crossed `hopLimit` links; No Local stops the shortest loop, a message sent straight back.
+
+### 2.4 The store: link logs
+
+![A link's log: segment files on disk, records appended at the tail, one force for many records, the cursor the peer has reached, and the segments below it deleted](images/ft-store.svg)
+
+Every link has a log of its own, in a folder named by the link's id. The log is a row of segment files; a new segment
+starts at 64 MiB. A message that matches a link's `out` filters is appended at the log's *tail*, and the publisher's
+PUBACK waits until it is forced to disk. The *cursor* marks how far the peer has acknowledged. Once the cursor has
+passed a whole segment, the segment is deleted, so the disk is freed while the link runs.
+
+| Piece | What it does |
+|---|---|
+| Force | One thread per log writes the waiting records and forces them to disk. Records that arrive together share one force, and the link's own thread never waits on the disk. |
+| Cursor | Saved in its own small file, which is replaced whole, so a crash leaves the old cursor or the new one. |
+| Trim | Segments wholly below the saved cursor are deleted. |
+| Quota | A log holds at most 1 GiB. An append past it is refused, and the publisher gets `0x97` (§8.4). |
+| Recovery | At start the log checks every record and cuts off a half-written one (§8.6). |
+
+> **Learn: the write-ahead log.** Memory is fast and forgets everything when the power goes. A disk is slow and
+> remembers. A write-ahead log makes one promise from both: write the fact to the end of a file, force the file to
+> the disk, and only then say "done". Appending to the end is the cheapest write a disk does. Each frontear record
+> also carries a *checksum*, a number computed from its bytes. After a crash the node recomputes it: a half-written
+> record does not match and is cut off.
+
+### 2.5 alexander, the control plane
+
+![The control plane, alexander: signed requests in from the control pod, the seal checked, the links changed through the octopus, the gates on local and remote clients, and the retained link state out](images/ft-alexander.svg)
+
+alexander is the control plane of a node. The gateway and the links carry your messages; alexander decides what they
+carry and to whom, and lets only a holder of a trusted key change that. It has four jobs:
+
+| Job | What it does |
+|---|---|
+| Decides | Applies `PutLink`, `SetFilters`, `RemoveLink` and `GetState` (§5.1) to the node's links, through the octopus. A request that cannot be applied is refused as `failed`, and nothing changes. |
+| Checks | Accepts a request only when its *seal* holds: a trusted key signed it, its time is within 30 s of the node's clock and not before the node started, the signature verifies, and its nonce has not been used. A failed check is a *refusal*, with its name in the reply and its code in the PUBACK (§10.1). The `Signer` makes such a seal for a pod (§5.5). |
+| Gates | On the loopback, lets clients publish anything outside `$frontear/` and, under it, only to `$frontear/control/`; they may subscribe to anything. On the border gateway's listener, lets another machine connect only as a link client `<slug>~<node>`, publish only its own instances' presences and this machine's instances' `inbox` and `reply` topics, and subscribe to nothing. |
+| Publishes | Retains the state of every link on `$frontear/state/<node>/links`, when it changed and at most once a second (§7.1). |
+
+alexander handles one request at a time, on one strand of its own, `frontear-control-<node>`. Requests wait for it in
+a bounded queue: 1,000 requests and 16 MiB, and a quarter of each for one client, so one client cannot crowd out
+another. A request past the bound is refused as `busy` without a reply. Each request then goes through the steps of
+the picture below: the seal is checked, the body read, the change applied and forced to disk, the reply sent and the
+state published.
+
+![The control flow: the pod writes, signs and publishes a request; the node checks it in a fixed order, applies it, replies and publishes its state](images/ft-control-flow.svg)
+
+The seal checks the nonce last. A message that fails an earlier check therefore cannot use up the nonce of a genuine
+request. A machine across the border gateway may keep at most 64 retained presences on this node at a time; an empty
+retained message clears one.
+
+> **Learn: control plane and data plane.** A road network carries two kinds of traffic: the cars, and the crews that
+> repaint the lanes and change the signs. Networks split their work the same way. The *data plane* carries the
+> messages and must be fast. The *control plane* decides where messages go and must be careful, because one wrong
+> order reroutes everything. In frontear the gateway, the links and their logs are the data plane, and alexander is
+> the control plane: its orders arrive as MQTT messages like any other, but on their own topics, on their own strand,
+> and only with a valid signature.
+
+### 2.6 The watch
+
+![The watch: the gateway, the links and the logs writing events into a ring, and the frontear tab and frontear_read reading it without slowing them](images/ft-watch.svg)
+
+The watch records what a node does, for whoever looks: each message the gateway routes, each step of a link (a message
+appended, sent, arrived or dropped; a connection made or lost) and each force of a log. It also gives a snapshot of
+the node: its counters, its connected clients, its links and their logs. The watch is read-only: nothing in it
+changes the node.
+
+The watch is off until someone turns it on, and while off it costs one memory read per event. While on, it never
+locks and never waits. A message's correlation data is kept up to 16 bytes and its payload up to 8 KiB. In comando,
+the [frontear tab](workbench.md#44-the-frontear-tab) and the MCP tool `frontear_read` read it: comando reads the events
+every 250 ms and the snapshot every second. `frontear_read` has four views, `overview`, `traffic`, `octopus` and
+`store`; `traffic` lists the messages seen, at most 2,000 per call, and shows a payload only when you ask for it.
+
+> **Learn: a ring buffer.** A ring buffer is a row of slots whose end joins its start, like the seats of a carousel.
+> A writer puts each new event in the next slot; after the last slot it starts again at the first, over the oldest
+> event. A reader keeps its own place and reads the slots it has not seen yet. A reader that falls a whole turn
+> behind has lost the oldest events, and is told how many. frontear's watch is such a ring of 16,384 slots in a
+> node: a slow screen loses events and counts them as `missed`, and the messages never slow down for it.
+
+### 2.7 TLS between machines
+
+![TLS between machines: two border gateways, each with its machine key and self-signed certificate, both showing their certificate in a TLS 1.3 handshake and each trusting only the key fingerprints it has pinned](images/ft-tls.svg)
+
+TLS protects the connections between the border gateways of two machines paired with each other (§9.1). In
+comando nothing on the loopback uses it. Each machine has one Ed25519 key and a certificate it signed itself, for
+the name of the machine, valid 20 years, in `~/.comando-machine/` (`machine.key` and `machine.crt`), readable by their owner only.
+The key's *fingerprint*, the SHA-256 of its public half written as 64 hex digits, names it; pairing two machines
+means each one pins the other's fingerprint.
+
+| Rule | What frontear does |
+|---|---|
+| Protocol | TLS 1.3 only. |
+| Both sides | The client shows its certificate as well as the server, and each side checks the other's. |
+| Trust | A peer is trusted exactly when the key in its certificate is pinned. No certificate authority, no validity dates, no host name. |
+| No resumption | Every connection makes a full handshake, so a machine unpaired is refused at its next connection. |
+| Pins | The set of pinned fingerprints is replaced whole when the pairings change; a handshake sees the set before a change or after it, never half of each. |
+
+> **Learn: mutual TLS and pinning.** TLS wraps a connection so nobody between the two ends can read or change it. In
+> the handshake a server shows a certificate, a signed statement of its public key, and usually a certificate
+> authority vouches for it. In *mutual* TLS the client shows one too, so both ends know whom they talk to. *Pinning*
+> skips the authority: each end keeps the exact key it expects and refuses any other, even one an authority signed.
+> frontear pins: you compare two fingerprints once, when you pair the machines, and from then on only those two keys
+> are let in.
+
+### 2.8 The protocol
+
+![The protocol: an MQTT 5 packet as bytes, its type, its length as a variable byte integer and its body, read and written by the codec, and frontear's client on top](images/ft-protocol.svg)
+
+The protocol component turns MQTT 5 packets into bytes and back, for the gateway and for frontear's own MQTT 5 client.
+Every packet type is one record. The codec refuses what frontear declines: a protocol level other than 5, a user name
+or password, enhanced authentication, topic aliases and subscription identifiers (§11). It also says which topic names
+and filters are valid, and names what frontear reserves: the `$frontear/` topics and the user property
+`frontear-origin`.
+
+The client connects to one MQTT 5 server, over TLS 1.3 when it is given a TLS context. It has 10 s to connect and
+10 s for each write, and holds at most 1,000 messages waiting to go out. Links use it to reach their peers, and
+comando's instances use it to reach their nodes. A link's log stores each message as the PUBLISH packet MQTT 5 writes,
+so any MQTT tool can read a record.
+
+> **Learn: framing.** TCP delivers a stream of bytes with no gaps between messages, like one long ribbon of letters.
+> To find where one packet ends and the next begins, each MQTT packet starts with its type and its length. A reader
+> takes the length first, then exactly that many bytes. MQTT writes the length as a *variable byte integer*: seven
+> bits per byte, the eighth saying that another byte follows, so a small length takes one byte and the largest,
+> 268,435,455, takes four. frontear reads and writes these integers in one place, and refuses a packet whose
+> length breaks the rule as malformed.
+
+## 3. Quick start: one node, one client
 
 You need JDK 25, OpenSSL 3 or later, and an MQTT 5 client that can set user properties. The examples use the
 Mosquitto clients, `mosquitto_pub` and `mosquitto_sub`. The `openssl` that ships with macOS is LibreSSL and may lack
@@ -78,14 +296,14 @@ mosquitto_sub -V 5 -h 127.0.0.1 -p 1883 -t 'hello/#' -v
 mosquitto_pub -V 5 -h 127.0.0.1 -p 1883 -q 1 -t hello/world -m 'first message'
 ```
 
-The subscriber prints `hello/world first message`. You have a working MQTT 5 broker.
+The subscriber prints `hello/world first message`. You have a working MQTT 5 gateway.
 
-## 3. A mesh, step by step
+## 4. An octopus network, step by step
 
-A mesh is several nodes joined by links. You build it one link at a time, and each link belongs to one node. This
-walk builds the mesh of the picture above: `a` links to `b`, then `b` links to `c`.
+An octopus network is several nodes joined by links. You build it one link at a time, and each link belongs to one
+node. This walk builds the network of the picture at the top: `a` links to `b`, then `b` links to `c`.
 
-**1. Save the two helper scripts.** `ftsign` signs a request (§4.2 explains the bytes). `ftctl` publishes it.
+**1. Save the two helper scripts.** `ftsign` signs a request (§5.2 explains the bytes). `ftctl` publishes it.
 
 ```sh
 #!/bin/sh
@@ -137,7 +355,7 @@ java -cp "$CP" dev.marregui.comando.frontear.Frontear b 1884 data-b pod.pub
 java -cp "$CP" dev.marregui.comando.frontear.Frontear c 1885 data-c pod.pub
 ```
 
-All three trust the same `pod.pub`, so one private key configures the whole mesh.
+All three trust the same `pod.pub`, so one private key configures the whole network.
 
 **3. Watch node a.** One terminal for the replies, one for the link state:
 
@@ -191,39 +409,39 @@ Its state shows them waiting, for example:
 {"links":[{"id":"b","connected":false,"queued":3,"cursor":2,"tail":5,"sent":2,"dropped":0,"reordered":0}]}
 ```
 
-Start `b` again. It brings back its links from its data folder (§7.3), so you send nothing. Node `a`
+Start `b` again. It brings back its links from its data folder (§8.3), so you send nothing. Node `a`
 reconnects by itself and its state returns to `"connected":true,"queued":0`. The three jobs are on `b`.
 
-## 4. Configuring links with signed control messages
+## 5. Configuring links with signed control messages
 
-![The control flow: the pod writes, signs and publishes a request; the node checks it in a fixed order, applies it, replies and publishes its state](images/ft-control-flow.svg)
+A control request is an ordinary MQTT publish with a signature on it, and alexander is the part of the node that
+checks and applies it (§2.5). Whoever holds a trusted private key is the *control pod* and can change the links.
+Everyone else is refused.
 
-A control request is an ordinary MQTT publish with a signature on it. Whoever holds a trusted private key is the
-*control pod* and can change the links. Everyone else is refused.
-
-### 4.1 The request
+### 5.1 The request
 
 Publish at QoS 1 to `$frontear/control/<node>/<Method>`. The payload is a JSON object, and the content type must be
 `application/json`. Set a response topic to get a reply.
 
 | Method | Body | Effect |
 |---|---|---|
-| `PutLink` | `{"id","host","port","out","in","hopLimit"}` | Adds the link, or updates the link with the same id. |
+| `PutLink` | `{"id","host","port","out","in","hopLimit"}`, and `"tls"` if the link uses TLS | Adds the link, or updates the link with the same id. |
 | `SetFilters` | `{"id","direction","filters"}` | Replaces all the filters of one direction, `"OUT"` or `"IN"`. |
 | `RemoveLink` | `{"id"}` | Removes the link and keeps its log. |
-| `GetState` | `{}` | Replies with the state of every link (§6.1). |
+| `GetState` | `{}` | Replies with the state of every link (§7.1). |
 
-Every property is required, and an unknown property is refused: a node never applies half a request.
+Every property but `tls` is required, and an unknown property is refused: a node never applies half a request.
 
 | Property | Rule |
 |---|---|
-| `id` | 1 to 64 characters from `A-Z a-z 0-9 . _ -`, and not `.` or `..`. It names the link's log folder. |
+| `id` | 1 to 64 characters from `A-Z a-z 0-9 . _ @ -`, and not `.` or `..`. It names the link's log folder. |
 | `host`, `port` | Where the peer listens. `port` is 1 to 65535. |
 | `out` | Topic filters. A message published on this node that matches one goes to the peer. |
 | `in` | Topic filters. The link subscribes to them on the peer and publishes what arrives on this node. |
 | `hopLimit` | At least 1. The link does not carry a message that has already crossed this many links. |
+| `tls` | Optional, `false` when absent. `true` makes the link connect over TLS 1.3 with the TLS context its host gives it (§2.7). A node run from the command line has none, so such a link stays down. |
 
-### 4.2 The signature
+### 5.2 The signature
 
 > **Learn: a digital signature.** A key pair is two numbers made together: a private key you keep and a public key
 > you hand out. Signing mixes a message with the private key and gives a short code. Anyone with the public key can
@@ -256,9 +474,9 @@ when the key is trusted, the signature verifies and the two freshness rules belo
 
 Nonces live in memory. A node therefore also refuses any request signed before it started.
 
-### 4.3 A worked example of each method
+### 5.3 A worked example of each method
 
-Each command uses `ftctl` from §3. The reply arrives on `reply/pod`.
+Each command uses `ftctl` from §4. The reply arrives on `reply/pod`.
 
 | Step | Command | Reply |
 |---|---|---|
@@ -274,19 +492,19 @@ Good to know:
 - `RemoveLink` of an id that does not exist succeeds. A later `PutLink` with the same id resumes the kept log.
 - A request is applied at most once. A resent copy carries a used nonce and is refused as `replayed`.
 
-### 4.4 Replies
+### 5.4 Replies
 
 | Outcome | PUBACK | Reply on the response topic |
 |---|---|---|
 | Applied | `0x00` | `{"ok":true}` |
 | `GetState` | `0x00` | `{"ok":true,"links":[…]}` |
-| Refused | The refusal's code (§9.1) | `{"ok":false,"reason":"<code>","detail":"<text>"}` |
+| Refused | The refusal's code (§10.1) | `{"ok":false,"reason":"<code>","detail":"<text>"}` |
 
 The reply is sent at QoS 1 with your correlation data unchanged. A response topic under `$frontear/` gets no reply.
 
-### 4.5 From Java
+### 5.5 From Java
 
-`Signer` builds the signed message. This example reads the key files of §2:
+`Signer` builds the signed message. This example reads the key files of §3:
 
 ```java
 KeyFactory keys = KeyFactory.getInstance("Ed25519");
@@ -302,20 +520,13 @@ Packet.Publish request = signer.sign("$frontear/control/a/GetState",
 
 `Signer` is in `dev.marregui.comando.frontear.alexander`, `Packet` in `dev.marregui.comando.frontear.protocol`. Publish
 `request` with any MQTT 5 client. frontear's own `MqttClient.publishAcknowledged(request)` completes with the PUBACK's
-reason code, `0` for an applied request.
+reason code, `0` for an applied request. One `Signer` may be shared by several threads.
 
-## 5. How a link carries a message
+## 6. How a link carries a message
 
-![The path of one message through a link: publish, match, append to the log and force it, acknowledge, send to the peer, move the cursor, deliver](images/ft-link-path.svg)
-
-A link is a subscriber inside the node that writes what it receives to a file, then sends it on. The publisher's
-PUBACK waits for the file. A message the node has acknowledged therefore survives a crash of the node.
-
-> **Learn: the write-ahead log.** Memory is fast and forgets everything when the power goes. A disk is slow and
-> remembers. A write-ahead log makes one promise from both: write the fact to the end of a file, force the file to
-> the disk, and only then say "done". Appending to the end is the cheapest write a disk does. Each frontear record
-> also carries a *checksum*, a number computed from its bytes. After a crash the node recomputes it: a half-written
-> record does not match and is cut off.
+A link is a subscriber inside the gateway that writes what it receives to its log (§2.4), then sends it on. The
+publisher's PUBACK waits for the log. A message the node has acknowledged therefore survives a crash of the node. The
+picture of §2.3 shows the path.
 
 | Aspect | What frontear does |
 |---|---|
@@ -332,13 +543,14 @@ PUBACK waits for the file. A message the node has acknowledged therefore survive
 > After a reconnect or a restart, everything after the saved cursor goes out a second time. Design your receivers to
 > tolerate a repeat, for example by remembering the correlation data of what they have handled.
 
-## 6. Monitoring
+## 7. Monitoring
 
-A node reports on itself over MQTT. Any client may subscribe to these topics; only the node publishes them.
+A node reports on itself over MQTT. Any client may subscribe to these topics; only the node publishes them. Inside
+comando, the watch (§2.6) shows the same and more in the frontear tab.
 
-### 6.1 Link state
+### 7.1 Link state
 
-`$frontear/state/<node>/links` is a retained message. The node publishes it when a link changes, at most once a
+`$frontear/state/<node>/links` is a retained message. alexander publishes it when a link changes, at most once a
 second.
 
 ```json
@@ -366,13 +578,13 @@ link.
 | `dropped` rising | Messages reach the hop limit, expire in the log, or the peer refuses them for good; or the peer sends messages outside the link's `in` filters. | Compare `hopLimit` with the links a message crosses. Check message expiry. Compare the topics the peer sends with the link's `in` filters. |
 | `reordered` rising | The peer is full for moments. | Nothing, unless your receivers need strict order. |
 
-### 6.2 Presence
+### 7.2 Presence
 
 `$frontear/presence/<clientId>` holds the retained message `{"online":true}` while that client is connected. The
-node clears it when the connection ends. Subscribe to `$frontear/presence/#` to see every client, links included: the
-link of step 4 appears on node `b` as `$frontear/presence/a~b`.
+gateway clears it when the connection ends. Subscribe to `$frontear/presence/#` to see every client, links included:
+the link of step 4 appears on node `b` as `$frontear/presence/a~b`.
 
-### 6.3 The node's log
+### 7.3 The node's log
 
 The node logs to standard error. These lines matter most:
 
@@ -382,13 +594,13 @@ The node logs to standard error. These lines matter most:
 | `link disconnected […]` | The connection to the peer ended. The link retries. |
 | `link restored [link=…, host=…, port=…, file=…]` | At start, the node brought back a link from its `link.json`. |
 | `link not restored, it stays down until a put replaces its spec […]` | At start, a `link.json` could not be read or held a value out of range. |
-| `applied control request [node=…, method=…, key=…, nonce=…, origin=…]` | A signed request changed the node. `origin` is the client id. |
-| `refused control message [reason=…, detail=…, topic=…, origin=…]` | The node refused a request. Logged at most once a minute. |
+| `applied control request [node=…, method=…, key=…, nonce=…, origin=…]` | alexander applied a signed request. `origin` is the client id. |
+| `refused control message [reason=…, detail=…, topic=…, origin=…]` | alexander refused a request. Logged at most once a minute. |
 | `cut torn tail off log segment […]` | Recovery removed a half-written record after a crash. |
 
-## 7. Operations
+## 8. Operations
 
-### 7.1 The data folder
+### 8.1 The data folder
 
 ```
 data-a/
@@ -402,27 +614,27 @@ Links share nothing: each has its own folder, its own log and its own bounds. A 
 the peer acknowledges, the node saves the cursor and then deletes the segments that lie wholly below it. The
 disk is freed while the link runs. A segment that a crash left below the cursor goes when the log opens.
 
-### 7.2 Durability
+### 8.2 Durability
 
 | Event | What you keep |
 |---|---|
 | The node acknowledged a QoS 1 publish that matches a link | The message is on disk. It goes to the peer as soon as the link runs, after a crash too. |
 | The node crashes before the PUBACK | The publisher has no acknowledgement and sends again. |
-| The peer is down | Messages wait in the log, in order, up to the log's bound (§7.4). |
-| The node crashes after sending, before saving the cursor | The messages after the saved cursor go out again (§5, at least once). |
+| The peer is down | Messages wait in the log, in order, up to the log's bound (§8.4). |
+| The node crashes after sending, before saving the cursor | The messages after the saved cursor go out again (§6, at least once). |
 
 Publishes that arrive together share one force to disk.
 
-### 7.3 Restarts
+### 8.3 Restarts
 
-Stop a node with a termination signal, Ctrl-C included. It stops taking control messages, closes the broker, then
-closes the links, whose logs force their last records. The close has 10 s.
+Stop a node with a termination signal, Ctrl-C included. It stops alexander, closes the gateway, then closes the
+links, whose logs force their last records. The close has 10 s.
 
 A restarted node brings back its links and starts empty of everything else:
 
 | Lives in memory, gone after a restart | Lives on disk, kept |
 |---|---|
-| Client sessions and subscriptions | Each link's configuration: id, peer, filters, hop limit (`link.json`) |
+| Client sessions and subscriptions | Each link's configuration: id, peer, filters, hop limit, TLS (`link.json`) |
 | Retained messages | Each link's log and cursor |
 | Remembered nonces and all counters | |
 
@@ -439,16 +651,16 @@ After every start:
 1. Let clients reconnect and subscribe again.
 2. Sign requests after the node is up. A request signed earlier is refused as `stale`.
 
-The links start before the node takes control requests, but the broker already listens: a message that reaches it in
-the moment before a link starts goes to the node's own subscribers only, and is not forwarded later.
+The links start before alexander takes control requests, but the gateway already listens: a message that reaches it
+in the moment before a link starts goes to the node's own subscribers only, and is not forwarded later.
 
-### 7.4 Bounds, and what to do at each
+### 8.4 Bounds, and what to do at each
 
 Every queue in frontear has a limit, so a slow peer or a flooding client cannot exhaust the node.
 
 | Bound | Limit | When you hit it | What to do |
 |---|---|---|---|
-| A link's log on disk | 1 GiB | Publishers of matching QoS 1 messages get PUBACK `0x97`. | Bring the peer back. Or discard the backlog (§7.5). |
+| A link's log on disk | 1 GiB | Publishers of matching QoS 1 messages get PUBACK `0x97`. | Bring the peer back. Or discard the backlog (§8.5). |
 | Messages a link has not yet logged | 1,000 messages, and 8 MiB waiting for the disk | QoS 1 gets `0x97`. QoS 0 is dropped and counted in `dropped`. | Publish slower and retry on `0x97`. |
 | Messages in flight to a peer | The peer's Receive Maximum, at most 1,000 | The link waits for acknowledgements. | Nothing. |
 | Unacknowledged QoS 1 publishes from a client | 1,024 | The client is disconnected with `0x93`. | Honour the Receive Maximum of the CONNACK. |
@@ -462,7 +674,7 @@ Every queue in frontear has a limit, so a slow peer or a flooding client cannot 
 | Control requests waiting | 1,000 and 16 MiB, a quarter of each per client | `busy`, PUBACK `0x97`, no reply. | Wait and send a newly signed request. |
 | Nonces remembered | 10,000 in 30 s | `busy`, PUBACK `0x97`, with a reply. | Send fewer control requests. |
 
-### 7.5 Discard a link's backlog
+### 8.5 Discard a link's backlog
 
 To drop everything a link still holds for its peer:
 
@@ -470,7 +682,7 @@ To drop everything a link still holds for its peer:
 2. Delete the link's folder, `<dataDir>/<id>/`.
 3. Send `PutLink` again. The link starts an empty log at offset 0.
 
-### 7.6 Recovery after a crash
+### 8.6 Recovery after a crash
 
 When a link starts, its log checks itself before it takes a message. You do nothing.
 
@@ -481,27 +693,29 @@ When a link starts, its log checks itself before it takes a message. You do noth
 
 The file format is in [the frontear module page](modules/frontear.md).
 
-## 8. frontear inside comando
+## 9. frontear inside comando
 
-Every comando instance hosts a frontear node of its own, and the nodes are linked; it is the only broker comando has
-([record 185](adr/0185-frontear-is-the-only-fabric.md), [record 187](adr/0187-frontear-lab-node-per-instance.md)).
+Every comando instance hosts a frontear node of its own, and the nodes are linked into one octopus network; it is the
+only MQTT 5 server comando has ([record 185](adr/0185-frontear-is-the-only-octopus-network.md) and
+[record 187](adr/0187-frontear-lab-node-per-instance.md)).
 
 | Fact | Value |
 |---|---|
 | When | At launch, and at each later look (every 5 s) while it is down, unless stopped by hand. `-Dcomando.peers=false` keeps an instance off the others: its node runs on a port the OS picks, with a registry in its data folder. |
 | Node name | The instance's id, `main` for the main instance. Control topics are `$frontear/control/<id>/<Method>`. A link client named `<other>~<name>` is refused unless `<name>` is this node's. Until comando's own client of the node has its subscriptions acknowledged, every link client is refused with `0x88` (Server unavailable); the link tries again after the first wait, at most 1 s later. Each start of the node counts as a new one: an acknowledgement for the subscriptions made against an earlier start, the same port included, lets no link in. |
 | Address | `127.0.0.1`, the lowest port from 18883 up that is free and no other instance holds; the instance keeps it from then on. |
-| Data folder | `fabric/` in the instance's data folder. |
-| Control keys | `pod.key` and `pod.pub` in `fabric/`, made at the first start. `pod.key` is readable by its owner only. |
+| Data folder | The node's folder in the instance's data folder, `fabric/` (the name is kept for compatibility). |
+| Control keys | `pod.key` and `pod.pub` in the node's folder, made at the first start. `pod.key` is readable by its owner only. |
 | How many | One node per instance. Each instance's client connects to its own node only. |
-| Links | At each look comando puts a link to every other node in the registry, with id the other instance's id: out that instance's `inbox` and `reply` topics and this one's `presence`, nothing in, hop limit 1. It removes a link whose id is not in the registry, so a link you add by hand lasts until the next look. A link to an instance first seen present is put at once, and checked before each question to it, so a question asked in its first seconds is not lost. A link to a node that is down queues until it starts again, and drains once that node lets the links in. |
+| Links | At each look comando puts a link to every other node in the registry, with id the other instance's id: out that instance's `inbox` and `reply` topics and this one's `presence`, nothing in, hop limit 1. While a machine is paired, the border gateway's links to the instances have hop limit 3 and its link to each paired machine hop limit 2, and every link to or from the border gateway carries the paired machines' topics too ([§9.1](#91-other-machines)). It removes a link whose id is not in the registry, so a link you add by hand lasts until the next look. A link to an instance first seen present is put at once, and checked before each question to it, so a question asked in its first seconds is not lost. A link to a node that is down queues until it starts again, and drains once that node lets the links in. |
+| Control replies | comando's own control requests ask for their reply under `comando/v1/local/fabric/` (the prefix is kept for compatibility), a topic no link's filter covers. |
 | Start and stop | The window's frontear toggle, or an agent's `server_start frontear` and `server_stop frontear`, for this instance's node. The other nodes keep running. |
-| Registry | `~/.comando-fabric.json`, version 2: every instance's node by id, with its port, its process while it runs and 0 once down, its start, its name and its data folder. A file of version 1 is replaced. |
+| Registry | One file per machine that lists every instance's node by id, with its port, its process while it runs and 0 once down, its start, its name and its data folder; version 2, and a file of version 1 is replaced. Its name, `~/.comando-fabric.json`, and its lock's, the same with `.lock` added, are kept for compatibility. |
 
 comando makes the key pair, gives the node its public key and signs its own control requests with it. `pod.pub`
-has the form of §2. `pod.key` is the private key as one line, the base64 of its PKCS#8 encoding. `ftsign` takes a
-PEM file, so wrap that line first. Run this in the `fabric/` folder of the instance `main`, its node on the port the
-toggle's tooltip names (18883 here), with `ftsign` and `ftctl` of §3 beside you:
+has the form of §3. `pod.key` is the private key as one line, the base64 of its PKCS#8 encoding. `ftsign` takes a
+PEM file, so wrap that line first. Run this in the node's folder of the instance `main`, its node on the port the
+toggle's tooltip names (18883 here), with `ftsign` and `ftctl` of §4 beside you:
 
 ```sh
 umask 077
@@ -509,7 +723,7 @@ umask 077
 ./ftctl 18883 comando.pem main GetState '{}'
 ```
 
-`umask 077` keeps `comando.pem` readable by you alone. Every method of §4 then works the same way, for example
+`umask 077` keeps `comando.pem` readable by you alone. Every method of §5 then works the same way, for example
 `./ftctl 18883 comando.pem main GetState '{}'` to read each link's `connected`, `queued` and `sent`.
 
 | Message | Meaning |
@@ -521,9 +735,9 @@ umask 077
 | `Cannot read the frontear registry; remove it if no frontear runs [registry=…, cause=…]` | The registry does not read, or a newer comando wrote it. |
 | `not an Ed25519 key pair; remove both files to make a new one` | `pod.key` and `pod.pub` do not read as a pair. Remove both and start again. |
 
-### 8.1 Other machines
+### 9.1 Other machines
 
-Instances on two machines of yours talk through one gateway per machine, the node of its instance `main`
+Instances on two machines of yours talk through one border gateway per machine, the node of its instance `main`
 ([record 189](adr/0189-frontear-across-machines.md)). Nothing listens on the network until you pair a machine and name
 the address to listen on.
 
@@ -531,7 +745,8 @@ the address to listen on.
 |---|---|
 | Pairing | The Machines window (Instances tab menu, or the palette's "Machines…"), or the MCP tool `machines`. Each machine shows its token, `comando-pair:1:<machine>:<host>:<port>:<fingerprint>`; paste the other machine's token on each side and compare the fingerprint it shows with the one the other machine shows. A pairing grants `peer` (the default) or `overseer`. |
 | Listen address | One address of this machine you name, a Tailscale or LAN one; never the wildcard. Port 18893 unless set. Clear the address to stop listening. |
-| Security | TLS 1.3 only, both sides authenticated by their Ed25519 key, pinned by fingerprint; no TLS session is resumed, so a machine unpaired is refused at its next connection. A remote connection may publish only to the inboxes and replies of this machine's instances and to its own machine's presences; it subscribes to nothing. |
+| Path | A question goes from the asker's node to its machine's border gateway, across to the other machine's border gateway, and on to the node asked; nothing goes further. Each border gateway keeps one link over TLS to each paired machine's. |
+| Security | TLS 1.3 only, both sides authenticated by their Ed25519 key, pinned by fingerprint (§2.7); no TLS session is resumed, so a machine unpaired is refused at its next connection. A remote connection may publish only to the inboxes and replies of this machine's instances and to its own machine's presences; it subscribes to nothing (§2.5). |
 | Names | An instance on another machine is `<slug>@<machine>`: `instance_ask main@laptop2`. A bare slug names this machine's instance first. |
 | Authority | A question from another machine is headed `[from instance <slug>@<machine> · peer]`, and its consult session runs in plan mode. With the grant `overseer`, `main@<machine>` is the overseer here too and its session runs as a local one. |
 | What the other machine sees | Each instance's name, version, role, whether it is busy, and its sessions' names. Folders, branches, prompts and replies stay here. |
@@ -539,47 +754,48 @@ the address to listen on.
 | Limits | Per other machine: 64 instances kept, 8 consult sessions; a question that would open a ninth is refused with a reply saying so. |
 | Reachability | A machine whose `main` is not running is unreachable from the others. A question to it waits in the link's log until its asker stops waiting; presences expire after 30 s. |
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
-### 9.1 A control request is refused
+### 10.1 A control request is refused
 
 Read the `reason` in the reply, or the reason code in the PUBACK.
 
 | `reason` | PUBACK | Cause | Fix |
 |---|---|---|---|
 | `unsigned` | `0x87` | One of the four signature properties is missing. | Send all four as user properties. |
-| `malformed` | `0x87` | A property repeats or does not read: ts not decimal, nonce not 32 lower-case hex digits, bad base64. | Format each value as in §4.2. |
+| `malformed` | `0x87` | A property repeats or does not read: ts not decimal, nonce not 32 lower-case hex digits, bad base64. | Format each value as in §5.2. |
 | `unknown-key` | `0x87` | The key id names no key the node trusts. | Start the node with this key's public file, or sign with a trusted key. |
 | `stale` | `0x87` | The ts is over 30 s from the node's clock, or earlier than the node's start. | Sign right before sending. Synchronize the clocks. |
 | `bad-signature` | `0x87` | The signed bytes differ from the published message. | Sign the exact topic, content type, response topic and payload you publish. |
 | `replayed` | `0x87` | The nonce is already used. | Sign every request anew. Never resend a signed copy. |
 | `busy` | `0x97` | Too many requests are waiting: no reply is sent. Or too many nonces are remembered: the reply says `busy`. | Wait, then send a newly signed request. |
 | `unknown-method` | `0x90` | The last topic level names no method. | Use `PutLink`, `SetFilters`, `RemoveLink` or `GetState`, spelled exactly. |
-| `bad-request` | `0x99` | The body is not the method's JSON object, or the content type is not `application/json`. | Send every property of §4.1 and no other. The `detail` names the problem. |
+| `bad-request` | `0x99` | The body is not the method's JSON object, or the content type is not `application/json`. | Send the properties of §5.1 and no other. The `detail` names the problem. |
 | `failed` | `0x83` | The node cannot apply the change, for example `no such link [link=…]` on `SetFilters`. | Read the `detail`. Create the link with `PutLink` first. |
 
-### 9.2 Other symptoms
+### 10.2 Other symptoms
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | The node prints its usage and exits with code 2 | Fewer than four arguments. | Pass node, port, data folder and at least one key file. |
-| `not an Ed25519 public key [file=…]` at start | The key file is not the base64 of an X.509 public key, for example a PEM file. | Make `pod.pub` with the command of §2. |
+| `not an Ed25519 public key [file=…]` at start | The key file is not the base64 of an X.509 public key, for example a PEM file. | Make `pod.pub` with the command of §3. |
 | A publish under `$frontear/` gets PUBACK `0x87` | Clients may publish there only to `$frontear/control/`. | Use another topic. |
 | A publish gets PUBACK `0x10` | No subscriber matches. This is a success code. | Nothing, or start the subscriber first. |
-| A publish gets PUBACK `0x97` | A matching link's log or queue is full. | See §7.4. |
+| A publish gets PUBACK `0x97` | A matching link's log or queue is full. | See §8.4. |
 | The connection ends with `0x9B` after a publish | The publish used QoS 2. | Publish at QoS 0 or 1. |
 | SUBSCRIBE is refused with `0x9E` | The filter starts with `$share/`. | Subscribe without a shared subscription. |
 | CONNECT is refused with `0x85` | The client id starts with `$`. | Choose another client id. |
 | A client is disconnected with `0x8E` | Another client connected with the same client id. | Give each client its own id. |
 | A client is disconnected with `0x8B` | The node is shutting down. | Reconnect when it serves again. |
 | A link stays at `connected:false` | The peer is not reachable at `host` and `port`. | Start the peer, or send `PutLink` with the right address. |
+| A link with `"tls":true` stays down on a node run from the command line | That node has no TLS context to give the link. | Leave `tls` out on the loopback; TLS links are the border gateways' (§9.1). |
 | A link is connected and nothing arrives | No `out` filter matches, the hop limit stops the message, or on the receiving side the topic is outside the `in` filters. | Publish a test message and read the state. `tail` rises when a filter matches, `dropped` when the hop limit stops it or the receiving link's `in` filters do not cover it. |
-| A link is missing after a restart | Its `link.json` could not be read (`link not restored […]` in the log). | Send `PutLink` for it (§7.3). |
+| A link is missing after a restart | Its `link.json` could not be read (`link not restored […]` in the log). | Send `PutLink` for it (§8.3). |
 | Every request is `stale` right after a restart | The signer's clock runs behind the node's. | Wait that long, or synchronize the clocks. |
 
-## 10. MQTT 5 support
+## 11. MQTT 5 support
 
-A frontear node is a standard MQTT 5 broker. It announces what it declines in the CONNACK, as the specification
+A frontear gateway is a standard MQTT 5 server. It announces what it declines in the CONNACK, as the specification
 allows.
 
 | Feature | Support |
@@ -601,16 +817,17 @@ allows.
 | Subscription identifiers | No. |
 | Shared subscriptions | No. |
 | Enhanced authentication, user name and password | No. |
-| TLS, WebSocket | No. Plain TCP on loopback. |
+| TLS | Only on the border gateway's listener for other machines, TLS 1.3 with pinned keys (§2.7). The loopback listener is plain TCP. |
+| WebSocket | No. |
 
 Topics under `$frontear/` are reserved for the node. Clients may subscribe to them and may publish only control
 requests.
 
-## 11. FAQ
+## 12. FAQ
 
-**Can a client on another machine connect?** Only another comando paired with this one, through the gateway of §8.1:
-a TLS 1.3 connection whose certificate's key is pinned, with a link's client id, that may publish to the inboxes,
-replies and presences ADR 0189 lists and subscribe to nothing. Any other client on another machine cannot.
+**Can a client on another machine connect?** Only another comando paired with this one, through the border gateway of
+§9.1: a TLS 1.3 connection whose certificate's key is pinned, with a link's client id, that may publish to the
+inboxes, replies and presences record 189 lists and subscribe to nothing. Any other client on another machine cannot.
 
 **Who may change the links?** Whoever can sign with a trusted private key. The node reads its trusted keys at start.
 To add or replace a key, restart the node with the new list of key files.
@@ -618,32 +835,33 @@ To add or replace a key, restart the node with the new list of key files.
 **Are control requests secret?** No. They are signed, not encrypted, and any local client can subscribe to
 `$frontear/control/#`. Never put a secret in a request.
 
-**Can a message arrive twice?** Yes, over a link, after a reconnect or a restart (§5). Make receivers tolerate a
+**Can a message arrive twice?** Yes, over a link, after a reconnect or a restart (§6). Make receivers tolerate a
 repeat.
 
 **Can a message get lost?** Not on a running link, once the node has acknowledged it at QoS 1. Two exceptions: the
-cases counted in `dropped` (§6.1), and a node whose links are not yet restored (§7.3). A QoS 0 message has no
+cases counted in `dropped` (§7.1), and a node whose links are not yet restored (§8.3). A QoS 0 message has no
 acknowledgement and can be lost.
 
 **Does a link survive a restart?** Yes. Its configuration and its log are both on disk, and it drains its
-backlog once its peer answers (§7.3).
+backlog once its peer answers (§8.3).
 
 **Does a subscriber get what a link delivered during its absence?** Only through a session that is still alive on the
 node. A node restart ends every session.
 
-**What stops a message from circling a mesh forever?** No Local, plus the hop count. Set `hopLimit` to the longest
-path you want a message to travel.
+**What stops a message from circling an octopus network forever?** No Local, plus the hop count (§2.3). Set
+`hopLimit` to the longest path you want a message to travel.
 
 **Can several links carry the same message?** Yes. Each link whose `out` filters match logs its own copy.
 
-**How do I see who is connected?** Subscribe to `$frontear/presence/#` (§6.2).
+**How do I see who is connected?** Subscribe to `$frontear/presence/#` (§7.2).
 
 **Why does a publish succeed with `0x10`?** MQTT 5 tells you that nobody subscribes to the topic. The node still
 accepted the message.
 
 ## Where next
 
-- [The frontear module](modules/frontear.md): the classes, the threads and the link log's file format.
-- [Why frontear is built this way](adr/0184-frontear-comandos-own-mqtt-fabric.md): the decision record.
-- [Architecture](architecture.md): where the message fabric sits in comando.
+- [The frontear module](modules/frontear.md): the packages, the classes, the threads and the link log's file format.
+- [The decision records](adr/README.md): why frontear is built this way (records 184, 185, 187 and 189).
+- [Workbench §4.4](workbench.md#44-the-frontear-tab): the frontear tab, which reads the watch.
+- [Architecture](architecture.md): where the octopus network sits in comando.
 - [All documentation](README.md).

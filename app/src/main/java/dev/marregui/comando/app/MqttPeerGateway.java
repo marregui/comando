@@ -26,10 +26,10 @@ import dev.marregui.comando.frontear.protocol.Topics;
 import dev.marregui.comando.mcp.PeerGateway;
 
 /**
- * frontear as the instances' broker (records 123, 185, 187), on comando's own MQTT client: MQTT 5 to {@code 127.0.0.1},
- * client id {@code comando-<instance>}. It follows this instance's own frontear node rather than the window: every
- * {@link #FOLLOW_EVERY}, on a strand of its own, it asks whether the node runs, and the answer may start it; it
- * connects when it runs, again when its port changed, and disconnects when it does not. While the node runs the
+ * frontear as the instances' gateway (records 123, 185, 187), on comando's own MQTT client: MQTT 5 to {@code
+ * 127.0.0.1}, client id {@code comando-<instance>}. It follows this instance's own frontear node rather than the
+ * window: every {@link #FOLLOW_EVERY}, on a strand of its own, it asks whether the node runs, and the answer may start
+ * it; it connects when it runs, again when its port changed, and disconnects when it does not. While the node runs the
  * client reconnects by itself, 1 s after a drop and then at most every {@link #FOLLOW_EVERY}, and renews its
  * subscriptions after every connect, and at the next look when one was refused; once the node stops it stops trying.
  * Messages reach their handlers on one strand, in order.
@@ -44,7 +44,7 @@ final class MqttPeerGateway implements PeerGateway, AutoCloseable {
     /**
      * The largest message frontear may hand this instance, in bytes: the protocol's own, so none is announced, as the
      * client before comando's own announced none. A question to another instance is not clipped, and a smaller limit
-     * would make the broker drop a long one unseen while its sender waits for an answer.
+     * would make the gateway drop a long one unseen while its sender waits for an answer.
      */
     static final int MAXIMUM_PACKET_SIZE = Packet.PROTOCOL_MAXIMUM_PACKET_SIZE;
 
@@ -52,7 +52,7 @@ final class MqttPeerGateway implements PeerGateway, AutoCloseable {
     private final IntSupplier port;
     private final BooleanSupplier octopusUp;
     private final LongSupplier generation;
-    private final ScheduledExecutorService follow = Threads.timedStrand("peer-broker");
+    private final ScheduledExecutorService follow = Threads.timedStrand("peer-gateway");
     private final ExecutorService messages = Threads.strand("peer-messages");
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
     private final List<LongConsumer> subscribed = new CopyOnWriteArrayList<>();
@@ -173,7 +173,7 @@ final class MqttPeerGateway implements PeerGateway, AutoCloseable {
         return c;
     }
 
-    /** Whether {@code c} is still the client to keep connected: this broker is open and has not left frontear since. */
+    /** Whether {@code c} is still the client to keep connected: it is open and has not left frontear since. */
     private synchronized boolean wanted(final MqttClient c) {
         return !closed && c != null && c == client;
     }
@@ -287,7 +287,7 @@ final class MqttPeerGateway implements PeerGateway, AutoCloseable {
 
     /**
      * A received publish as {@link PeerGateway} hands it on, with the machine its {@link Names#ORIGIN} user property
-     * names, the last one when several came: the broker removes every one a remote client sent and adds its own after
+     * names, the last one when several came: the gateway removes every one a remote client sent and adds its own after
      * them.
      */
     static Message message(final Packet.Publish p) {
@@ -366,7 +366,7 @@ final class MqttPeerGateway implements PeerGateway, AutoCloseable {
         }
     }
 
-    /** Disconnects, so the broker drops the last will: whoever closes this has cleared what it published. */
+    /** Disconnects, so the gateway drops the last will: whoever closes this has cleared what it published. */
     @Override
     public void close() {
         final MqttClient c;
@@ -378,10 +378,10 @@ final class MqttPeerGateway implements PeerGateway, AutoCloseable {
             c = client;
             client = null;
         }
-        ExecutorStop.now("peer-broker", follow);
+        ExecutorStop.now("peer-gateway", follow);
         if (c != null) {
             c.close();
         }
-        ExecutorStop.now("peer-broker", messages);
+        ExecutorStop.now("peer-gateway", messages);
     }
 }

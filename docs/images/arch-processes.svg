@@ -87,7 +87,7 @@
     <text x="56" y="520">outlives comando</text>
     <text x="291" y="502">PostgreSQL or QuestDB,</text>
     <text x="291" y="520">over the PG wire protocol</text>
-    <text x="526" y="502">a local MQTT broker,</text>
+    <text x="526" y="502">a local MQTT gateway,</text>
     <text x="526" y="520">127.0.0.1:18883</text>
     <text x="761" y="502">each its own JVM and its</text>
     <text x="761" y="520">own data root</text>

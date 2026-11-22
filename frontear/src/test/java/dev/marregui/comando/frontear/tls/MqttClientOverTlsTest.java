@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /// The client given a TLS context: MQTT over TLS 1.3 through a terminator in front of [FakeGateway], both sides
-/// pinned; a plain broker, a server the client does not pin, a server that does not pin the client and a server that
+/// pinned; a plain gateway, a server the client does not pin, a server that does not pin the client and a server that
 /// never answers the handshake each end the attempt before CONNECT, told to the handler as the cause.
 class MqttClientOverTlsTest {
 
@@ -82,7 +82,7 @@ class MqttClientOverTlsTest {
         }
     }
 
-    /// A plain broker does not speak TLS: the handshake fails, the handler hears why, and no CONNECT reached it.
+    /// A plain gateway does not speak TLS: the handshake fails, the handler hears why, and no CONNECT reached it.
     @Test
     void aPlainGatewayIsRefused() throws Exception {
         final MachineKey client = key("client");
@@ -114,7 +114,7 @@ class MqttClientOverTlsTest {
         }
     }
 
-    /// A server that does not pin the client refuses it at the handshake, before any CONNECT reached the broker,
+    /// A server that does not pin the client refuses it at the handshake, before any CONNECT reached the gateway,
     /// and the client's handler is told. In TLS 1.3 the client's handshake is done before the server checks the
     /// client's certificate, so the client hears of the refusal at its next read or write: as the server's alert or
     /// as the connection the server closed, whichever comes first.

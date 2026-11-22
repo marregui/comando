@@ -1,29 +1,29 @@
-# 184. frontear: comando's own MQTT 5 broker, mesh link and signed control
+# 184. frontear: comando's own MQTT 5 gateway, links between gateways and signed control
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-19 | proposed; v1 being built in task 200; superseded in part by [record 185](0185-frontear-is-the-only-fabric.md) | Miguel and Claude |
+| 2026-11-19 | proposed; v1 being built in task 200; superseded in part by [record 185](0185-frontear-is-the-only-octopus-network.md) | Miguel and Claude |
 
 ## 1. Context
 
 comando instances talk to each other over MQTT 5 ([record 123](0123-instances-consult-each-other.md)):
-`MqttPeerGateway` connects to the comando Edge, a separate broker process that `EmbeddedEdge` downloads and runs.
+`MqttPeerGateway` connects to the comando Edge, a separate MQTT server process that `EmbeddedEdge` downloads and runs.
 comando already speaks MQTT 5 with its own client and codec ([record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md)).
-What it does not own is the broker in the middle, nor a way for several brokers to form a mesh, nor a way to change a
-mesh at run time other than by editing a broker's configuration.
+What it does not own is the gateway in the middle, nor a way for several gateways to form an octopus network, nor a way to change an
+octopus network at run time other than by editing a gateway's configuration.
 
-Miguel, 2026-11-19: a broker of comando's own, from scratch, with no code dependency on any HiveMQ product and as
+Miguel, 2026-11-19: a gateway of comando's own, from scratch, with no code dependency on any HiveMQ product and as
 few third-party libraries as possible; the smallest MQTT 5 that comando's use needs, without breaking the
 specification; configuration only by MQTT messages, signed, from a control pod; one link per peer with one internal
 subscriber per link and one append-only log per link; production quality, tested for parity against an external
-broker; then optimised for throughput and latency. Not a UI, REST, config file, adapter, data transformation or
+gateway; then optimised for throughput and latency. Not a UI, REST, config file, adapter, data transformation or
 persisted session.
 
 ## 2. Decision
 
 ### 2.1 One module, JDK and `core` only
 
-`frontear` (Gradle `:frontear`) holds the MQTT 5 client and codec (moved from `app.mqtt`), the broker, the topic tree,
+`frontear` (Gradle `:frontear`) holds the MQTT 5 client and codec (moved from `app.mqtt`), the gateway, the topic tree,
 the link log, the links and the control plane; `app` depends on it. Its main code depends on the JDK and `core`
 alone; its tests on JUnit, AssertJ, Awaitility and `testkit`.
 
@@ -68,9 +68,9 @@ strand is one virtual thread running its tasks in order; what only a strand touc
 
 | Thread | Kind | Owner, one per |
 |---|---|---|
-| `frontear-broker-accept-<port>`, `frontear-broker-publish-<port>` | strand | broker |
-| `frontear-broker-sweep-<port>` (expiry), `frontear-control-<node>` | timed strand | broker, node |
-| `frontear-broker-reader-<client>`, `frontear-broker-writer-<client>` | strand | client connection |
+| `frontear-gateway-accept-<port>`, `frontear-gateway-publish-<port>` | strand | gateway |
+| `frontear-gateway-sweep-<port>` (expiry), `frontear-control-<node>` | timed strand | gateway, node |
+| `frontear-gateway-reader-<client>`, `frontear-gateway-writer-<client>` | strand | client connection |
 | `link-<id>` (sender, resend backoff) | timed strand | link |
 | `mqtt-<client>` (reader, keep alive, reconnect), `mqtt-writer-<client>` | timed strand, strand | link's client |
 | `frontear-log-force-<dir>` | platform thread | link log |
@@ -84,7 +84,7 @@ in bytes or by a window, as each strand's field comment states.
 
 ## 3. Consequences
 
-- comando can run its instances' broker in process: `-Dcomando.fabric=frontear` puts a frontear node, hosted by the
+- comando can run its instances' gateway in process: a system property puts a frontear node, hosted by the
   first instance, where the comando Edge (`EmbeddedEdge`) is; the Edge stays the default until frontear is accepted.
   Parity with the pinned HiveMQ Edge release is tested by `FrontearParityTest` (`COMANDO_PARITY=true`): 31 scenarios,
   19 the same, 12 differing only where MQTT 5 allows it and section 2.2 declares it.

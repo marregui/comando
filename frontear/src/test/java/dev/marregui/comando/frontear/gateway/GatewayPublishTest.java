@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /// PUBLISH, SUBSCRIBE and UNSUBSCRIBE over TCP: routing with `+`, `#` and the `$` rule, QoS 0 and 1, the features
-/// the broker declines with their reason codes, the subscription options, retained messages, message expiry, the
+/// the gateway declines with their reason codes, the subscription options, retained messages, message expiry, the
 /// properties passed through, both sides' Receive Maximum and Maximum Packet Size, redelivery, and PUBACK after the
 /// internal subscribers with the worst of their codes.
 class GatewayPublishTest {
@@ -47,7 +47,7 @@ class GatewayPublishTest {
                 p.publish(RawClient.qos1(topic, topic));
             }
             p.send(new Packet.Publish("s/2/x", new byte[0], 0, false, false, 0, null, null));
-            // the broker routes a publish before it reads the next packet, so p's PINGRESP fences the QoS 0 one
+            // the gateway routes a publish before it reads the next packet, so p's PINGRESP fences the QoS 0 one
             p.ping();
             final List<Packet> got = s.ping();
             assertThat(got).extracting(m -> ((Packet.Publish) m).topic()).containsExactly("s/1/x", "m", "m/a/b",
@@ -169,7 +169,7 @@ class GatewayPublishTest {
     @Test
     void anEmptyRetainedMessageClearsTheTopic() throws IOException {
         try (RawClient p = RawClient.connected(test.port(), "p")) {
-            // the client's own presence is retained too, published on the broker's presence strand after CONNACK
+            // the client's own presence is retained too, published on the gateway's presence strand after CONNACK
             await().atMost(TestGateway.WAIT).until(() -> test.gateway.stats().retained() == 1);
             final int before = 1;
             p.publish(new Packet.Publish("r", new byte[] {1}, 1, true, false, 1, null, null));
@@ -246,7 +246,7 @@ class GatewayPublishTest {
         }
     }
 
-    /// A client with more QoS 1 publishes unacknowledged than the broker's Receive Maximum is sent DISCONNECT 0x93.
+    /// A client with more QoS 1 publishes unacknowledged than the gateway's Receive Maximum is sent DISCONNECT 0x93.
     @Test
     void aPublishPastTheGatewaysReceiveMaximumEndsTheConnection() throws IOException {
         test.gateway.subscribe("held", "slow", 1, false, (m, o) -> new CompletableFuture<>());
@@ -271,7 +271,7 @@ class GatewayPublishTest {
         }
     }
 
-    /// A packet larger than the broker's Maximum Packet Size ends the connection with DISCONNECT 0x95, refused on its
+    /// A packet larger than the gateway's Maximum Packet Size ends the connection with DISCONNECT 0x95, refused on its
     /// header before its body is read.
     @Test
     void aPacketLargerThanTheGatewaysMaximumIsRefusedWith0x95() throws IOException {

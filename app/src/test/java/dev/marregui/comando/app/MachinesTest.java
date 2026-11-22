@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 ///   this machine's own, by its id or by its key
 /// - the remotes file is owner-only and versioned; one of a later version is read by none and written by none
 /// - a listen address is an IP literal of this machine, never the wildcard; none empties the token
-/// - unpairing removes the pairing; a grant reads from the pairings; the gateway's link state shows per machine
+/// - unpairing removes the pairing; a grant reads from the pairings; the border gateway's link state shows per machine
 class MachinesTest {
 
     /// The port each machine file names here; nothing listens on it, as no test opens a listener.
@@ -242,8 +242,8 @@ class MachinesTest {
         assertThat(sameMachine.grantOf("c")).isNull();
     }
 
-    /// The gateway's link state shows per paired machine: connected while its last read said so, with when it last
-    /// was; a machine its read does not name is not connected and keeps when it last was.
+    /// The border gateway's link state shows per paired machine: connected while its last read said so, with when it
+    /// last was; a machine its read does not name is not connected and keeps when it last was.
     @Test
     void theBorderGatewaysLinkStateShowsPerMachine() {
         b.listen(LOOPBACK);

@@ -41,12 +41,12 @@ import dev.marregui.comando.frontear.watch.LogView;
 import dev.marregui.comando.frontear.watch.Watch;
 
 /**
- * One link to a peer broker. Its strand, {@code link-<id>}, runs every step of the link and is the only thread that
+ * One link to a peer gateway. Its strand, {@code link-<id>}, runs every step of the link and is the only thread that
  * touches its log; it is also its client's callbacks executor, so the client's events reach it in order.
  *
- * <p>Out, at least once. Every message the local broker routes to the link's OUT filters, all under the one internal
+ * <p>Out, at least once. Every message the local gateway routes to the link's OUT filters, all under the one internal
  * subscriber {@code $link/<id>}, waits for the strand in a queue of {@link LinkOptions#queueMax} and joins the log at
- * its tail with its hop count incremented; the broker hears 0x00 once the record is durable, 0x97 when the log or the
+ * its tail with its hop count incremented; the gateway hears 0x00 once the record is durable, 0x97 when the log or the
  * queue is full (a QoS 0 message over the queue is dropped), 0x8B when the link closed first. The sender reads from
  * the log's cursor, at most the peer's Receive Maximum and {@link LinkOptions#windowMax} at a time, publishes each
  * record at QoS 1 and moves the cursor past the prefix the peer has answered. A peer that answers 0x97 or 0x89 holds
@@ -57,7 +57,7 @@ import dev.marregui.comando.frontear.watch.Watch;
  * peer may see a message twice.
  *
  * <p>In, at least once. The link subscribes to its IN filters on the peer with No Local, so what it sends does not
- * come back, and publishes what arrives on the local broker as {@code $link/<id>}, whose own OUT subscription, No
+ * come back, and publishes what arrives on the local gateway as {@code $link/<id>}, whose own OUT subscription, No
  * Local under that owner, leaves it; the peer's PUBACK waits for that local publish and carries its reason code. A
  * message whose topic none of the IN filters covers is dropped and counted: the peer may be another machine's server.
  *
@@ -65,8 +65,8 @@ import dev.marregui.comando.frontear.watch.Watch;
  * ({@link Forwarding#backoff}); a 0x88 refusal, from a node that runs and holds its links, after the first backoff;
  * and the peer's own link connecting to this node brings a waiting reconnect forward to now ({@link #wake}).
  *
- * <p>TLS. A link whose spec asks for TLS connects over the TLS context the mesh gives it ({@link #tls}), and while it
- * has none it does not connect at all: it stays down, its state saying why, until a context is set.
+ * <p>TLS. A link whose spec asks for TLS connects over the TLS context the octopus gives it ({@link #tls}), and while
+ * it has none it does not connect at all: it stays down, its state saying why, until a context is set.
  *
  * <p>Watch. While the node's {@link Watch} is on, the link keeps each message's steps there (appended, sent, arrived,
  * dropped and why) and each connection change; a connection the peer refused for the client id, a link aimed at a
@@ -77,7 +77,7 @@ final class Link implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger(Link.class.getName());
     /** The owner of a link's internal subscription and the origin of what it publishes locally, before its id. */
     static final String OWNER = "$link/";
-    /** Server busy: a broker may answer a publish with it; the contract retries on it as on 0x97. */
+    /** Server busy: a gateway may answer a publish with it; the contract retries on it as on 0x97. */
     static final int SERVER_BUSY = 0x89;
     /**
      * The Receive Maximum the link asks of the peer: each message in holds a local publish open until it completes.
@@ -91,8 +91,8 @@ final class Link implements AutoCloseable {
     static final long WAKE_EVERY_NANOS = TimeUnit.SECONDS.toNanos(1);
     /** The keep alive towards the peer: comando's peer client's. */
     private static final int KEEP_ALIVE_SECONDS = 60;
-    /** Why a TLS link is down while the mesh gives it no TLS context. */
-    static final String NO_TLS = "no TLS context for the link: it connects once the mesh gives it one";
+    /** Why a TLS link is down while the octopus gives it no TLS context. */
+    static final String NO_TLS = "no TLS context for the link: it connects once the octopus network gives it one";
     /** Why a message in from the peer was dropped when none of the link's IN filters covers its topic. */
     static final String NOT_IN = "not in the link's in filters";
 
@@ -106,20 +106,20 @@ final class Link implements AutoCloseable {
     private final Watch watch;
     /**
      * Runs every step of the link. Its queue has no bound of its own; what joins it is bounded where it comes from:
-     * the broker's messages wait in {@link #deliveries} behind one task, the log's completions behind one pump, the
+     * the gateway's messages wait in {@link #deliveries} behind one task, the log's completions behind one pump, the
      * peer's answers by the window, its QoS 1 messages by {@link #IN_RECEIVE_MAXIMUM} and its QoS 0 messages by
      * {@link LinkOptions#queueMax}, the client's {@link MqttClient.Options#maxQueuedQos0}.
      */
     private final ScheduledExecutorService strand;
-    /** The broker's messages waiting for the strand to append them, oldest first; any thread. */
+    /** The gateway's messages waiting for the strand to append them, oldest first; any thread. */
     private final ArrayBlockingQueue<Delivery> deliveries;
     /** How many of {@link #deliveries} wait, as the queue readings report it. */
     private final Queues.Gauge waiting;
-    /** Set by the broker's thread that posts the strand's append of the deliveries, cleared by that task. */
+    /** Set by the gateway's thread that posts the strand's append of the deliveries, cleared by that task. */
     private final AtomicBoolean appendPosted = new AtomicBoolean();
     /** Set by the log's completion that posts a pump, cleared by that pump. */
     private final AtomicBoolean pumpPosted = new AtomicBoolean();
-    /** The QoS 0 messages dropped over the queue's bound; written by the broker's threads, read by {@link #state}. */
+    /** The QoS 0 messages dropped over the queue's bound; written by the gateway's threads, read by {@link #state}. */
     private final AtomicLong shed = new AtomicLong();
     /** When {@link #wake} last went through, by {@link System#nanoTime}; any thread, by compare-and-set. */
     private final AtomicLong wokenAtNanos = new AtomicLong(System.nanoTime() - WAKE_EVERY_NANOS);
@@ -128,22 +128,25 @@ final class Link implements AutoCloseable {
     private final InternalSubscriber subscriber = (m, _) -> deliver(m);
     /** The records sent and not yet acknowledged in order, oldest first; strand only. */
     private final ArrayDeque<Flight> flights = new ArrayDeque<>();
-    /** The OUT filters registered with the broker; the mesh's caller only, under the mesh's lock. */
+    /** The OUT filters registered with the gateway; the octopus's caller only, under the octopus's lock. */
     private Set<String> out = Set.of();
-    /** Written by the mesh's caller under the mesh's lock; read by the strand. */
+    /** Written by the octopus's caller under the octopus's lock; read by the strand. */
     private volatile LinkSpec spec;
-    /** The TLS context of a TLS link's clients, null while the mesh gives none; the mesh's caller, under its lock. */
+    /**
+     * The TLS context of a TLS link's clients, null while the octopus gives none; the octopus's caller, under its
+     * lock.
+     */
     private SSLContext tls;
     /**
-     * The connection to the peer; written by the mesh's caller under the mesh's lock, replaced under
+     * The connection to the peer; written by the octopus's caller under the octopus's lock, replaced under
      * {@link #peerSwap}; read by the strand and by {@link #state}.
      */
     private volatile Peer peer;
     /** The peer's QoS 0 messages dropped by the clients this link has closed; guarded by {@link #peerSwap}. */
     private long shedIn;
     /**
-     * Set once by {@link #close}, on the mesh's caller, before it fails the deliveries and posts the strand's last
-     * task; read by the strand, the broker's threads and the client's reader.
+     * Set once by {@link #close}, on the octopus's caller, before it fails the deliveries and posts the strand's last
+     * task; read by the strand, the gateway's threads and the client's reader.
      */
     private volatile boolean closed;
     /** A failure of the log's close; written by the strand's last task, read by {@link #close} once it ended. */
@@ -200,7 +203,7 @@ final class Link implements AutoCloseable {
     }
 
     /**
-     * Stops: the broker forgets the link's subscriptions, the client disconnects, every message still waiting for the
+     * Stops: the gateway forgets the link's subscriptions, the client disconnects, every message still waiting for the
      * strand is answered 0x8B, the strand finishes what it holds and its last task saves the cursor and closes the
      * log. The strand is stopped by the closed flag and its shutdown, never interrupted, so a write in a segment's
      * channel is not cut; when it does not end within {@link ExecutorStop#WAIT}, its last task still closes the log
@@ -211,7 +214,7 @@ final class Link implements AutoCloseable {
         if (closed) {
             return;
         }
-        // written before the deliveries are failed and the last task posted: a broker's thread that queues a message
+        // written before the deliveries are failed and the last task posted: a gateway's thread that queues a message
         // after the failing reads it and fails it itself, and every strand task after the last one reads it
         closed = true;
         RuntimeException failure = null;
@@ -406,7 +409,7 @@ final class Link implements AutoCloseable {
 
     /**
      * A new client for {@code s}'s peer in place of the current one, which is closed first; for a TLS link while the
-     * mesh gives it no TLS context, no client, and the link waits down with {@link #NO_TLS}. Octopus's caller.
+     * octopus gives it no TLS context, no client, and the link waits down with {@link #NO_TLS}. Octopus's caller.
      */
     private void connect(final LinkSpec s) {
         final Peer old = peer;
@@ -432,8 +435,8 @@ final class Link implements AutoCloseable {
     }
 
     /**
-     * A message the broker routed to the OUT filters: queued for the strand to append, refused at once when the queue
-     * is full or the link closed. From the broker's threads.
+     * A message the gateway routed to the OUT filters: queued for the strand to append, refused at once when the queue
+     * is full or the link closed. From the gateway's threads.
      */
     private CompletionStage<Integer> deliver(final Packet.Publish m) {
         if (closed) {
@@ -1017,7 +1020,7 @@ final class Link implements AutoCloseable {
         DROPPED
     }
 
-    /** A message the broker handed the link and the future its outcome completes. */
+    /** A message the gateway handed the link and the future its outcome completes. */
     private record Delivery(Packet.Publish message, CompletableFuture<Integer> done) {
     }
 
@@ -1050,7 +1053,7 @@ final class Link implements AutoCloseable {
 
         Peer(final LinkSpec s) {
             // one client id per link, so two links to one peer do not take over each other's session; the peer's QoS 0
-            // messages wait for the strand within the link's queue bound, as the broker's do
+            // messages wait for the strand within the link's queue bound, as the gateway's do
             this.client = new MqttClient(new MqttClient.Options(s.host(), s.port(), clientId(), KEEP_ALIVE_SECONDS,
                     Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null, IN_RECEIVE_MAXIMUM, options.queueMax()), this, strand,
                     s.tls() ? tls : null);

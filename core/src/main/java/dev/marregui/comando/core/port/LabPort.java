@@ -104,7 +104,7 @@ public interface LabPort {
         public static final Node NONE = new Node("", 0, 0L, false, Totals.NONE, List.of(), List.of(), Counts.NONE);
     }
 
-    /** The broker's own figures; {@code refused} sums the retained messages, topics and subscriptions it refused. */
+    /** The gateway's own figures; {@code refused} sums the retained messages, topics and subscriptions it refused. */
     record Totals(
             int sessions,
             int connections,

@@ -155,7 +155,7 @@ record Schedule(Topology topology, int hopLimit, Map<String, List<String>> filte
     enum Check {
         /// Loss and order over first hops, for runs whose filters and links change.
         FIRST_HOP,
-        /// Every hop against the mesh's paths, OUT-only walks owed, for runs with faults and fixed filters.
+        /// Every hop against the octopus's paths, OUT-only walks owed, for runs with faults and fixed filters.
         PATHS,
         /// Every walk once, IN sides included, for runs without faults.
         EXACT
@@ -194,7 +194,8 @@ record Schedule(Topology topology, int hopLimit, Map<String, List<String>> filte
         }
     }
 
-    /// `count` QoS 1 messages on `topic` handed to `node`'s broker in a loop, faster than a link's strand appends them.
+    /// `count` QoS 1 messages on `topic` handed to `node`'s gateway in a loop, faster than a link's strand appends
+    /// them.
     record Burst(String node, int count, String topic) implements Step {
 
         @Override

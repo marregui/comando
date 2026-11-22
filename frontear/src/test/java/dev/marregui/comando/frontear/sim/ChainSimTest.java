@@ -18,7 +18,7 @@ class ChainSimTest {
     /// After every schedule: each message acknowledged 0x00 reached every matching subscriber at the end of each
     /// walk of OUT sides its filters admit, once at least per hop count; no copy arrived with a hop count no walk
     /// gives it, nor past the hop limit; over each walk of OUT sides without a counted refusal, first arrivals keep
-    /// publish order; the brokers' and links' readings stayed within their bounds after every step.
+    /// publish order; the gateways' and links' readings stayed within their bounds after every step.
     @Test
     void theChainKeepsTheContractOnEveryHopUnderFaults(@TempDir final Path dir) throws Exception {
         Soak.run("ChainSimTest", dir, RUNS, r -> Schedule.paths(r, Schedule.Topology.CHAIN));

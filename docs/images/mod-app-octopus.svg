@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="670" viewBox="0 0 1000 670" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-  <title>The fabric: three instances, each with a frontear node inside its own JVM, hosted by its FrontearOctopus on its own port from 18883 up, and its MqttPeerGateway as that node's client; each node has a link to every other node, one each way, and each link keeps a log at its sender until the peer acknowledges; the registry ~/.comando-fabric.json holds each instance's port</title>
+  <title>The octopus network: three instances, each with a frontear node inside its own JVM, hosted by its FrontearOctopus on its own port from 18883 up, and its MqttPeerGateway as that node's client; each node has a link to every other node, one each way, and each link keeps a log at its sender until the peer acknowledges; the registry ~/.comando-fabric.json holds each instance's port</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
     <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
     <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#E7C55A" stroke-width="1.5"/></marker>
   </defs>
   <rect width="1000" height="670" fill="url(#bg)"/>
-  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">MODULE APP · THE FABRIC</text>
+  <text x="40" y="44" font-size="13" letter-spacing="3" fill="#E7C55A">MODULE APP · THE OCTOPUS</text>
   <text x="40" y="78" font-size="24" font-weight="300" fill="#E8E8E8">One node per instance, a link to every other, each link with its log</text>
 
   <!-- instance one -->

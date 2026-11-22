@@ -6,7 +6,8 @@ import dev.marregui.comando.frontear.protocol.Names;
 /**
  * What a client may publish once a {@link ControlPlane} runs: anything outside {@code $frontear/}, and under it only
  * {@code $frontear/control/}, where the signature decides. Presence and state, and every other topic under
- * {@code $frontear/}, are the broker's to write. A client may subscribe to anything, so it can read state and presence.
+ * {@code $frontear/}, are the gateway's to write. A client may subscribe to anything, so it can read state and
+ * presence.
  */
 final class ControlGate implements Gate {
 

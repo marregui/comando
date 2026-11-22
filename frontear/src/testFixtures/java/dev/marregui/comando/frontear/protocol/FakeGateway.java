@@ -18,18 +18,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 
-/// An MQTT 5 broker for tests, on `127.0.0.1` and a port of the system's choosing, speaking through [Codec]: it
-/// answers CONNECT, SUBSCRIBE, UNSUBSCRIBE, PUBLISH and PINGREQ as a broker would, routes publishes to the
+/// An MQTT 5 gateway for tests, on `127.0.0.1` and a port of the system's choosing, speaking through [Codec]: it
+/// answers CONNECT, SUBSCRIBE, UNSUBSCRIBE, PUBLISH and PINGREQ as a gateway would, routes publishes to the
 /// subscriptions that match, keeps retained messages and sends a will when a client goes without its DISCONNECT. Every
 /// packet a client sends is recorded in arrival order. The knobs (a refused connect, a server keep alive, a receive
 /// maximum, a session present, the capabilities a CONNACK states, unanswered pings, unacknowledged publishes) apply to
 /// the connects and packets after they are set; [#send], [#sendRaw] and [#drop] act on the latest connection. One
-/// broker serves a test class: [#reset] gives each test a fresh one, whose connections, records and retained messages
+/// gateway serves a test class: [#reset] gives each test a fresh one, whose connections, records and retained messages
 /// are its own.
 public final class FakeGateway implements AutoCloseable {
 
     private final ServerSocket server;
-    private final ExecutorService accepting = Threads.strand("fake-broker-accept");
+    private final ExecutorService accepting = Threads.strand("fake-gateway-accept");
     private final List<ExecutorService> reading = new CopyOnWriteArrayList<>();
     private final List<Session> everySession = new CopyOnWriteArrayList<>();
     /// Written by the test thread at a reset, read by the accept strand and the test thread.
@@ -46,7 +46,7 @@ public final class FakeGateway implements AutoCloseable {
     private volatile boolean answerPings = true;
     private volatile boolean ackPublishes = true;
 
-    /// A broker listening, accepting connections at once.
+    /// A gateway listening, accepting connections at once.
     public FakeGateway() {
         try {
             server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
@@ -146,7 +146,7 @@ public final class FakeGateway implements AutoCloseable {
         latestOrFail().write(bytes);
     }
 
-    /// Closes the latest connection without a DISCONNECT, as a broker that went away.
+    /// Closes the latest connection without a DISCONNECT, as a gateway that went away.
     public void drop() {
         final Session s = latest;
         if (s != null) {
@@ -165,9 +165,9 @@ public final class FakeGateway implements AutoCloseable {
             for (final Session s : everySession) {
                 s.close();
             }
-            ExecutorStop.now("fake-broker", accepting);
+            ExecutorStop.now("fake-gateway", accepting);
             for (final ExecutorService e : reading) {
-                ExecutorStop.now("fake-broker", e);
+                ExecutorStop.now("fake-gateway", e);
             }
         }
     }
@@ -194,13 +194,13 @@ public final class FakeGateway implements AutoCloseable {
             everySession.add(s);
             g.open.add(s);
             latest = s;
-            final ExecutorService strand = Threads.strand("fake-broker-session");
+            final ExecutorService strand = Threads.strand("fake-gateway-session");
             reading.add(strand);
             strand.execute(s::read);
         }
     }
 
-    /// What one test sees of the broker: its connections, the packets they sent, and the messages retained.
+    /// What one test sees of the gateway: its connections, the packets they sent, and the messages retained.
     private static final class Generation {
 
         private final List<Session> open = new CopyOnWriteArrayList<>();
@@ -263,7 +263,7 @@ public final class FakeGateway implements AutoCloseable {
                     }
                 }
             } catch (final IOException _) {
-                // the client went, or sent what this broker does not read: the connection ends either way
+                // the client went, or sent what this gateway does not read: the connection ends either way
             } finally {
                 close();
                 generation.open.remove(this);

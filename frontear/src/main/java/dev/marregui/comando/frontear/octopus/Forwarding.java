@@ -13,7 +13,7 @@ import dev.marregui.comando.frontear.protocol.Packet;
  */
 final class Forwarding {
 
-    /** The hops a message has made between brokers, a decimal count; absent before its first. */
+    /** The hops a message has made between gateways, a decimal count; absent before its first. */
     static final String HOPS = "frontear-hops";
     /** When a message joined a link's log, epoch milliseconds; never sent on. */
     static final String QUEUED = "frontear-queued-ms";

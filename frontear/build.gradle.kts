@@ -1,4 +1,4 @@
-// frontear: comando's own MQTT 5 broker, client and mesh link, the instances' message fabric. JDK and core only.
+// frontear: comando's own MQTT 5 gateway, client and links between gateways, the instances' octopus network. JDK and core only.
 plugins {
     `java-test-fixtures`
 }

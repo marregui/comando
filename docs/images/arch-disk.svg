@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-  <title>comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, fabric) and the instance's identity; outside it sit the machine's cdb, the fabric registry, and Claude Code's root with the kit and the conversations</title>
+  <title>comando's data on disk: the data root holds what you made (specs, panel text, settings), what one run leaves (run, logs, audit, cache), the servers' data (cdb, octopus network) and the instance's identity; outside it sit the machine's cdb, the octopus network registry, and Claude Code's root with the kit and the conversations</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
   </defs>
@@ -66,7 +66,7 @@
   </g>
   <g font-size="13" letter-spacing="2.5">
     <text x="696" y="136" fill="#6FAEE8">THE MACHINE'S CDB</text>
-    <text x="696" y="272" fill="#AEB6C1">THE FABRIC REGISTRY</text>
+    <text x="696" y="272" fill="#AEB6C1">THE OCTOPUS REGISTRY</text>
     <text x="696" y="408" fill="#D98E5F">CLAUDE CODE'S ROOT</text>
   </g>
   <g font-size="13" fill="#9AA0A6">

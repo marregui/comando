@@ -55,7 +55,7 @@ class ControlGateOnGatewayTest {
                 return CompletableFuture.completedFuture(Packet.SUCCESS);
             });
             client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            // the broker's own presence for the client shows the subscribers receive what reaches them
+            // the gateway's own presence for the client shows the subscribers receive what reaches them
             await().atMost(WAIT).until(() -> reserved.stream()
                     .anyMatch(message -> message.topic().equals("$frontear/presence/pod")));
             final byte[] forged = "{\"forged\":true}".getBytes(StandardCharsets.UTF_8);

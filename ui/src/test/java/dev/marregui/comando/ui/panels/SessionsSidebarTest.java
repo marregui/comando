@@ -1774,13 +1774,13 @@ class SessionsSidebarTest {
         final InstancesState.Instance me = new InstancesState.Instance("main", "comando", "2.0.0", "", "a710bbf", false, "2026-10-30T07:00:00Z",
                 List.of(new InstancesState.Member("work", true)), true, true, 0L);
         final InstancesState.Member consult = new InstancesState.Member("consult-main", true, "OPEN", "running Bash", now - 125_000, "opus", "high", 42,
-                "~/work", "main", List.of("gradle check"), "what is X?", "X is a broker.");
+                "~/work", "main", List.of("gradle check"), "what is X?", "X is a gateway.");
         final InstancesState.Instance expert = new InstancesState.Instance("comando-expert", "Comando Expert", "1.9.0", "comando specialist",
                 "17be4f5", true, "2026-10-30T07:30:00Z", List.of(consult));
         final InstancesState.Instance gone = new InstancesState.Instance("b", "comando · b", "2.0.0", "", "eb16ce5", false, "2026-10-29T07:30:00Z",
                 List.of(), false, false, now - 3_600_000);
         final InstancesState.Consult asked = new InstancesState.Consult("1", InstancesState.Direction.ASKED, "comando-expert", "Comando Expert", "",
-                "what is X?", InstancesState.Status.OK, 1_000, 3_000, "X is a broker.");
+                "what is X?", InstancesState.Status.OK, 1_000, 3_000, "X is a gateway.");
         final InstancesState.Consult answered = new InstancesState.Consult("2", InstancesState.Direction.ANSWERED, "comando-expert", "Comando Expert",
                 "consult-comando-expert", "and Y?", InstancesState.Status.WAITING, 2_000, 0, "");
         final AppState s = States.twoPanels().withSessions(List.of(SessionState.closed(SessionSpec.fresh("consult-comando-expert", "/tmp"))))
@@ -1824,7 +1824,7 @@ class SessionsSidebarTest {
         assertThat(List.of(InstancesTab.dot(consult), InstancesTab.dot(idle), InstancesTab.dot(stopped), InstancesTab.dot(failed)))
                 .as("busy, idle, stopped, failed: as the Sessions tab colours them")
                 .containsExactly(Theme.CLAUDE, Theme.OK, Theme.MUTED, Theme.DANGER);
-        assertThat(session.text()).isEqualTo("Asked: what is X?\n\nSaid: X is a broker.");
+        assertThat(session.text()).isEqualTo("Asked: what is X?\n\nSaid: X is a gateway.");
 
         SwingUtilities.invokeAndWait(() -> {
             tree.setSize(400, 400);
@@ -1877,7 +1877,7 @@ class SessionsSidebarTest {
         assertThat(intents).filteredOn(Intent.ShowView.class::isInstance).singleElement().satisfies(i -> {
             final Intent.ShowView v = (Intent.ShowView) i;
             assertThat(v.title()).isEqualTo("Question to Comando Expert");
-            assertThat(((ViewSpec.Markdown) v.spec()).markdown()).contains("what is X?", "X is a broker.");
+            assertThat(((ViewSpec.Markdown) v.spec()).markdown()).contains("what is X?", "X is a gateway.");
         });
         assertThat(intents).filteredOn(Intent.OpenSession.class::isInstance).extracting(i -> ((Intent.OpenSession) i).session())
                 .containsExactly("consult-comando-expert");

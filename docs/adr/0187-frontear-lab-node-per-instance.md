@@ -2,13 +2,13 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-21 | accepted; built in task 220; amended in task 221 (§2.1 a peer down, §2.2 the events, §2.3 persistence and agents); supersedes the one shared node of [record 185](0185-frontear-is-the-only-fabric.md) §2; amended by [record 189](0189-frontear-across-machines.md) (links to other machines); amended in task 228 (see Amendments: the Health view) | Miguel and Claude |
+| 2026-11-21 | accepted; built in task 220; amended in task 221 (§2.1 a peer down, §2.2 the events, §2.3 persistence and agents); supersedes the one shared node of [record 185](0185-frontear-is-the-only-octopus-network.md) §2; amended by [record 189](0189-frontear-across-machines.md) (links to other machines); amended in task 228 (see Amendments: the Health view) | Miguel and Claude |
 
 ## 1. Context
 
-Since [record 185](0185-frontear-is-the-only-fabric.md) one frontear node serves every instance on the machine. Its
+Since [record 185](0185-frontear-is-the-only-octopus-network.md) one frontear node serves every instance on the machine. Its
 links (octopus) and their logs (store) never run: no link exists, so nothing is queued, forwarded or forced. The
-fabric's traffic is read only as `mqtt sub` output.
+octopus network's traffic is read only as `mqtt sub` output.
 
 Miguel, 2026-11-21: "I am interested in the actual mqtt traffic. I sort of want to have frontear more integrated with
 comando, possibly to explore channels, octopus, store, all the individual components and the traffic exchanged with
@@ -41,7 +41,7 @@ a memory ring and in cdb; bridge queue semantics shown first (Overview, Traffic,
 | the events | one sealed type, `Observation`, in `dev.marregui.comando.frontear.watch`: a publish the gateway accepted (origin, topic, QoS, retain, bytes, matches, correlation data, and the payload, by reference up to 8 KiB, past it a copy of its first 8 KiB, the only copy made on the publisher's thread, so the ring holds at most 16,384 times 8 KiB: a publish's payload is never written after it is made; a reader decodes the head and the kept text on its own thread), and link steps (appended with offset, sent, arrived from the peer, dropped with reason, connected, disconnected), and store force rounds (records, bytes, nanoseconds) |
 | the ring | a fixed array of 2^n slots written by sequence (`getAndIncrement`, then a release store): a writer never waits and never allocates beyond the event; the newest overwrite the oldest; a reader names the sequence it has read up to and learns how many it missed |
 | off by default | the hooks cost one volatile read when nobody watches; `Frontear.watch()` turns them on |
-| snapshots | `Frontear.snapshot()`: the broker's stats and connections, the links' states, each log's cursor, tail, bytes and segments; each value copied under the lock that guards it, held for the copy alone (two field reads), once a second |
+| snapshots | `Frontear.snapshot()`: the gateway's stats and connections, the links' states, each log's cursor, tail, bytes and segments; each value copied under the lock that guards it, held for the copy alone (two field reads), once a second |
 | the cost | the stress harness's p99 with the ring on is within 5% of the p99 with it off, measured, method and machine stated in the task's report |
 
 ### 2.3 The lab
@@ -56,7 +56,7 @@ a memory ring and in cdb; bridge queue semantics shown first (Overview, Traffic,
 ## 3. Consequences
 
 - Every message between instances crosses a link: it is queued in the store log, forced, forwarded and acknowledged,
-  which is the path of an Edge bridge to a broker with its per-bridge queue.
+  which is the path of an Edge bridge to an MQTT server with its per-bridge queue.
 - A question to a peer that is down waits in the link's log and is answered once the peer is back, where before it
   failed at once.
 - N instances make N(N-1) links; at the handful of instances a machine runs this is a few dozen connections.

@@ -2,14 +2,14 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted in part: §2.1, the layout and the kit's brain paths of §2.2 and the broker of §2.4 built, the presence and inbox of §2.4 built on one machine by [record 123](0123-instances-consult-each-other.md); proposed: the backups of §2.2–§2.3, the trust and bridging of §2.4, §2.5; amended 2026-11-01 and 2026-11-09 (see Amendments); superseded in part by [record 185](0185-frontear-is-the-only-fabric.md) | Miguel and Claude |
+| 2026-10-29 | accepted in part: §2.1, the layout and the kit's brain paths of §2.2 and the gateway of §2.4 built, the presence and inbox of §2.4 built on one machine by [record 123](0123-instances-consult-each-other.md); proposed: the backups of §2.2–§2.3, the trust and bridging of §2.4, §2.5; amended 2026-11-01 and 2026-11-09 (see Amendments); superseded in part by [record 185](0185-frontear-is-the-only-octopus-network.md) | Miguel and Claude |
 
 ## 1. Context
 
 Miguel, 2026-10-29: several comando instances on one machine, each with its own kit and brain laid out as his
 `~/.claude` (`~/.claude_elf`, `~/.claude_appa`, `~/.claude_tink`…), each with a role; they consolidate, share what
 they know and decide together, with little of his attention. Instances find each other through an Edge acting as their
-broker, which puts the Edge to daily use. Later, other people's instances join the same way.
+gateway, which puts the Edge to daily use. Later, other people's instances join the same way.
 
 An agent-side trial (2026-10-28/29, a second instance on a cloned kit) found that two instances can run side by side
 but share window preferences unless told otherwise, look identical in the Dock, and cannot find each other: the MCP
@@ -48,7 +48,7 @@ port is written only to the log.
 Proposed: the desk, `metrics/` and `audit/` go to the same repository as the brain's backup, under `instance/`, so one
 restore brings an instance back.
 
-### 2.4 Finding each other through an Edge (broker built; the rest proposed)
+### 2.4 Finding each other through an Edge (gateway built; the rest proposed)
 
 Miguel, 2026-10-29: the Edge starts and stops as the embedded QuestDB does, from a toggle at the top of the workspace
 beside QuestDB's; only one Edge started by comando runs on the machine, so that every instance talks through it; the
@@ -56,11 +56,11 @@ user still starts and stops Edges of their own beside it without interference.
 
 | Question | Decision or proposal |
 |---|---|
-| the broker (built) | the comando Edge (`EmbeddedEdge`): a start/stop toggle at the top of the workspace, right of QuestDB's (the corner of [record 114](0114-help-menu-and-corner-buttons.md)), and in the Connections tab's menu. Its distribution is the zip named by `comando.edge.zip` or `COMANDO_EDGE_ZIP`, else the open-source HiveMQ Edge release comando pins (2026.15), downloaded once into `edge/dist/` and checked against its published SHA-256 (the build it looked for first is not open source); it is installed in `edge/` of the data root, its data and logs in `edge/data` and `edge/log` so a newer zip keeps them. It runs as a child process on ports of its own, none an Edge's default, all on `127.0.0.1` (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010). One per machine: `~/.comando-edge.json`, shared by every instance, names its pid, the data root and name of the instance that started it, and its ports; every instance shows it running, only that instance stops it, and it stops with that instance. Only the recorded process is ever signalled, so the user's own Edges start and stop beside it ([Workbench §4.1](../workbench.md#41-the-comando-edge)) |
+| the gateway (built) | the comando Edge (`EmbeddedEdge`): a start/stop toggle at the top of the workspace, right of QuestDB's (the corner of [record 114](0114-help-menu-and-corner-buttons.md)), and in the Connections tab's menu. Its distribution is the zip named by `comando.edge.zip` or `COMANDO_EDGE_ZIP`, else the open-source HiveMQ Edge release comando pins (2026.15), downloaded once into `edge/dist/` and checked against its published SHA-256 (the build it looked for first is not open source); it is installed in `edge/` of the data root, its data and logs in `edge/data` and `edge/log` so a newer zip keeps them. It runs as a child process on ports of its own, none an Edge's default, all on `127.0.0.1` (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010). One per machine: `~/.comando-edge.json`, shared by every instance, names its pid, the data root and name of the instance that started it, and its ports; every instance shows it running, only that instance stops it, and it stops with that instance. Only the recorded process is ever signalled, so the user's own Edges start and stop beside it ([Workbench §4.1](../workbench.md#41-the-comando-edge)) |
 | what travels (built on one machine by [record 123](0123-instances-consult-each-other.md): presence, inbox and reply under `comando/v1/local/instance/<id>/`; the board, roles, kit tag and brain commit not yet) | MQTT 5, small JSON: `comando/v1/<org>/instance/<id>/presence`, retained, with a last will that clears it (name, role, field, version, kit tag, brain commit, sessions, busy): a few hundred bytes, sent on change; `…/<id>/inbox`, requests with a response topic and correlation data (ask, task, review, vote) and their answers; `comando/v1/<org>/board/<decision>`, proposals and votes, retained. Never brain or kit files: a request carries only the text a session chose to send |
 | trust | an instance connects with its own credentials; the Edge's access rules let it publish only under its own id and read the board and its inbox; a new peer is accepted once by the user (its id and key fingerprint on both sides); a peer may read and prompt by default, the rest by grant, as record 121 rules for outside clients |
-| beyond the machine | the Edge bridges `comando/v1/<org>/#` to a shared broker when the user enables it; other people's instances join through theirs |
-| the Edge in daily use | the instances exercise the Edge's broker, retained messages, last wills, access rules and bridges every day; a failure found there is reported to the Edge's project |
+| beyond the machine | the Edge bridges `comando/v1/<org>/#` to a shared MQTT server when the user enables it; other people's instances join through theirs |
+| the Edge in daily use | the instances exercise the Edge's MQTT server, retained messages, last wills, access rules and bridges every day; a failure found there is reported to the Edge's project |
 
 ### 2.5 Roles (proposed)
 

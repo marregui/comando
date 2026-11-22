@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The MQTT 5 control packets the client and the broker speak (§3), one record each: what {@link Codec} writes and
+ * The MQTT 5 control packets the client and the gateway speak (§3), one record each: what {@link Codec} writes and
  * reads. A record refuses a value its packet cannot carry with an {@link IllegalArgumentException}; {@link Codec}
  * turns that into a {@link #MALFORMED} failure for a packet it reads.
  */
@@ -13,7 +13,7 @@ public sealed interface Packet {
 
     /** Success, normal disconnection, or QoS 0 granted (§2.4). */
     int SUCCESS = 0x00;
-    /** Disconnect with Will Message: the client asks the broker to publish its will (§3.14.2.1). */
+    /** Disconnect with Will Message: the client asks the gateway to publish its will (§3.14.2.1). */
     int DISCONNECT_WITH_WILL = 0x04;
     /** No matching subscribers: the message was accepted and nobody was subscribed (§3.4.2.1). */
     int NO_MATCHING_SUBSCRIBERS = 0x10;
@@ -33,7 +33,7 @@ public sealed interface Packet {
     int UNSUPPORTED_PROTOCOL_VERSION = 0x84;
     /** Client Identifier not valid. */
     int CLIENT_ID_NOT_VALID = 0x85;
-    /** Bad User Name or Password: a CONNECT that carries either, which a broker without authentication refuses. */
+    /** Bad User Name or Password: a CONNECT that carries either, which a gateway without authentication refuses. */
     int BAD_USER_NAME_OR_PASSWORD = 0x86;
     /** Not authorized. */
     int NOT_AUTHORIZED = 0x87;
@@ -41,7 +41,7 @@ public sealed interface Packet {
     int SERVER_UNAVAILABLE = 0x88;
     /** Server shutting down. */
     int SERVER_SHUTTING_DOWN = 0x8B;
-    /** Bad authentication method: a CONNECT with an Authentication Method, which a broker without AUTH refuses. */
+    /** Bad authentication method: a CONNECT with an Authentication Method, which a gateway without AUTH refuses. */
     int BAD_AUTHENTICATION_METHOD = 0x8C;
     /** Keep Alive timeout. */
     int KEEP_ALIVE_TIMEOUT = 0x8D;
@@ -126,7 +126,7 @@ public sealed interface Packet {
     }
 
     /**
-     * CONNACK (§3.2): the broker's answer and the limits it sets. A property absent holds its default:
+     * CONNACK (§3.2): the gateway's answer and the limits it sets. A property absent holds its default:
      * {@link #DEFAULT_RECEIVE_MAXIMUM}, {@link #PROTOCOL_MAXIMUM_PACKET_SIZE}, a topic alias maximum of 0,
      * {@link #NO_SERVER_KEEP_ALIVE}, null strings, and {@link Capabilities#DEFAULT}.
      */
@@ -134,7 +134,7 @@ public sealed interface Packet {
             int topicAliasMaximum, int serverKeepAliveSeconds, String assignedClientId, String reasonString,
             Capabilities capabilities) implements Packet {
 
-        /** A CONNACK that declines none of the features a broker may decline. */
+        /** A CONNACK that declines none of the features a gateway may decline. */
         public ConnAck(final boolean sessionPresent, final int reasonCode, final int receiveMaximum,
                 final int maximumPacketSize, final int topicAliasMaximum, final int serverKeepAliveSeconds,
                 final String assignedClientId, final String reasonString) {
@@ -159,7 +159,7 @@ public sealed interface Packet {
     }
 
     /**
-     * The features a CONNACK states the broker supports (§3.2.2.3.4 to .13): its Maximum QoS, 0 to 2, and whether
+     * The features a CONNACK states the gateway supports (§3.2.2.3.4 to .13): its Maximum QoS, 0 to 2, and whether
      * retained messages, wildcard subscriptions, Subscription Identifiers and Shared Subscriptions are available.
      */
     record Capabilities(int maximumQos, boolean retainAvailable, boolean wildcardAvailable,
@@ -177,7 +177,7 @@ public sealed interface Packet {
     /**
      * PUBLISH (§3.3), QoS 0, 1 or 2 as read, with its Response Topic and Correlation Data, null when absent. A
      * {@code null} payload is the empty one. {@code packetId} is 0 at QoS 0, and at QoS 1 until the client gives the
-     * message one. {@code meta} holds the other application properties a broker passes on unchanged (§3.3.2.3).
+     * message one. {@code meta} holds the other application properties a gateway passes on unchanged (§3.3.2.3).
      * Two publishes are equal when every field is, the payload and correlation data compared by content. Nothing
      * writes into the payload or the correlation data once the record is built (the codec decodes each into an array
      * of its own), so every holder, a session's queue, a link, the watch, shares them by reference.

@@ -49,13 +49,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-/// Links between real brokers in one JVM, and against [FakeGateway] where the test must answer for the peer: one copy
+/// Links between real gateways in one JVM, and against [FakeGateway] where the test must answer for the peer: one copy
 /// per message whatever the filters overlap, no echo over a two-way link, order and no loss across a peer's and the
 /// link's restart with a backlog, filter changes that miss nothing covered and lose nothing queued, the hop limit on a
 /// loop of three, the PUBACK classes, a refused message sent again alone and counted when a later one overtook
 /// it, the bound on what waits for a link's strand, a close that answers what waits and interrupts nothing,
 /// expiry while queued, the IN side's PUBACK after the local publish, a message in outside the IN filters dropped,
-/// the checks on what a link is given, a link's spec kept across a restart, and a TLS link that waits for the mesh's
+/// the checks on what a link is given, a link's spec kept across a restart, and a TLS link that waits for the octopus's
 /// TLS context.
 class LinksTest {
 
@@ -225,7 +225,7 @@ class LinksTest {
         }
     }
 
-    /// Three brokers linked in a ring, A to B to C to A, with a hop limit of 3: a message published on A goes round
+    /// Three gateways linked in a ring, A to B to C to A, with a hop limit of 3: a message published on A goes round
     /// once, comes back to A with three hops and stops there, counted as dropped by the link that refused it.
     @Test
     void theHopLimitStopsAThreeGatewayLoop() throws Exception {
@@ -314,7 +314,7 @@ class LinksTest {
         }
     }
 
-    /// Between real brokers: a peer whose own queue refuses the first of three messages (0x97) and takes the next
+    /// Between real gateways: a peer whose own queue refuses the first of three messages (0x97) and takes the next
     /// two gets the first once more, alone, and none of the two again; the link counts the one overtaking.
     @Test
     void aRefusalBetweenGatewaysResendsOnlyTheRefusedMessage() throws Exception {
@@ -593,7 +593,7 @@ class LinksTest {
     }
 
     /// The IN side subscribes on the peer with No Local and Retain As Published, publishes what arrives on the
-    /// local broker with one more hop, and answers the peer only when that publish completes, with its code; a
+    /// local gateway with one more hop, and answers the peer only when that publish completes, with its code; a
     /// message past the hop limit is answered 0x00 and not published; replacing the IN filters subscribes to the new
     /// one before it unsubscribes from the old.
     @Test
@@ -629,7 +629,7 @@ class LinksTest {
     }
 
     /// A peer that pushes a message the link never subscribed to (another machine's server, for one) is answered
-    /// 0x00 and nothing reaches the local broker, on a link with no IN filters and on one whose IN filters do not
+    /// 0x00 and nothing reaches the local gateway, on a link with no IN filters and on one whose IN filters do not
     /// cover the topic; each such message is counted as dropped, and one the filters cover still arrives.
     @Test
     void aMessageInOutsideTheInFiltersIsDroppedAndCounted() throws Exception {
@@ -658,7 +658,7 @@ class LinksTest {
         }
     }
 
-    /// The mesh refuses what it cannot run (an id that is not a folder name, an empty host, a port or hop limit out
+    /// The octopus refuses what it cannot run (an id that is not a folder name, an empty host, a port or hop limit out
     /// of range, a filter that is not one) and a change to an unknown link; it replaces a link put again, forgets a
     /// removed one, and lists the links by id.
     @Test
@@ -692,7 +692,7 @@ class LinksTest {
         }
     }
 
-    /// A link to another machine's node is named `<node>@<machine>`: the mesh takes the id, keeps the link in a
+    /// A link to another machine's node is named `<node>@<machine>`: the octopus takes the id, keeps the link in a
     /// folder of that name and brings it back from there after a restart; a `/` after it is still refused.
     @Test
     void aLinkToAnotherMachineIsNamedNodeAtMachine() throws Exception {
@@ -775,7 +775,7 @@ class LinksTest {
         }
     }
 
-    /// A TLS link put before the mesh has a TLS context stays down, its state saying why, and opens no connection;
+    /// A TLS link put before the octopus has a TLS context stays down, its state saying why, and opens no connection;
     /// once the context is set it connects over TLS with this machine's key and its reason is cleared. Its spec, a
     /// filter change included, keeps `tls` across a restart, where the link waits for the context again.
     @Test
@@ -808,8 +808,8 @@ class LinksTest {
         }
     }
 
-    /// A plain link stays plain once the mesh has a TLS context, a TLS link whose handshake fails shows the failure
-    /// as its reason, and a closed mesh refuses a context.
+    /// A plain link stays plain once the octopus has a TLS context, a TLS link whose handshake fails shows the failure
+    /// as its reason, and a closed octopus refuses a context.
     @Test
     void tlsContextLeavesPlainLinksPlainAndAFailedHandshakeIsTheReason(@TempDir final Path keys) throws Exception {
         final MachineKey local = MachineKey.loadOrCreate(keys.resolve("a"), "a");
@@ -833,9 +833,9 @@ class LinksTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
-    /// Each TLS link dials with the context the mesh gives its id: a link to `b` whose context pins `b` alone fails
+    /// Each TLS link dials with the context the octopus gives its id: a link to `b` whose context pins `b` alone fails
     /// the handshake with a peer that presents `c`'s certificate, `c` pinned in another link's context, which connects
-    /// to that same peer; a link the mesh gives no context stays down with [Link#NO_TLS].
+    /// to that same peer; a link the octopus gives no context stays down with [Link#NO_TLS].
     @Test
     void eachTlsLinkTrustsOnlyTheKeyOfItsOwnContext(@TempDir final Path keys) throws Exception {
         final MachineKey local = MachineKey.loadOrCreate(keys.resolve("a"), "a");
@@ -976,7 +976,7 @@ class LinksTest {
         return Integer.parseInt(new String(m.payload(), StandardCharsets.UTF_8));
     }
 
-    /// An internal subscriber on a broker that records what reaches it and answers 0x00 at once, or, holding, leaves
+    /// An internal subscriber on a gateway that records what reaches it and answers 0x00 at once, or, holding, leaves
     /// each answer to the test.
     private static final class Probe implements InternalSubscriber {
 

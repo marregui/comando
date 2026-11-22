@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="740" viewBox="0 0 1200 740" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title>The frontear watch: the gateway, the links and the logs write what they do into a ring that never locks or waits; one comando errand reads the ring every 250 ms and a snapshot of the node every second, and the frontear tab and the MCP tool frontear_read read the errand's copy, never the node</title>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker>
+<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#6FAEE8" stroke-width="1.4"/></marker>
+<marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#D98E5F" stroke-width="1.4"/></marker>
+</defs>
+<rect width="1200" height="740" fill="#161616"/>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">FRONTEAR · THE WATCH</text>
+<text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">A read-only view of the node, taken without slowing it down</text>
+
+<!-- the node and its writers -->
+<rect x="30" y="98" width="650" height="330" rx="10" fill="none" stroke="#3A3A3A" stroke-width="1"/>
+<text x="46" y="120" font-size="13" fill="#9AA0A6" letter-spacing="2">1 · THE NODE WRITES WHAT IT DOES</text>
+
+<rect x="46" y="136" width="270" height="76" rx="8" fill="#1E1E1E" stroke="#9AA0A6" stroke-width="1"/>
+<text x="62" y="160" font-size="13" fill="#9AA0A6" letter-spacing="2">GATEWAY · READER STRANDS</text>
+<text x="62" y="182" font-size="13" fill="#E8E8E8"><tspan font-family="Menlo, Consolas, monospace">Published</tspan>: origin, topic, QoS,</text>
+<text x="62" y="200" font-size="13" fill="#E8E8E8">bytes, matches, hops, payload</text>
+
+<rect x="46" y="226" width="270" height="94" rx="8" fill="#1E1E1E" stroke="#9AA0A6" stroke-width="1"/>
+<text x="62" y="250" font-size="13" fill="#9AA0A6" letter-spacing="2">LINK STRANDS</text>
+<text x="62" y="272" font-size="13" fill="#E8E8E8"><tspan font-family="Menlo, Consolas, monospace">LinkStep</tspan>: appended, sent, arrived,</text>
+<text x="62" y="292" font-size="13" fill="#E8E8E8">dropped, connected, disconnected</text>
+<text x="62" y="310" font-size="13" fill="#9AA0A6">with the offset or the reason</text>
+
+<rect x="46" y="334" width="270" height="76" rx="8" fill="#1E1E1E" stroke="#9AA0A6" stroke-width="1"/>
+<text x="62" y="358" font-size="13" fill="#9AA0A6" letter-spacing="2">LOG FORCERS</text>
+<text x="62" y="380" font-size="13" fill="#E8E8E8"><tspan font-family="Menlo, Consolas, monospace">ForceRound</tspan>: records, bytes</text>
+<text x="62" y="398" font-size="13" fill="#E8E8E8">written and forced, how long</text>
+
+<g stroke="#9AA0A6" stroke-width="1.2">
+<line x1="316" y1="174" x2="400" y2="214" marker-end="url(#a)"/>
+<line x1="316" y1="273" x2="398" y2="262" marker-end="url(#a)"/>
+<line x1="316" y1="372" x2="400" y2="300" marker-end="url(#a)"/>
+</g>
+
+<!-- the ring -->
+<circle cx="500" cy="250" r="96" fill="#2B2618" stroke="none"/>
+<circle cx="500" cy="250" r="88" fill="none" stroke="#E7C55A" stroke-width="16" stroke-dasharray="10 3"/>
+<circle cx="500" cy="250" r="72" fill="#1E1E1E" stroke="#3A3A3A"/>
+<text x="500" y="233" font-size="13" fill="#E7C55A" letter-spacing="2" text-anchor="middle">THE RING</text>
+<text x="500" y="255" font-size="13" fill="#E8E8E8" text-anchor="middle">16,384 slots</text>
+<text x="500" y="275" font-size="13" fill="#9AA0A6" text-anchor="middle" font-family="Menlo, Consolas, monospace">Watch</text>
+<text x="500" y="384" font-size="13" fill="#E8E8E8" text-anchor="middle">a writer takes the next sequence and stores</text>
+<text x="500" y="404" font-size="13" fill="#E8E8E8" text-anchor="middle">its event in that slot: <tspan fill="#E7C55A">no lock, no wait</tspan></text>
+
+<!-- the errand -->
+<rect x="720" y="120" width="440" height="150" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="736" y="144" font-size="13" fill="#6FAEE8" letter-spacing="2">2 · COMANDO'S ERRAND · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">LabDrain</tspan></text>
+<text x="736" y="170" font-size="13" fill="#E8E8E8">every 250 ms: <tspan font-family="Menlo, Consolas, monospace">since(last, max)</tspan> returns the events</text>
+<text x="736" y="190" font-size="13" fill="#E8E8E8">after the last it saw, how many it missed, and the</text>
+<text x="736" y="210" font-size="13" fill="#E8E8E8">new last; at once again while a read comes back full</text>
+<text x="736" y="236" font-size="13" fill="#E8E8E8">every second: the node's snapshot</text>
+<text x="736" y="256" font-size="13" fill="#9AA0A6">it copies both; readers never wait on the node</text>
+<line x1="598" y1="230" x2="716" y2="180" stroke="#6FAEE8" stroke-width="1.4" marker-end="url(#b)" stroke-dasharray="5 4"/>
+
+<!-- the readers -->
+<rect x="720" y="300" width="210" height="128" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="736" y="324" font-size="13" fill="#6FAEE8" letter-spacing="2">3 · THE FRONTEAR TAB</text>
+<text x="736" y="348" font-size="13" fill="#E8E8E8">Health: a row per link,</text>
+<text x="736" y="368" font-size="13" fill="#E8E8E8">its worst trouble first</text>
+<text x="736" y="388" font-size="13" fill="#E8E8E8">Traffic: the packets</text>
+<text x="736" y="412" font-size="13" fill="#9AA0A6">drawn on the EDT</text>
+
+<rect x="950" y="300" width="210" height="128" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="966" y="324" font-size="13" fill="#D98E5F" letter-spacing="2">3 · MCP TOOL</text>
+<text x="966" y="346" font-size="13" fill="#E8E8E8" font-family="Menlo, Consolas, monospace">frontear_read</text>
+<text x="966" y="370" font-size="13" fill="#E8E8E8">views: overview,</text>
+<text x="966" y="390" font-size="13" fill="#E8E8E8">traffic, octopus, store</text>
+<text x="966" y="412" font-size="13" fill="#9AA0A6">traffic: 200, at most 2,000</text>
+<line x1="825" y1="270" x2="825" y2="296" stroke="#6FAEE8" stroke-width="1.2" marker-end="url(#b)"/>
+<line x1="1055" y1="270" x2="1055" y2="296" stroke="#D98E5F" stroke-width="1.2" marker-end="url(#c)"/>
+
+<!-- the snapshot -->
+<rect x="40" y="456" width="1120" height="112" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="480" font-size="13" fill="#9AA0A6" letter-spacing="2">THE SNAPSHOT · <tspan font-family="Menlo, Consolas, monospace" letter-spacing="0">NodeSnapshot</tspan></text>
+<text x="1144" y="480" font-size="13" fill="#9AA0A6" text-anchor="end">each part is read on its own, so two parts may be a moment apart</text>
+<g font-size="13">
+<text x="56" y="508" fill="#E8E8E8">the gateway's figures</text>
+<text x="56" y="528" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">Gateway.Stats</text>
+<text x="56" y="548" fill="#9AA0A6">node, port, the time taken</text>
+<text x="336" y="508" fill="#E8E8E8">each client's connection</text>
+<text x="336" y="528" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">ConnectionView</text>
+<text x="336" y="548" fill="#9AA0A6">since, keep alive, in flight, …</text>
+<text x="616" y="508" fill="#E8E8E8">each link</text>
+<text x="616" y="528" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">LinkState</text>
+<text x="616" y="548" fill="#9AA0A6">connected, queued, sent, dropped</text>
+<text x="896" y="508" fill="#E8E8E8">each link's log</text>
+<text x="896" y="528" fill="#9AA0A6" font-family="Menlo, Consolas, monospace">LogView</text>
+<text x="896" y="548" fill="#9AA0A6">cursor, tail, bytes, segments</text>
+</g>
+
+<!-- the costs -->
+<rect x="40" y="588" width="360" height="80" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="56" y="612" font-size="13" fill="#9AA0A6" letter-spacing="2">OFF</text>
+<text x="56" y="634" font-size="13" fill="#E8E8E8">a hook costs one volatile read</text>
+<text x="56" y="654" font-size="13" fill="#E8E8E8">and builds nothing</text>
+<rect x="420" y="588" width="360" height="80" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="436" y="612" font-size="13" fill="#9AA0A6" letter-spacing="2">A READER A RING BEHIND</text>
+<text x="436" y="634" font-size="13" fill="#E8E8E8">loses the oldest events, counted as</text>
+<text x="436" y="654" font-size="13" fill="#E8E8E8">missed; the publisher never slows</text>
+<rect x="800" y="588" width="360" height="80" rx="8" fill="#1E1E1E" stroke="#3A3A3A" stroke-width="1"/>
+<text x="816" y="612" font-size="13" fill="#9AA0A6" letter-spacing="2">PAYLOADS</text>
+<text x="816" y="634" font-size="13" fill="#E8E8E8">kept by reference, not copied; over</text>
+<text x="816" y="654" font-size="13" fill="#E8E8E8">8 KiB, a copy of the first 8 KiB</text>
+
+<line x1="40" y1="694" x2="1160" y2="694" stroke="#2A2A2A" stroke-width="1"/>
+<rect x="40" y="708" width="14" height="14" rx="3" fill="#E7C55A"/><text x="60" y="720" font-size="13" fill="#9AA0A6">the watch</text>
+<rect x="150" y="708" width="14" height="14" rx="3" fill="#6FAEE8"/><text x="170" y="720" font-size="13" fill="#9AA0A6">comando</text>
+<rect x="260" y="708" width="14" height="14" rx="3" fill="#D98E5F"/><text x="280" y="720" font-size="13" fill="#9AA0A6">Claude Code, through MCP</text>
+<text x="1160" y="720" font-size="13" fill="#9AA0A6" text-anchor="end">comando · docs/frontear.md</text>
+</svg>

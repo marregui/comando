@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1100" height="600" viewBox="0 0 1100 600" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-<title>A signed frontear control request and the checks the node makes before it acts</title>
+<title>A signed frontear control request and the checks alexander, the node's control plane, makes before it acts</title>
 <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9AA0A6" stroke-width="1.4"/></marker></defs>
 <rect width="1100" height="600" fill="#161616"/>
-<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · FRONTEAR · THE CONTROL PLANE</text>
+<text x="40" y="44" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">MODULE · FRONTEAR · ALEXANDER, THE CONTROL PLANE</text>
 <text x="40" y="76" font-size="22" font-weight="300" fill="#E8E8E8">A request is an MQTT message with a signature on it</text>
 
 <text x="40" y="116" font-size="13" fill="#9AA0A6" letter-spacing="2">THE REQUEST</text>

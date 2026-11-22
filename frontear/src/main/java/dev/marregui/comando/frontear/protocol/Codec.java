@@ -530,7 +530,7 @@ public final class Codec {
     private static Packet.Subscribe subscribe(final Wire.In in) throws MqttException {
         final int packetId = in.u16();
         if (properties(in, SUBSCRIBE_PROPERTIES).has(SUBSCRIPTION_ID)) {
-            // the CONNACK of frontear's broker states Subscription Identifiers Available 0 (§3.8.2.1.2)
+            // the CONNACK of frontear's gateway states Subscription Identifiers Available 0 (§3.8.2.1.2)
             throw new MqttException(Packet.SUBSCRIPTION_IDS_NOT_SUPPORTED, "subscription identifier not supported "
                     + "[packetId=" + packetId + ']');
         }

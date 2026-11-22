@@ -3,7 +3,7 @@ package dev.marregui.comando.frontear.octopus;
 import java.util.List;
 import java.util.Set;
 
-/** The links of a broker to its peers, changed while they run. */
+/** The links of a gateway to its peers, changed while they run. */
 public interface Octopus {
 
     /** Adds the link {@code spec} names, or replaces the one with its id; refuses a value out of range. */

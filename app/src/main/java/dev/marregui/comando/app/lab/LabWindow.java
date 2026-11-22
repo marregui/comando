@@ -12,7 +12,7 @@ import dev.marregui.comando.core.port.LabPort.Packet;
  */
 final class LabWindow {
 
-    /** The packets kept (ADR 0187 §2.3): a minute of a busy fabric's traffic, a few MiB of rows. */
+    /** The packets kept (ADR 0187 §2.3): a minute of a busy octopus's traffic, a few MiB of rows. */
     static final int CAPACITY = 10_000;
 
     private final Packet[] ring;

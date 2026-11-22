@@ -62,7 +62,7 @@ the machine's QuestDB alone; no file is written or read, the last context of a l
 `comando_turn` alone, and a write QuestDB does not take is lost and told in a notice, once an outage.
 
 2026-11-11: 78% of `comando_queue`'s rows measured on one machine were idle (depth 0, peak at most 1), and seven timed
-strands (`kit-check`, `db-timer`, `peer-broker`, …) read depth 1 or more at every reading, as each holds its next run.
+strands (`kit-check`, `db-timer`, `peer-gateway`, …) read depth 1 or more at every reading, as each holds its next run.
 `MetricsLog.queues` enters a queue only when its reading (depth, peak) differs from the one last written for it (a
 queue not written before has none): its last row holds until the next, so a return to idle is written, and the peak's
 fall to 0 after it; an event left with no queue is not sent. The state is one reading a queue name, on the

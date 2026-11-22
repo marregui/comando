@@ -29,7 +29,7 @@ import dev.marregui.comando.frontear.watch.LogView;
 import dev.marregui.comando.frontear.watch.Watch;
 
 /**
- * A broker's links to its peers, each with its log in a folder of {@code dataDir} named by its id. Any thread may
+ * A gateway's links to its peers, each with its log in a folder of {@code dataDir} named by its id. Any thread may
  * call any method; changes are serialised. Removing a link keeps its log, so putting it back resumes where it was.
  *
  * <p>Each link's spec is kept beside its log ({@link LinkFile}), written and forced before a put or a filter change
@@ -62,7 +62,7 @@ public final class Links implements Octopus, AutoCloseable {
     private final Object lock = new Object();
     /** Written under {@link #lock}; read from any thread by {@link #state}. */
     private final Map<String, Link> links = new ConcurrentHashMap<>();
-    /** Told each client the broker accepts: a peer's link to this node wakes this node's link to that peer. */
+    /** Told each client the gateway accepts: a peer's link to this node wakes this node's link to that peer. */
     private final Consumer<String> connectListener = this::peerConnected;
     /**
      * Each link's TLS context by its id, null until {@link #tls} gives one: written by the caller of {@link #tls}
@@ -110,7 +110,7 @@ public final class Links implements Octopus, AutoCloseable {
     Links(final Gateway gateway, final String localId, final Path dataDir, final LogOptions log,
             final LinkOptions options, final InstantSource clock, final Watch watch) {
         this.watch = Objects.requireNonNull(watch, "watch");
-        this.gateway = Objects.requireNonNull(gateway, "broker");
+        this.gateway = Objects.requireNonNull(gateway, "gateway");
         this.localId = Objects.requireNonNull(localId, "localId");
         this.dataDir = Objects.requireNonNull(dataDir, "dataDir");
         this.log = Objects.requireNonNull(log, "log");
@@ -280,7 +280,7 @@ public final class Links implements Octopus, AutoCloseable {
     }
 
     /**
-     * The hops {@code message} has made between brokers, as a link counts them: 0 when it carries no count, -1 when
+     * The hops {@code message} has made between gateways, as a link counts them: 0 when it carries no count, -1 when
      * its count is not one decimal number.
      */
     public static int hops(final Packet.Publish message) {
@@ -347,7 +347,7 @@ public final class Links implements Octopus, AutoCloseable {
     }
 
     /**
-     * Client {@code clientId} connected to this node's broker: when it is a peer's link to this node,
+     * Client {@code clientId} connected to this node's gateway: when it is a peer's link to this node,
      * {@code <peer>~<localId>}, the peer runs again, so this node's link {@code <peer>} reconnects now rather than at
      * the end of its backoff. On the connection's reader; never blocks.
      */

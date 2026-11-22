@@ -4,7 +4,7 @@ import java.io.IOException;
 
 /**
  * An MQTT failure with its MQTT 5 reason code (§2.4): a packet that breaks the protocol, read or about to be written,
- * a broker's refusal of a connect, a publish or a subscription, or a lost connection. The code, not the message, says
+ * a gateway's refusal of a connect, a publish or a subscription, or a lost connection. The code, not the message, says
  * what happened.
  */
 public final class MqttException extends IOException {

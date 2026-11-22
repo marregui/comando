@@ -14,9 +14,9 @@ import dev.marregui.comando.frontear.watch.ConnectionView;
 /**
  * One client's session (§4.1), held in memory while it is connected and, offline, until its expiry: the QoS 1 messages
  * sent and not yet acknowledged, in the order sent and within the client's receive maximum, the QoS 1 messages queued
- * behind them, and the will its last connection left. Its subscriptions are in the broker's tree. What it holds is
- * bounded by the broker's {@code maxQueued} and {@code maxQueuedBytes}. Every method takes the session's lock; none
- * calls out of the broker under it, so a send only queues bytes on the connection's writer.
+ * behind them, and the will its last connection left. Its subscriptions are in the gateway's tree. What it holds is
+ * bounded by the gateway's {@code maxQueued} and {@code maxQueuedBytes}. Every method takes the session's lock; none
+ * calls out of the gateway under it, so a send only queues bytes on the connection's writer.
  */
 final class Session {
 
@@ -32,7 +32,7 @@ final class Session {
     // the ids in inflight a new connection has not had again yet, in the order sent (§4.4)
     private final ArrayDeque<Integer> resend = new ArrayDeque<>();
     private final ArrayDeque<Queued> queue = new ArrayDeque<>();
-    // the weight of the messages in inflight and queue (Packet.Publish.weight), against the broker's maxQueuedBytes
+    // the weight of the messages in inflight and queue (Packet.Publish.weight), against the gateway's maxQueuedBytes
     private long heldBytes;
     private Connection connection;
     private int receiveMaximum = Packet.DEFAULT_RECEIVE_MAXIMUM;
@@ -323,7 +323,7 @@ final class Session {
                 return bytes;
             }
         } catch (final MqttException _) {
-            // a message the broker read fits a packet; one too long to write is dropped as one too large to send
+            // a message the gateway read fits a packet; one too long to write is dropped as one too large to send
         }
         gateway.droppedOversize.increment();
         return null;
@@ -340,7 +340,7 @@ final class Session {
         }
     }
 
-    /** A message for one client, as it is to be forwarded, and when the broker received it. */
+    /** A message for one client, as it is to be forwarded, and when the gateway received it. */
     record Queued(Packet.Publish publish, long receivedMillis) {
     }
 }

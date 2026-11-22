@@ -50,8 +50,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
-/// Instances consulting each other through a broker (record 123), with a broker in memory between fake instances: each
-/// with its own state, transcripts and data root, and a window that applies the intents a test needs.
+/// Instances consulting each other through a gateway (record 123), with a gateway in memory between fake instances:
+/// each with its own state, transcripts and data root, and a window that applies the intents a test needs.
 class PeersTest {
 
     private static final Duration WAIT = Duration.ofSeconds(10);
@@ -131,10 +131,11 @@ class PeersTest {
         Thread.sleep(400);
         assertThat(asking).as("no reply before the turn ends").isNotDone();
 
-        b.window.turn("consult-main", "X is a broker.", "Done.");
+        b.window.turn("consult-main", "X is a link.", "Done.");
         final McpTools.Outcome reply = asking.get(WAIT.toSeconds(), TimeUnit.SECONDS);
         assertThat(reply.error()).as(reply.text()).isFalse();
-        assertThat(reply.text()).startsWith("reply from comando · b (its session consult-main):").contains("X is a broker.\n\nDone.")
+        assertThat(reply.text()).startsWith("reply from comando · b (its session consult-main):")
+                .contains("X is a link.\n\nDone.")
                 .doesNotContain("tool output");
     }
 
@@ -237,10 +238,10 @@ class PeersTest {
         assertThat(call(main, "instance_reply", "{\"id\":\"" + id.group(1) + "\",\"wait_seconds\":0}").text()).contains("no reply from comando · b yet");
 
         b.window.recorded.await(Intent.PromptSession.class, WAIT);
-        b.window.turn("consult-main", "X is a broker.");
+        b.window.turn("consult-main", "X is a link.");
         final McpTools.Outcome reply = call(main, "instance_reply", "{\"id\":\"" + id.group(1) + "\",\"wait_seconds\":10}");
         assertThat(reply.error()).as(reply.text()).isFalse();
-        assertThat(reply.text()).contains("X is a broker.");
+        assertThat(reply.text()).contains("X is a link.");
         assertThat(call(main, "instance_reply", "{\"id\":\"" + id.group(1) + "\"}").text()).contains("waits for a reply", "read once");
     }
 
@@ -322,7 +323,7 @@ class PeersTest {
         b.window.state.updateAndGet(s -> turns(s, "work", 1));
         b.window.state.updateAndGet(s -> s.withSession("work", x -> x.withActivity("running Bash", 0L).withContext(42_000, 100_000)));
         b.window.transcripts.of("work").append(new Block.UserPrompt("[from instance comando]\nwhat is X?\nmore", "work", ""));
-        b.window.transcripts.of("work").append(new Block.AssistantText("m1", 0, "X is a broker.\nDetails.", false, ""));
+        b.window.transcripts.of("work").append(new Block.AssistantText("m1", 0, "X is a link.\nDetails.", false, ""));
         b.window.transcripts.of("work").append(new Block.UserPrompt("a subagent's prompt", "work", "tool-1"));
         b.peers.tick();
         // the presence after the last change: the periodic tick or the connect may send one made between the updates
@@ -336,7 +337,7 @@ class PeersTest {
         assertThat(work.status()).isEqualTo("OPEN");
         assertThat(work.context()).isEqualTo(42);
         assertThat(work.prompt()).as("the consult header skipped, the subagent's prompt not the session's").isEqualTo("what is X?");
-        assertThat(work.reply()).isEqualTo("X is a broker.");
+        assertThat(work.reply()).isEqualTo("X is a link.");
         assertThat(call(main, "instances_list", "{}").text()).contains("work (busy: running Bash) last asked: what is X?");
     }
 
@@ -449,8 +450,8 @@ class PeersTest {
         Awaitility.await().atMost(WAIT).until(() -> present(main).equals(List.of("b")));
     }
 
-    /// Forgetting an instance that left tells the fabric, so its link and registry entry go too; an instance present
-    /// is not forgotten, and the fabric is not told.
+    /// Forgetting an instance that left tells the octopus, so its link and registry entry go too; an instance present
+    /// is not forgotten, and the octopus is not told.
     @Test
     void forgettingAnInstanceTellsTheOctopus() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
@@ -469,7 +470,7 @@ class PeersTest {
         assertThat(main.peers.instances().others()).isEmpty();
     }
 
-    /// An instance whose presence first comes has its link put at once, on an errand, not at the fabric's next look; a
+    /// An instance whose presence first comes has its link put at once, on an errand, not at the octopus's next look; a
     /// presence of it again puts nothing, and this instance's own never does. A question to it puts the link first, on
     /// the asker's thread, before the question leaves.
     @Test
@@ -526,10 +527,10 @@ class PeersTest {
         assertThat(b.window.recorded.of(Intent.PromptSession.class).getFirst().text()).as("no session in the header")
                 .isEqualTo("[from instance comando · overseer]\nwhat is X?");
 
-        b.window.turn("consult-main", "X is a broker.");
+        b.window.turn("consult-main", "X is a link.");
         final InstancesState.Consult asked = main.window.recorded.await(Intent.InstancesChanged.class,
                 i -> i.instances().consults().stream().anyMatch(c -> c.status() == InstancesState.Status.OK), WAIT).instances().consults().getFirst();
-        assertThat(asked.reply()).isEqualTo("X is a broker.");
+        assertThat(asked.reply()).isEqualTo("X is a link.");
         assertThat(asked.endedAt()).isGreaterThanOrEqualTo(asked.askedAt());
         final InstancesState.Consult answered = b.window.recorded.await(Intent.InstancesChanged.class,
                 i -> i.instances().consults().stream().anyMatch(c -> c.status() == InstancesState.Status.OK), WAIT).instances().consults().getFirst();
@@ -674,8 +675,8 @@ class PeersTest {
         assertThat(refused.text()).contains("session work of comando · b is waiting for a reply of its own");
         assertThat(b.window.recorded.of(Intent.PromptSession.class)).isEmpty();
 
-        main.window.turn("consult-b", "X is a broker.");
-        assertThat(bAsks.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a broker.");
+        main.window.turn("consult-b", "X is a link.");
+        assertThat(bAsks.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a link.");
         final CompletableFuture<McpTools.Outcome> again = async(main, "foreman", "instance_ask",
                 "{\"instance\":\"b\",\"session\":\"work\",\"text\":\"and you?\",\"wait_seconds\":30}");
         b.window.recorded.await(Intent.PromptSession.class, p -> p.session().equals("work"), WAIT);
@@ -793,8 +794,8 @@ class PeersTest {
         assertThat(p.session()).isEqualTo("consult-x@a");
         assertThat(p.text()).isEqualTo("[from instance x@a · peer · session foreman]\nwhat is X?");
         assertThat(made(w, "consult-x@a").planMode()).isTrue();
-        w.window.turn("consult-x@a", "X is a broker.");
-        assertThat(asked.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a broker.");
+        w.window.turn("consult-x@a", "X is a link.");
+        assertThat(asked.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a link.");
 
         final McpTools.Outcome fromMain = call(mainA, "instance_ask",
                 "{\"instance\":\"w@b\",\"text\":\"and Y?\",\"wait_seconds\":0}");
@@ -873,9 +874,9 @@ class PeersTest {
         a.deliver(new PeerGateway.Message(Peers.replyTopic("a", "x"), forged, null, correlation), false);
 
         w.window.recorded.await(Intent.PromptSession.class, WAIT);
-        w.window.turn("consult-x@a", "X is a broker.");
+        w.window.turn("consult-x@a", "X is a link.");
         final McpTools.Outcome read = call(x, "instance_reply", "{\"id\":\"" + id.group(1) + "\",\"wait_seconds\":10}");
-        assertThat(read.text()).contains("X is a broker.").doesNotContain("forged");
+        assertThat(read.text()).contains("X is a link.").doesNotContain("forged");
     }
 
     /// A question of a machine with an id to an instance of the same machine goes as before: on the local topics,
@@ -895,13 +896,13 @@ class PeersTest {
                 .findFirst().orElseThrow();
         assertThat(q.message().responseTopic()).isEqualTo(Peers.replyTopic("main"));
         assertThat(q.expirySeconds()).isEqualTo(Peers.ANSWER_WITHIN.plusSeconds(40).toSeconds());
-        y.window.turn("consult-main", "X is a broker.");
-        assertThat(asked.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a broker.");
+        y.window.turn("consult-main", "X is a link.");
+        assertThat(asked.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a link.");
     }
 
     /// The presence another machine sees carries the name, slug, version, role, whether it is busy and the sessions'
     /// names only: no folder, branch, prompt, reply, task or kit, which this machine's presence carries; it expires
-    /// with the broker after 30 s, and this instance's close clears it on both machines.
+    /// with the gateway after 30 s, and this instance's close clears it on both machines.
     @Test
     void theCutPresenceCarriesNoFolderBranchPromptOrReplyAndIsClearedOnClose() throws Exception {
         final Bus a = new Bus("a");
@@ -1336,7 +1337,8 @@ class PeersTest {
         tools.peers(peers);
         peers.start();
         link.connect();
-        // the connect's own presence goes out on the ticks' strand; the test's sends it now, so the others see it at once
+        // the connect's own presence goes out on the ticks' strand; the test's sends it now, so the others see it at
+        // once
         peers.tick();
         final Node n = new Node(window, link, peers, tools, home.resolve("agents.json"), home);
         nodes.add(n);
@@ -1410,9 +1412,9 @@ class PeersTest {
     }
 
     /**
-     * A broker in memory: retained messages, last wills, delivery to each matching subscription of a live link. A bus
-     * of a machine is one machine's broker: its topics between machines reach the buses it is crossed with, stamped
-     * with its origin as the gateway stamps them, and its {@code local} topics stay on it.
+     * A gateway in memory: retained messages, last wills, delivery to each matching subscription of a live link. A bus
+     * of a machine is one machine's gateway: its topics between machines reach the buses it is crossed with, stamped
+     * with its origin as the border gateway stamps them, and its {@code local} topics stay on it.
      */
     private static final class Bus {
         final Map<String, byte[]> retained = new LinkedHashMap<>();
@@ -1431,7 +1433,7 @@ class PeersTest {
             this.machine = machine;
         }
 
-        /** Crosses each of {@code buses} with every other, as paired machines' gateways do. */
+        /** Crosses each of {@code buses} with every other, as paired machines' border gateways do. */
         static void cross(final Bus... buses) {
             for (final Bus a : buses) {
                 for (final Bus b : buses) {
@@ -1520,7 +1522,7 @@ class PeersTest {
             subs.forEach((filter, handler) -> bus.retained(filter).forEach(handler));
         }
 
-        /** Gone without a goodbye: the broker publishes the last will. */
+        /** Gone without a goodbye: the gateway publishes the last will. */
         void die() {
             up = false;
             bus.links.remove(this);
@@ -1573,7 +1575,7 @@ class PeersTest {
                 return CompletableFuture.failedFuture(new IllegalStateException("not connected"));
             }
             if (failing) {
-                return CompletableFuture.failedFuture(new IllegalStateException("the broker refused it"));
+                return CompletableFuture.failedFuture(new IllegalStateException("the gateway refused it"));
             }
             bus.publish(topic, payload, retained, responseTopic, correlation);
             return CompletableFuture.completedFuture(null);

@@ -91,7 +91,7 @@ final class FrontearTab {
             new Column("origin / link", "The client that published it, or the peer the step's link goes to"),
             new Column("topic", "The MQTT topic"),
             new Column("QoS", "The publish's quality of service: 0, 1 or 2"),
-            new Column("retain", "Whether the broker keeps it as the topic's retained message"),
+            new Column("retain", "Whether the gateway keeps it as the topic's retained message"),
             new Column("bytes", "The payload's size in bytes"),
             new Column("hops", "0: published on this node; 1: came over a link from a peer"),
             new Column("correlation", "Correlation data in hex: pairs a question with its reply"));

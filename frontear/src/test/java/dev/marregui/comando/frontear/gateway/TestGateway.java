@@ -21,20 +21,20 @@ import dev.marregui.comando.frontear.protocol.Packet;
 
 import static org.awaitility.Awaitility.await;
 
-/// A broker on a free loopback port for one test, timed by a clock the test moves by hand: message expiry, will
+/// A gateway on a free loopback port for one test, timed by a clock the test moves by hand: message expiry, will
 /// delay and session expiry fall due when the test says, never by waiting. Its limits are small, so a test reaches
 /// them in a few packets.
 final class TestGateway implements AutoCloseable {
 
-    /// How long a test waits for something the broker does on its own threads.
+    /// How long a test waits for something the gateway does on its own threads.
     static final Duration WAIT = Duration.ofSeconds(10);
-    /// The broker's Receive Maximum.
+    /// The gateway's Receive Maximum.
     static final int RECEIVE_MAXIMUM = 8;
-    /// The broker's Maximum Packet Size.
+    /// The gateway's Maximum Packet Size.
     static final int MAXIMUM_PACKET_SIZE = 64 * 1024;
     /// The QoS 1 messages a session queues beyond its client's Receive Maximum.
     static final int MAX_QUEUED = 4;
-    // the internal subscriber that counts, per client id, the presence clears the broker published
+    // the internal subscriber that counts, per client id, the presence clears the gateway published
     private static final String PRESENCE_WATCH = "test-presence-clears";
 
     final Clock clock = new Clock();
@@ -57,17 +57,17 @@ final class TestGateway implements AutoCloseable {
         gateway.close();
     }
 
-    /// A broker that keeps up to 16 sessions.
+    /// A gateway that keeps up to 16 sessions.
     static TestGateway start() throws IOException {
         return new TestGateway(16);
     }
 
-    /// A broker that keeps up to `maxSessions` sessions.
+    /// A gateway that keeps up to `maxSessions` sessions.
     static TestGateway start(final int maxSessions) throws IOException {
         return new TestGateway(maxSessions);
     }
 
-    /// A broker that keeps up to 16 sessions, with the bounds `b` sets.
+    /// A gateway that keeps up to 16 sessions, with the bounds `b` sets.
     static TestGateway start(final Bounds b) throws IOException {
         return new TestGateway(b);
     }
@@ -76,7 +76,7 @@ final class TestGateway implements AutoCloseable {
         return gateway.port();
     }
 
-    /// Publishes `message` through the broker as `origin` and returns its code, waiting at most [#WAIT] for it.
+    /// Publishes `message` through the gateway as `origin` and returns its code, waiting at most [#WAIT] for it.
     int publish(final Packet.Publish message, final String origin) {
         return gateway.publish(message, origin).orTimeout(WAIT.toMillis(), TimeUnit.MILLISECONDS).join();
     }
@@ -96,9 +96,9 @@ final class TestGateway implements AutoCloseable {
         }
     }
 
-    /// Sends `client`, connected as `clientId`, a DISCONNECT 0x00 and returns once the broker has marked its session
-    /// offline. The close the client sees can come before the broker records when the session went offline, and a
-    /// test that moves the clock in between leaves the session short of its expiry for good; the broker clears the
+    /// Sends `client`, connected as `clientId`, a DISCONNECT 0x00 and returns once the gateway has marked its session
+    /// offline. The close the client sees can come before the gateway records when the session went offline, and a
+    /// test that moves the clock in between leaves the session short of its expiry for good; the gateway clears the
     /// client's presence after that record, so this waits for the clear.
     void disconnect(final RawClient client, final String clientId) throws IOException {
         // a subscription again on the same filter replaces it, so every call may make sure the watcher is there

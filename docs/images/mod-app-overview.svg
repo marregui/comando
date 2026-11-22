@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" viewBox="0 0 1000 640" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
-  <title>The app module as the composition root: Main reads AppConfig and builds App; App builds core's state loop and plugs one class into each of the six ports: DbRouter, ClaudeAdapter, McpServer, ComandoUi, Store and ToolsAdapter; it also builds the machine's cdb, the fabric, the peers and the search</title>
+  <title>The app module as the composition root: Main reads AppConfig and builds App; App builds core's state loop and plugs one class into each of the six ports: DbRouter, ClaudeAdapter, McpServer, ComandoUi, Store and ToolsAdapter; it also builds the machine's cdb, the octopus network, the peers and the search</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#121212"/></linearGradient>
     <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#9AA0A6" stroke-width="1.5"/></marker>
@@ -68,8 +68,8 @@
   </g>
   <g font-size="13" fill="#9AA0A6">
     <text x="40" y="590">the machine's database</text>
-    <text x="270" y="590">the fabric the instances meet on</text>
-    <text x="570" y="590">this instance on the fabric</text>
+    <text x="270" y="590">the octopus network the instances meet on</text>
+    <text x="570" y="590">this instance on the octopus network</text>
     <text x="800" y="590">find in files</text>
   </g>
   <text x="40" y="622" font-size="13" fill="#9AA0A6">comando · docs/modules/app.md</text>

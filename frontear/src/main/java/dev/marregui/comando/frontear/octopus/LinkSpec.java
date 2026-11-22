@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * A link to the broker at {@code host}:{@code port}: the filters whose messages it carries {@code out} to the peer and
+ * A link to the gateway at {@code host}:{@code port}: the filters whose messages it carries {@code out} to the peer and
  * {@code in} from it, how many hops a message may have made before it stops being forwarded, and whether it connects
  * over TLS ({@link Links#tls}). The sets are copied; {@link Octopus#put} checks the values.
  */

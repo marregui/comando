@@ -16,7 +16,7 @@
 comando is a desktop workbench for people who work with databases and with Claude Code. You write in one editor. A
 block of text runs as SQL on the panel's database, or goes as a prompt to the panel's Claude Code session. Claude
 answers in the same window, with tables, plots, diffs and approval cards. Around that editor sit a database, a message
-broker, and a way to give an agent a memory. All three are written for comando, and its documentation explains each.
+gateway, and a way to give an agent a memory. All three are written for comando, and its documentation explains each.
 
 ## What you get
 
@@ -68,13 +68,13 @@ Start at [docs/README.md](docs/README.md). It is a map with three reading paths.
 |---|---|
 | use comando | [Tutorial](docs/tutorial.md) |
 | learn how an agent gets tools and a memory | [Kit and brain](docs/kit-and-brain.md) |
-| learn how a database or a broker works inside | [cdb](docs/cdb.md), [frontear](docs/frontear.md) |
+| learn how a database or a gateway works inside | [cdb](docs/cdb.md), [frontear](docs/frontear.md) |
 | read or change the code | [Architecture](docs/architecture.md) |
 
 ## Built with
 
 Java 25 and Swing, FlatLaf, jsvg, RSyntaxTextArea, JediTerm and pty4j, commonmark-java, the PostgreSQL JDBC driver.
-The database, the MQTT broker and client, JSON, diffs, SQL completion and the icons are comando's own code. Ten Gradle
+The database, the MQTT gateway and client, JSON, diffs, SQL completion and the icons are comando's own code. Ten Gradle
 modules: about 139 000 lines of Java and 134 000 lines of tests.
 
 ## Licence

@@ -184,7 +184,7 @@ final class InstancesTab {
         status.setForeground(Theme.MUTED_STRONG);
         status.putClientProperty("html.disable", Boolean.TRUE);
         start.setIcon(Icons.get("frontear-start"));
-        start.setToolTipText("Start frontear, the instances' MQTT fabric; every instance connects to it");
+        start.setToolTipText("Start frontear, the instances' octopus network; every instance connects to it");
         start.addActionListener(_ -> octopus.start());
         final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         buttons.setOpaque(false);
@@ -642,8 +642,8 @@ final class InstancesTab {
     }
 
     /**
-     * A session's dot, as the Sessions tab colours its icon: Claude's orange while a turn runs, green while it runs idle,
-     * grey while it is stopped, red when it failed.
+     * A session's dot, as the Sessions tab colours its icon: Claude's orange while a turn runs, green while it runs
+     * idle, grey while it is stopped, red when it failed.
      */
     static Color dot(final Member m) {
         if (m.busy()) {

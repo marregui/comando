@@ -45,7 +45,8 @@ class UiInstructionsTest {
         assertThat(main.substring(0, main.lastIndexOf('\n')))
                 .isEqualTo(surrogate.substring(0, surrogate.lastIndexOf('\n')));
         assertThat(surrogate).contains(
-                "frontear is comando's fabric between the instances on this machine, a trusted local environment",
+                "frontear is comando's octopus network between the instances on this machine, "
+                        + "a trusted local environment",
                 "[from instance <name> · session <s>]",
                 "carries the user's authority",
                 "The user overrules main at any time",

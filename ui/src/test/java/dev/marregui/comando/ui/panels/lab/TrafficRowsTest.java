@@ -68,7 +68,7 @@ class TrafficRowsTest {
     }
 
     /// The topics starting `$frontear/` or `comando/v1/local/fabric/` are control traffic, left out unless asked for,
-    /// presences of the fabric included; a topic that holds such a start further in is not.
+    /// presences of the octopus included; a topic that holds such a start further in is not.
     @Test
     void controlTrafficIsLeftOutUnlessAskedFor() {
         final List<Packet> packets = List.of(

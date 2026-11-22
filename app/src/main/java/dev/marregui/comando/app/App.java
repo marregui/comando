@@ -130,7 +130,7 @@ public final class App implements AutoCloseable {
     private final KitRoot root;
     private final RootLaunch launch;
     private final RootSetup setup;
-    /** frontear as the instances' broker, and this instance among them (record 123); null when left out. */
+    /** frontear as the instances' gateway, and this instance among them (record 123); null when left out. */
     private final MqttPeerGateway peerGateway;
     private final Peers peers;
     /** Reads the kit's version at start and every {@link #KIT_EVERY}, and the queues every {@link #QUEUES_EVERY}. */
@@ -170,18 +170,18 @@ public final class App implements AutoCloseable {
             final ConsoleRegistry consoles = new ConsoleRegistry();
             final SchemaRegistry schemas = new SchemaRegistry();
             final DeferredEffects effects = new DeferredEffects();
-            // the checkpoint threshold (record 129): the window's setting, in percent of a session's context window, read
-            // by the reducer at each turn's end, never below 10 % (Reflection.clamp)
+            // the checkpoint threshold (record 129): the window's setting, in percent of a session's context window,
+            // read by the reducer at each turn's end, never below 10 % (Reflection.clamp)
             final AtomicInteger checkpointThreshold = new AtomicInteger(Reflection.DEFAULT_PERCENT);
-            // the log is owned before the loop, so it closes after it and records the intents of the shutdown; it records
-            // the threshold too, which the reducer reads, and each change of it
+            // the log is owned before the loop, so it closes after it and records the intents of the shutdown; it
+            // records the threshold too, which the reducer reads, and each change of it
             final IntentLog log = config.recordIntents() ? own(new IntentLog(config.logDir(), initial, checkpointThreshold::get)) : null;
             loop = new StateLoop(initial, new Reducer(Clock.SYSTEM, appliedThreshold(log, checkpointThreshold::get)), effects);
             owned.push(loop);
             store.onNotice(text -> loop.dispatch(new Intent.Notify(Notice.Level.WARN, text, false)));
             store.onFoldersChanged(folders -> loop.dispatch(new Intent.FoldersRead(folders)));
-            // what is wrong with the kit's manifest is told, never dropped silently (record 133): the file refused whole,
-            // or each entry left out, with the palette's repair, which rewrites the file without them
+            // what is wrong with the kit's manifest is told, never dropped silently (record 133): the file refused
+            // whole, or each entry left out, with the palette's repair, which rewrites the file without them
             if (!root.refused().isEmpty()) {
                 loop.dispatch(new Intent.Notify(Notice.Level.WARN, root.refused(), false));
             }
@@ -237,7 +237,7 @@ public final class App implements AutoCloseable {
             claude.checkpointByComando();
             final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
-            // the instances' brokers, a node per instance, linked to the others' (record 187); off the peers, a
+            // the instances' gateways, a node per instance, linked to the others' (record 187); off the peers, a
             // registry of the data root's own, so no toggle of a test or picture tool touches the machine's
             final boolean onPeers = Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"));
             final FrontearOctopus octopus = FrontearOctopus.of(config.home(), InstanceName.current(), loop, onPeers);
@@ -257,7 +257,7 @@ public final class App implements AutoCloseable {
             ui.checkpointThreshold(checkpointThreshold::set);
             // the frontear tab and frontear_read read this node's watch, drained every 250 ms from launch, so the
             // watch is on with each node, a restarted one too; the packets go to the machine cdb when this instance
-            // writes there; the drain closes first, then the sink, both before the fabric (record 187)
+            // writes there; the drain closes first, then the sink, both before the octopus (record 187)
             final PacketSink packets = own(onPeers && machineCdb ? new PacketSink(new CdbWriter(cdb))
                     : PacketSink.off());
             final LabDrain lab = own(new LabDrain(new FrontearSource(octopus::node), SwingUtilities::invokeLater,
@@ -296,7 +296,7 @@ public final class App implements AutoCloseable {
                 mcpTools.peers(peers);
                 // the sidebar's Instances tab asks and refuses through it (record 124)
                 ui.instances(peers);
-                // this machine and its pairings: the gateway's node links to the paired machines' and every node
+                // this machine and its pairings: the border gateway's node links to the paired machines' and every node
                 // carries their topics to it; a question from another machine is answered as its grant says
                 // (record 189)
                 final Machines machines = Machines.of();
@@ -325,8 +325,8 @@ public final class App implements AutoCloseable {
                     + ", mcp=" + mcp.url() + ", claude=" + config.claudeExecutable() + ", root=" + root.dir()
                     + ", kit=" + (root.kit().isPresent() ? root.name() : "none") + ']');
         } catch (final RuntimeException | Error e) {
-            // roll back: close what was built, in reverse order, then report the cause; the kit check's strand too, when
-            // the failure came before it was owned
+            // roll back: close what was built, in reverse order, then report the cause; the kit check's strand too,
+            // when the failure came before it was owned
             try {
                 close();
             } finally {
@@ -520,8 +520,8 @@ public final class App implements AutoCloseable {
     /**
      * Closes and takes out every part of {@code owned}, the last pushed first. A part that throws is logged and the
      * rest still close: an {@link Exception} as a warning; an {@link Error} too, the first rethrown once every part has
-     * closed, the later ones suppressed in it, so a failing part never leaves the processes and files of the parts after
-     * it behind.
+     * closed, the later ones suppressed in it, so a failing part never leaves the processes and files of the parts
+     * after it behind.
      */
     static void closeAll(final Deque<AutoCloseable> owned) {
         Error failed = null;
