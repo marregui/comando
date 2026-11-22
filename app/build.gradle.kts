@@ -2,6 +2,8 @@ import java.nio.file.Files
 
 plugins {
     application
+    // one coverage report over every module app depends on: `./gradlew test testCodeCoverageReport`
+    `jacoco-report-aggregation`
 }
 
 // A release builds with -PreleaseVersion=<the tag without its v>: the packages are named after it, and the jar's manifest

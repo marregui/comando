@@ -2,6 +2,7 @@ package dev.marregui.comando.db;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.lang.reflect.Array;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -11,6 +12,8 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+
+import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.core.result.ColumnKind;
 import dev.marregui.comando.core.result.ResultView;
@@ -24,15 +27,25 @@ import dev.marregui.comando.core.result.ResultView;
  * when it grows, and a reader can meet a table grown for a row past the count it read: the writer stores a grown
  * table with a release store and readers load it with an acquire load, so the reader sees the table's copied
  * chunks.</p>
+ *
+ * <p>Every chunk holds {@link #CHUNK} rows except the first, which starts at {@link #FIRST_CHUNK} rows and doubles
+ * up to {@link #CHUNK}, so a short wide result does not reserve {@link #CHUNK} cells per column. A grown first
+ * chunk is a copy: the writer stores it in its slot with a release store and readers load every slot with an acquire
+ * load, so a reader that meets a copy made for a row past the count it read sees the cells copied into it.</p>
  */
 public final class ColumnarResult implements ResultView {
 
     static final int CHUNK_BITS = 14;
     static final int CHUNK = 1 << CHUNK_BITS;
     private static final int MASK = CHUNK - 1;
+    // one long of null bits; sizing only: up to 8 copies before the first chunk is full
+    static final int FIRST_CHUNK = 64;
     private static final VarHandle LONG_TABLE = MethodHandles.arrayElementVarHandle(long[][][].class);
     private static final VarHandle DOUBLE_TABLE = MethodHandles.arrayElementVarHandle(double[][][].class);
     private static final VarHandle TEXT_TABLE = MethodHandles.arrayElementVarHandle(String[][][].class);
+    private static final VarHandle LONG_SLOT = MethodHandles.arrayElementVarHandle(long[][].class);
+    private static final VarHandle DOUBLE_SLOT = MethodHandles.arrayElementVarHandle(double[][].class);
+    private static final VarHandle TEXT_SLOT = MethodHandles.arrayElementVarHandle(String[][].class);
 
     private final long requestId;
     private final String[] names;
@@ -111,30 +124,30 @@ public final class ColumnarResult implements ResultView {
                 case LONG -> {
                     final long v = rs.getLong(col);
                     isNull = rs.wasNull();
-                    longChunk(c, chunk)[at] = v;
+                    longChunk(c, chunk, at)[at] = v;
                 }
                 case DOUBLE -> {
                     final double v = rs.getDouble(col);
                     isNull = rs.wasNull();
-                    doubleChunk(c, chunk)[at] = v;
+                    doubleChunk(c, chunk, at)[at] = v;
                 }
                 case BOOLEAN -> {
                     final boolean v = rs.getBoolean(col);
                     isNull = rs.wasNull();
-                    longChunk(c, chunk)[at] = v ? 1L : 0L;
+                    longChunk(c, chunk, at)[at] = v ? 1L : 0L;
                 }
                 case TIMESTAMP -> {
                     final long v = readMicros(rs, col, sqlTypes[c]);
                     isNull = rs.wasNull();
-                    longChunk(c, chunk)[at] = v;
+                    longChunk(c, chunk, at)[at] = v;
                 }
                 default -> {
                     final String v = rs.getString(col);
                     isNull = v == null;
-                    textChunk(c, chunk)[at] = v;
+                    textChunk(c, chunk, at)[at] = v;
                 }
             }
-            final long[] bits = nullChunk(c, chunk);
+            final long[] bits = nullChunk(c, chunk, at);
             if (isNull) {
                 bits[at >>> 6] |= 1L << (at & 63);
             }
@@ -159,7 +172,7 @@ public final class ColumnarResult implements ResultView {
         }
     }
 
-    private long[] longChunk(final int c, final int chunk) {
+    private long[] longChunk(final int c, final int chunk, final int at) {
         long[][] table = longs[c];
         if (chunk == table.length) {
             // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
@@ -167,13 +180,15 @@ public final class ColumnarResult implements ResultView {
             LONG_TABLE.setRelease(longs, c, table);
         }
         long[] a = table[chunk];
-        if (a == null) {
-            table[chunk] = a = new long[CHUNK];
+        if (a == null || at >= a.length) {
+            final int rows = chunkRows(chunk, at);
+            a = a == null ? new long[rows] : Arrays.copyOf(a, rows);
+            LONG_SLOT.setRelease(table, chunk, a);
         }
         return a;
     }
 
-    private double[] doubleChunk(final int c, final int chunk) {
+    private double[] doubleChunk(final int c, final int chunk, final int at) {
         double[][] table = doubles[c];
         if (chunk == table.length) {
             // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
@@ -181,13 +196,15 @@ public final class ColumnarResult implements ResultView {
             DOUBLE_TABLE.setRelease(doubles, c, table);
         }
         double[] a = table[chunk];
-        if (a == null) {
-            table[chunk] = a = new double[CHUNK];
+        if (a == null || at >= a.length) {
+            final int rows = chunkRows(chunk, at);
+            a = a == null ? new double[rows] : Arrays.copyOf(a, rows);
+            DOUBLE_SLOT.setRelease(table, chunk, a);
         }
         return a;
     }
 
-    private String[] textChunk(final int c, final int chunk) {
+    private String[] textChunk(final int c, final int chunk, final int at) {
         String[][] table = texts[c];
         if (chunk == table.length) {
             // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
@@ -195,13 +212,15 @@ public final class ColumnarResult implements ResultView {
             TEXT_TABLE.setRelease(texts, c, table);
         }
         String[] a = table[chunk];
-        if (a == null) {
-            table[chunk] = a = new String[CHUNK];
+        if (a == null || at >= a.length) {
+            final int rows = chunkRows(chunk, at);
+            a = a == null ? new String[rows] : Arrays.copyOf(a, rows);
+            TEXT_SLOT.setRelease(table, chunk, a);
         }
         return a;
     }
 
-    private long[] nullChunk(final int c, final int chunk) {
+    private long[] nullChunk(final int c, final int chunk, final int at) {
         long[][] table = nulls[c];
         if (chunk == table.length) {
             // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
@@ -209,10 +228,34 @@ public final class ColumnarResult implements ResultView {
             LONG_TABLE.setRelease(nulls, c, table);
         }
         long[] a = table[chunk];
-        if (a == null) {
-            table[chunk] = a = new long[CHUNK >>> 6];
+        if (a == null || at >>> 6 >= a.length) {
+            final int words = chunkRows(chunk, at) >>> 6;
+            a = a == null ? new long[words] : Arrays.copyOf(a, words);
+            LONG_SLOT.setRelease(table, chunk, a);
         }
         return a;
+    }
+
+    /** The rows a chunk is allocated for to hold the row at {@code at}: the first doubles, the rest are full. */
+    private static int chunkRows(final int chunk, final int at) {
+        return chunk == 0 ? Math.max(FIRST_CHUNK, Integer.highestOneBit(at) << 1) : CHUNK;
+    }
+
+    /** The cells allocated for {@code column}, null bits not counted. */
+    @TestOnly
+    int capacity(final int column) {
+        final Object[] table = switch (kinds[column]) {
+            case LONG, BOOLEAN, TIMESTAMP -> longTable(longs, column);
+            case DOUBLE -> (Object[]) DOUBLE_TABLE.getAcquire(doubles, column);
+            case TEXT -> (Object[]) TEXT_TABLE.getAcquire(texts, column);
+        };
+        int cells = 0;
+        for (final Object chunk : table) {
+            if (chunk != null) {
+                cells += Array.getLength(chunk);
+            }
+        }
+        return cells;
     }
 
     // ---- ResultView
@@ -251,13 +294,13 @@ public final class ColumnarResult implements ResultView {
     public boolean isNull(final int row, final int column) {
         checkRow(row);
         final int at = row & MASK;
-        return (longTable(nulls, column)[row >>> CHUNK_BITS][at >>> 6] & (1L << (at & 63))) != 0;
+        return (readChunk(longTable(nulls, column), row)[at >>> 6] & (1L << (at & 63))) != 0;
     }
 
     @Override
     public long getLong(final int row, final int column) {
         checkRow(row);
-        return longTable(longs, column)[row >>> CHUNK_BITS][row & MASK];
+        return readChunk(longTable(longs, column), row)[row & MASK];
     }
 
     @Override
@@ -266,7 +309,8 @@ public final class ColumnarResult implements ResultView {
         if (kinds[column] != ColumnKind.DOUBLE) {
             return getLong(row, column);
         }
-        return ((double[][]) DOUBLE_TABLE.getAcquire(doubles, column))[row >>> CHUNK_BITS][row & MASK];
+        final double[][] table = (double[][]) DOUBLE_TABLE.getAcquire(doubles, column);
+        return ((double[]) DOUBLE_SLOT.getAcquire(table, row >>> CHUNK_BITS))[row & MASK];
     }
 
     @Override
@@ -282,12 +326,18 @@ public final class ColumnarResult implements ResultView {
             format(row, column, sb);
             return sb.toString();
         }
-        return ((String[][]) TEXT_TABLE.getAcquire(texts, column))[row >>> CHUNK_BITS][row & MASK];
+        final String[][] table = (String[][]) TEXT_TABLE.getAcquire(texts, column);
+        return ((String[]) TEXT_SLOT.getAcquire(table, row >>> CHUNK_BITS))[row & MASK];
     }
 
     /** A column's chunk table as a reader loads it: after the count, with an acquire load. */
     private static long[][] longTable(final long[][][] tables, final int column) {
         return (long[][]) LONG_TABLE.getAcquire(tables, column);
+    }
+
+    /** The chunk of {@code row} as a reader loads it, with an acquire load: the first chunk is replaced as it grows. */
+    private static long[] readChunk(final long[][] table, final int row) {
+        return (long[]) LONG_SLOT.getAcquire(table, row >>> CHUNK_BITS);
     }
 
     private void checkRow(final int row) {

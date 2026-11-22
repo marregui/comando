@@ -56,6 +56,29 @@ class ColumnarResultTest {
         check(result, ROWS - 1);
     }
 
+    /// A short result reserves only the rows of its first chunk, doubled from 64 as rows arrive, and keeps every value
+    /// across each copy; the second chunk is a full one.
+    @Test
+    void theFirstChunkGrowsByDoublingAndKeepsItsValues() throws Exception {
+        final ColumnarResult result = ColumnarResult.of(1L, metaData());
+        final Rows source = new Rows();
+        final int full = ColumnarResult.CHUNK;
+        final int[][] steps = {{1, 64}, {64, 64}, {65, 128}, {1000, 1024}, {full, full}, {full + 1, 2 * full}};
+        int row = 0;
+        for (final int[] step : steps) {
+            for (; row < step[0]; row++) {
+                source.row = row;
+                result.append(source.resultSet);
+            }
+            for (int c = 0; c < 3; c++) {
+                assertThat(result.capacity(c)).as("rows %d, column %d", step[0], c).isEqualTo(step[1]);
+            }
+            for (int r = 0; r < row; r++) {
+                check(result, r);
+            }
+        }
+    }
+
     /** Asserts the values of {@code row} as {@link Rows} writes them. */
     private static void check(final ColumnarResult result, final int row) {
         if (result.getLong(row, 0) != row || result.getDouble(row, 1) != row * 0.5) {

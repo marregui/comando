@@ -10,17 +10,20 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.util.concurrent.Executor;
+import java.util.function.BooleanSupplier;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
 
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.text.CaseFold;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
@@ -32,16 +35,29 @@ import dev.marregui.comando.ui.widget.capability.Searchable;
 
 /**
  * A grid over a {@link TableSource}. JTable paints only the visible rows; cells format into one reused
- * buffer. Sorting keeps a permutation of row indices instead of a sorter over boxed values. Sort and find run on the
- * event thread: a sort is bounded to {@link #MAX_EDT_ROWS} rows, and a larger result is not sorted; a find, whose cost
- * is rows times columns, to {@link #MAX_EDT_CELLS} cells, and looks at the first rows that fit. A copy takes at most
- * {@link #MAX_COPY_ROWS} rows, selected or not. A growing source adds rows without rebuilding the columns.
+ * buffer. Sorting keeps a permutation of row indices instead of a sorter over boxed values. A sort runs off the event
+ * thread over the rows shown when the header was clicked, bounded to {@link #MAX_SORT_ROWS} rows (a larger result is
+ * not sorted); the event thread shows its order only if nothing changed since: a newer click, another source or new
+ * rows drop it, so the latest click wins. A find runs on the event thread; its cost is rows times columns, so it looks
+ * at the first rows that fit {@link #MAX_EDT_ROWS} rows and {@link #MAX_EDT_CELLS} cells. A copy takes at most
+ * {@link #MAX_COPY_ROWS} rows, selected or not. A growing source adds rows without rebuilding the columns, and drops
+ * the sort.
  */
 public final class GridTable implements Searchable, Copyable, Exportable {
 
     static final int MAX_EDT_ROWS = 200_000;
     static final long MAX_EDT_CELLS = 2_000_000L;
     static final int MAX_COPY_ROWS = 200_000;
+    /**
+     * The rows a run keeps by default ({@code DbSettings.DEFAULTS}), so any such result sorts. Its keys are then at
+     * most 40 MB of doubles or, for text, about 280 MB of strings of 24 characters, held for the sort's length beside
+     * two 20 MB permutations, within the 4 GB heap the app runs with.
+     */
+    static final int MAX_SORT_ROWS = 5_000_000;
+    /** Rows insertion-sorted before the merges start: short runs where a merge pass costs more than it saves. */
+    private static final int RUN = 32;
+    /** Rows between two looks at whether a sort's result is still wanted while its keys are read. */
+    private static final int STALE_STRIDE = 1 << 16;
 
     final Model model = new Model(); // package-visible for tests
     private final JTable table = new JTable(model);
@@ -85,6 +101,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         model.rows = source == null ? 0 : source.rowCount();
         model.order = null;
         model.sortColumn = -1;
+        model.dropPendingSort();
         model.fireTableStructureChanged();
         sizeColumns();
     }
@@ -99,6 +116,8 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         final int now = s.rowCount();
         if (now > before) {
             model.rows = now;
+            // a sort running counts the rows it was clicked on, which no longer are all the rows
+            model.dropPendingSort();
             if (model.order != null) {
                 model.order = null;
                 model.sortColumn = -1;
@@ -148,6 +167,16 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         int[] order;
         int sortColumn = -1;
         boolean ascending = true;
+        /** Runs a sort off the event thread; package-visible for tests, which run a sort when they choose. */
+        Executor sorts = task -> UiErrands.start("grid-sort", task);
+        /**
+         * Bumped by each sort clicked, a new source and new rows: a sort whose number it no longer is shows nothing.
+         * Written on the event thread only; read there to publish, and by the sorts' threads to stop early.
+         */
+        private volatile int generation;
+        /** The column and direction of the sort running, -1 when none; on the event thread only. */
+        private int pendingColumn = -1;
+        private boolean pendingAscending;
 
         int sourceRow(final int row) {
             return order == null ? row : order[row];
@@ -182,41 +211,151 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             return cell.toString();
         }
 
+        /**
+         * Starts the sort a click on {@code modelColumn} asks for and returns: ascending, or the reverse of the sort
+         * shown or running on that column. Its order shows later, on the event thread, unless something changed.
+         */
         void toggleSort(final int modelColumn) {
-            if (modelColumn == 0 || source == null || rows > MAX_EDT_ROWS) {
+            if (modelColumn == 0 || source == null || rows > MAX_SORT_ROWS) {
                 return;
             }
             final int c = modelColumn - 1;
-            ascending = sortColumn != c || !ascending;
-            sortColumn = c;
-            final Integer[] idx = new Integer[rows];
-            for (int i = 0; i < rows; i++) {
-                idx[i] = i;
-            }
-            if (source.isNumeric(c)) {
-                final double[] keys = new double[rows];
-                for (int i = 0; i < rows; i++) {
-                    keys[i] = source.numeric(i, c);
+            final boolean up = pendingColumn >= 0
+                    ? pendingColumn != c || !pendingAscending
+                    : sortColumn != c || !ascending;
+            pendingColumn = c;
+            pendingAscending = up;
+            final int gen = ++generation;
+            final TableSource s = source;
+            final int n = rows;
+            final BooleanSupplier stale = () -> generation != gen || Thread.currentThread().isInterrupted();
+            sorts.execute(() -> {
+                final int[] o = sortedRows(s, c, n, up, stale);
+                if (o != null) {
+                    // the event queue's hand-off orders the permutation's writes before the event thread reads it
+                    SwingUtilities.invokeLater(() -> publish(gen, c, up, o));
                 }
-                Arrays.sort(idx, (a, b) -> Double.compare(keys[a], keys[b]));
-            } else {
-                final String[] keys = new String[rows];
-                final StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < rows; i++) {
-                    sb.setLength(0);
-                    source.format(i, c, sb);
-                    keys[i] = sb.toString();
-                }
-                Arrays.sort(idx, (a, b) -> keys[a].compareTo(keys[b]));
-            }
-            final int[] o = new int[rows];
-            for (int i = 0; i < rows; i++) {
-                o[i] = idx[ascending ? i : rows - 1 - i];
+            });
+        }
+
+        private void publish(final int gen, final int column, final boolean up, final int[] o) {
+            if (gen != generation) {
+                return;
             }
             order = o;
+            sortColumn = column;
+            ascending = up;
+            pendingColumn = -1;
             fireTableDataChanged();
             table.getTableHeader().repaint();
         }
+
+        void dropPendingSort() {
+            generation++;
+            pendingColumn = -1;
+        }
+    }
+
+    /**
+     * The first {@code rows} rows of {@code s} ordered by {@code column}, as the grid shows them: numbers by
+     * {@link Double#compare} (NaN last), text by {@link String#compareTo}, equal keys in row order, and descending the
+     * exact reverse of ascending. Null once {@code stale} says the result is no longer wanted.
+     */
+    static int[] sortedRows(
+            final TableSource s,
+            final int column,
+            final int rows,
+            final boolean ascending,
+            final BooleanSupplier stale
+    ) {
+        final RowOrder by;
+        if (s.isNumeric(column)) {
+            final double[] keys = new double[rows];
+            for (int i = 0; i < rows; i++) {
+                if ((i & STALE_STRIDE - 1) == 0 && stale.getAsBoolean()) {
+                    return null;
+                }
+                keys[i] = s.numeric(i, column);
+            }
+            by = (a, b) -> Double.compare(keys[a], keys[b]);
+        } else {
+            final String[] keys = new String[rows];
+            final StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < rows; i++) {
+                if ((i & STALE_STRIDE - 1) == 0 && stale.getAsBoolean()) {
+                    return null;
+                }
+                sb.setLength(0);
+                s.format(i, column, sb);
+                keys[i] = sb.toString();
+            }
+            by = (a, b) -> keys[a].compareTo(keys[b]);
+        }
+        final int[] up = stableSort(rows, by, stale);
+        if (up == null || ascending) {
+            return up;
+        }
+        final int[] down = new int[rows];
+        for (int i = 0; i < rows; i++) {
+            down[i] = up[rows - 1 - i];
+        }
+        return down;
+    }
+
+    /**
+     * Rows {@code 0..rows-1} in the ascending order of {@code by}, equal rows in row order: runs of {@link #RUN} by
+     * insertion, then merges of doubling width, each taking the left row on a tie. Null once {@code stale} says so.
+     */
+    private static int[] stableSort(final int rows, final RowOrder by, final BooleanSupplier stale) {
+        int[] a = new int[rows];
+        for (int i = 0; i < rows; i++) {
+            a[i] = i;
+        }
+        for (int lo = 0; lo < rows; lo += RUN) {
+            final int hi = Math.min(lo + RUN, rows);
+            for (int i = lo + 1; i < hi; i++) {
+                final int v = a[i];
+                int j = i - 1;
+                while (j >= lo && by.compare(a[j], v) > 0) {
+                    a[j + 1] = a[j];
+                    j--;
+                }
+                a[j + 1] = v;
+            }
+        }
+        int[] b = new int[rows];
+        // width and lo stay below 2 * MAX_SORT_ROWS, far from overflow
+        for (int width = RUN; width < rows; width *= 2) {
+            if (stale.getAsBoolean()) {
+                return null;
+            }
+            for (int lo = 0; lo < rows; lo += 2 * width) {
+                final int mid = Math.min(lo + width, rows);
+                final int hi = Math.min(lo + 2 * width, rows);
+                int i = lo;
+                int j = mid;
+                int k = lo;
+                while (i < mid && j < hi) {
+                    b[k++] = by.compare(a[j], a[i]) < 0 ? a[j++] : a[i++];
+                }
+                while (i < mid) {
+                    b[k++] = a[i++];
+                }
+                while (j < hi) {
+                    b[k++] = a[j++];
+                }
+            }
+            final int[] t = a;
+            a = b;
+            b = t;
+        }
+        return a;
+    }
+
+    /** Compares two source rows by the sort's key, as a {@link java.util.Comparator} of row indices would. */
+    @FunctionalInterface
+    private interface RowOrder {
+        int compare(int a, int b);
     }
 
     private final class Renderer extends DefaultTableCellRenderer {

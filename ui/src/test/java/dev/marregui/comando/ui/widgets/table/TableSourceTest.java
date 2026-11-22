@@ -2,8 +2,11 @@ package dev.marregui.comando.ui.widgets.table;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -11,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.view.ViewSpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /// [TableSource] reads a table view's cells; [GridTable] selects and exports them in the shown order.
 /// - numeric columns are detected from the values, with `null` as a null cell
@@ -56,6 +60,12 @@ class TableSourceTest {
         grid.setSource(TableSource.of(new ViewSpec.Table(List.of("id", "v"),
                 List.of(List.of("a", "3"), List.of("b", "1"), List.of("c", "2")))), "t.csv");
         grid.model.toggleSort(2); // model column 0 is the row number; 2 is v, ascending: b, c, a
+        // the sort runs off the event thread and publishes its order on it
+        await().atMost(Duration.ofSeconds(5)).until(() -> {
+            final AtomicReference<int[]> order = new AtomicReference<>();
+            SwingUtilities.invokeAndWait(() -> order.set(grid.model.order));
+            return order.get() != null;
+        });
         grid.table().setRowSelectionInterval(0, 1);
         assertThat(grid.selectedSourceRows()).containsExactly(1, 2);
 
