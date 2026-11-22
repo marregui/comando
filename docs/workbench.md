@@ -766,7 +766,7 @@ packet's payload, whole up to 8 KiB, else its first 8 KiB, in a fixed-width font
 two spaces when it is a JSON object or array, else as it came.
 
 While the machine's cdb runs ([§3.4](#34-the-machines-cdb)), each packet is also written to its table `frontear_packet`,
-and kept 24 hours, in hour partitions. Above 2,000 packets a second from one node the table keeps one in N and counts the rest as sampled; Traffic's bar then says it shows a sample, beside the window's packets, time span and the newest packet's age. A publish's payload, whole up to 8 KiB, else its first 8 KiB, goes to column `payload`, of type
+and kept 24 hours, in hour partitions. The sink writes with `create=false`: a table dropped meanwhile is made again by its own DDL rather than by the line protocol (a drop that lands in the middle of a write, or a cdb older than the parameter, still makes it by day). Above 2,000 packets a second from one node the table keeps one in N and counts the rest as sampled; Traffic's bar then says it shows a sample, beside the window's packets, time span and the newest packet's age. A publish's payload, whole up to 8 KiB, else its first 8 KiB, goes to column `payload`, of type
 JSON, when it is whole and one JSON document, an object or an array, else to `payload_text`. A table made by an earlier comando with a text
 `payload` keeps it, and its JSON payloads land there as text. A DROPPED packet's `code` names the reason as a number: 1
 the link's queue was full, 2 past the hop limit, 3 the link's log was full, 4 the peer refused it, 5 expired in the log,

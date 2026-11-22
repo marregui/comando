@@ -20,7 +20,10 @@ import dev.marregui.comando.core.json.JsonNode;
  * owner secret as bearer. Before its first write to a server it makes the table with {@link #DDL}, then adds the
  * payload columns with {@link #ALTERS}, through {@code /exec}: cdb's {@code /write} would make a missing table itself
  * from the line's fields, without the declared types, partitions and TTL, and a column it adds is VARCHAR, never
- * JSON. After a failed write it does both again before the next one, as the server may be a new one. A table made
+ * JSON. It writes with {@code create=false}, so a table dropped since it was made is refused (404) rather than
+ * made again by the line protocol: then it makes the table by its DDL and sends the lines once more. A drop that lands
+ * between cdb's check and its commit, or a cdb older than that parameter, still makes the table by day. After a
+ * failed write it does both again before the next one, as the server may be a new one. A table made
  * before the payload columns gets them from the {@code ALTER}s. One that already has a VARCHAR {@code payload},
  * from an earlier write, keeps it: the {@code ALTER} changes nothing there and its JSON payloads land as text, until
  * the table is dropped; nothing migrates it. A cdb without the JSON type refuses {@link #DDL}, and nothing is written
@@ -56,6 +59,13 @@ public final class CdbWriter implements PacketSink.Writer {
      * bytes of UTF-8 (a surrogate pair, two characters, four), so 4 Mi characters stay under it with room.
      */
     static final int MAX_BODY_CHARS = 4 << 20;
+    /**
+     * cdb's answer to a write with {@code create=false} for a table that does not exist: the line protocol would make
+     * it by day with no TTL, so the writer makes it by its DDL instead.
+     */
+    static final int MISSING = 404;
+    // nanosecond times, and no table made by the line protocol (see MISSING)
+    private static final String WRITE = "/write?precision=n&create=false";
     /** The metrics sink's connect bound (record 146, §5): a server on this machine answers a connect at once. */
     private static final Duration CONNECT_WITHIN = Duration.ofSeconds(1);
     /** The metrics sink's request bound (record 146, §5). */
@@ -80,11 +90,7 @@ public final class CdbWriter implements PacketSink.Writer {
         final URI base = cdb.live().orElseThrow(() -> new IOException("cdb is not running"));
         final Optional<String> secret = cdb.secret();
         if (!base.equals(madeOn)) {
-            exec(base, DDL, secret);
-            for (final String alter : ALTERS) {
-                exec(base, alter, secret);
-            }
-            madeOn = base;
+            make(base, secret);
         }
         int landed = 0;
         int from = 0;
@@ -96,9 +102,14 @@ public final class CdbWriter implements PacketSink.Writer {
                 continue;
             }
             final int to = end(lines, from);
-            final HttpResponse<String> answer;
+            HttpResponse<String> answer;
             try {
                 answer = post(base, lines.subList(from, to), secret);
+                if (answer.statusCode() == MISSING) {
+                    // the table was dropped since it was made: make it again by its DDL, once, and send the lines again
+                    make(base, secret);
+                    answer = post(base, lines.subList(from, to), secret);
+                }
             } catch (final IOException e) {
                 madeOn = null;
                 throw new PacketSink.PartialWrite("cannot write frontear packets [lines=" + (to - from)
@@ -139,10 +150,19 @@ public final class CdbWriter implements PacketSink.Writer {
         for (final String line : lines) {
             body.append(line).append('\n');
         }
-        final HttpRequest request = authorized(HttpRequest.newBuilder(base.resolve("/write?precision=n")), secret)
+        final HttpRequest request = authorized(HttpRequest.newBuilder(base.resolve(WRITE)), secret)
                 .timeout(REQUEST_WITHIN).header("Content-Type", "text/plain; charset=utf-8")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8)).build();
         return http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    }
+
+    // the table by its DDL and the ALTERs for an older one; madeOn says it was made on base
+    private void make(final URI base, final Optional<String> secret) throws IOException, InterruptedException {
+        exec(base, DDL, secret);
+        for (final String alter : ALTERS) {
+            exec(base, alter, secret);
+        }
+        madeOn = base;
     }
 
     private void exec(final URI base, final String sql, final Optional<String> secret)

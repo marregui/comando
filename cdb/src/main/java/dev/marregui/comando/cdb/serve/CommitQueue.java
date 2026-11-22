@@ -269,11 +269,19 @@ final class CommitQueue implements AutoCloseable {
     static final class Body implements CdbAppender {
 
         private final Map<String, Batch> batches = new LinkedHashMap<>();
+        // each table's name as its first row wrote it, by key, in the order the body named them
+        private final Map<String, String> names = new LinkedHashMap<>();
         private Batch current;
         private int rows;
 
+        /** The tables the body writes to, each once, as its first row names it. */
+        List<String> tables() {
+            return List.copyOf(names.values());
+        }
+
         @Override
         public CdbAppender table(final String table) {
+            names.putIfAbsent(key(table), table);
             current = batches.computeIfAbsent(key(table), Batch::new);
             current.startRow(table, rows++);
             return this;

@@ -196,6 +196,7 @@ rooms,room=kitchen temperature=22 1795122400'
 |---|---|
 | `precision` | the unit of the trailing time: `n` nanoseconds (the default), `u` microseconds, `ms`, `s` |
 | `durable=true` | answer only when the rows are on the disk |
+| `create=false` | refuse, with 404 and no row written, a body with a row for a table that does not exist, rather than make the table by day with no TTL; a writer whose table has its own DDL makes it and sends the body again |
 
 A table that cdb creates this way gets a time column named `timestamp` and `PARTITION BY DAY`. A field cdb has not
 seen adds a column.

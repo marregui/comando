@@ -197,7 +197,8 @@ public final class CdbServer implements AutoCloseable {
             server.createContext("/exec",
                     exchange -> handle(exchange, gate, role -> exec(backend, admission, bounds, role, exchange)));
             server.createContext("/write",
-                    exchange -> handle(exchange, gate, role -> write(commits, bodies, budget, bounds, role, exchange)));
+                    exchange -> handle(exchange, gate,
+                            role -> write(backend, commits, bodies, budget, bounds, role, exchange)));
             server.start();
             LOG.log(Level.INFO, "serving cdb [address=" + server.getAddress() + ']');
             return new CdbServer(server, admission, commits, bodies);
@@ -424,8 +425,15 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    private static void write(final CommitQueue commits, final BodyBuffers bodies, final Semaphore budget,
-            final Bounds bounds, final Role role, final HttpExchange exchange) throws IOException {
+    private static void write(
+            final Backend backend,
+            final CommitQueue commits,
+            final BodyBuffers bodies,
+            final Semaphore budget,
+            final Bounds bounds,
+            final Role role,
+            final HttpExchange exchange
+    ) throws IOException {
         if (refused(exchange, "/write", "POST")) {
             return;
         }
@@ -446,6 +454,14 @@ public final class CdbServer implements AutoCloseable {
             return;
         }
         final boolean durable = "true".equals(durableValue);
+        final String createValue = parameter(exchange, "create");
+        if (createValue != null && !createValue.equals("true") && !createValue.equals("false")) {
+            send(exchange, 400, JsonWriter.writeError("invalid create [create=" + createValue + ']', 0));
+            return;
+        }
+        // create=false: a row for a table that does not exist is refused, so a writer whose table carries its own DDL
+        // (partitioning, TTL) makes it again rather than have the line protocol make it by day with no TTL
+        final Backend creates = "false".equals(createValue) ? backend : null;
         final long declared = declaredLength(exchange);
         // the buffers the body is read into, as many as its declared length needs, or those of the longest pooled body
         // when it has none; null for a body declared longer, under a budget smaller than its buffers, or when too few
@@ -464,7 +480,7 @@ public final class CdbServer implements AutoCloseable {
                 return;
             }
             try {
-                write(commits, exchange, pooled, precision, durable);
+                write(creates, commits, exchange, pooled, precision, durable);
             } finally {
                 budget.release(share);
             }
@@ -508,8 +524,14 @@ public final class CdbServer implements AutoCloseable {
     // the body is parsed in place, across the pooled buffers when it fits them and in an array of its own when longer
     // or pooled is null; the buffers hold the bytes of earlier bodies past this one's length, which the parser never
     // reads
-    private static void write(final CommitQueue commits, final HttpExchange exchange, final byte[][] pooled,
-            final Precision precision, final boolean durable) throws IOException {
+    private static void write(
+            final Backend existing,
+            final CommitQueue commits,
+            final HttpExchange exchange,
+            final byte[][] pooled,
+            final Precision precision,
+            final boolean durable
+    ) throws IOException {
         final InputStream input = exchange.getRequestBody();
         final byte[][] bytes;
         final int length;
@@ -546,6 +568,15 @@ public final class CdbServer implements AutoCloseable {
         try {
             final CommitQueue.Body batches = new CommitQueue.Body();
             rows = IlpParser.parse(bytes, length, batches, precision, nowMicros);
+            if (existing != null) {
+                for (final String table : batches.tables()) {
+                    if (!existing.exists(table)) {
+                        send(exchange, 404, JsonWriter.writeError("refuse rows for a table that does not exist"
+                                + " [table=" + table + ", create=false]", 0));
+                        return;
+                    }
+                }
+            }
             final CommitQueue.Refusal refusal = commits.write(batches, durable);
             if (refusal != null) {
                 // the parser names the refused row's line, as when the store refused it during the parse
@@ -643,6 +674,14 @@ public final class CdbServer implements AutoCloseable {
 
         /** A line-protocol appender; the caller closes it. */
         CdbAppender appender();
+
+        /**
+         * Whether table {@code table} exists, its name compared as the store compares names; a backend that cannot tell
+         * answers true, so a write with {@code create=false} goes on as one without it.
+         */
+        default boolean exists(final String table) {
+            return true;
+        }
     }
 
     @FunctionalInterface
@@ -694,6 +733,16 @@ public final class CdbServer implements AutoCloseable {
         @Override
         public CdbAppender appender() {
             return cdb.appender();
+        }
+
+        @Override
+        public boolean exists(final String table) {
+            for (final String name : cdb.tables()) {
+                if (name.equalsIgnoreCase(table)) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

@@ -126,6 +126,25 @@ class CdbServerWritesTest {
         assertThat(rows).hasSize(bodies * lines).containsExactlyInAnyOrderElementsOf(expected);
     }
 
+    /// With `create=false` a body for a table that does not exist answers 404 and makes no table; once the table
+    /// exists the same body writes; without the parameter the line protocol makes the table as before; and a value
+    /// other than true or false answers 400.
+    @Test
+    void aWriteThatMustNotCreateIsRefusedForAMissingTable() throws Exception {
+        final HttpResponse<String> refused = http.post(server.port(), "/write?precision=u&create=false",
+                line("kept", 0));
+        assertThat(refused.statusCode()).isEqualTo(404);
+        assertThat(refused.body()).contains("table=kept");
+        assertThat(cdb.tables()).doesNotContain("kept");
+        cdb.run("CREATE TABLE kept (s SYMBOL, v LONG, timestamp TIMESTAMP) TIMESTAMP(timestamp) PARTITION BY HOUR");
+        assertThat(http.post(server.port(), "/write?precision=u&create=false", line("kept", 1)).statusCode())
+                .isEqualTo(204);
+        assertThat(http.post(server.port(), "/write?precision=u", line("made", 2)).statusCode()).isEqualTo(204);
+        assertThat(cdb.tables()).contains("made");
+        assertThat(http.post(server.port(), "/write?precision=u&create=maybe", line("kept", 3)).statusCode())
+                .isEqualTo(400);
+    }
+
     /// Among twenty good bodies, one with a malformed line and one whose second row the table refuses: those two
     /// answer 400 with the same body a lone request gets today, neither writes any of its rows,
     /// and every good body is written.

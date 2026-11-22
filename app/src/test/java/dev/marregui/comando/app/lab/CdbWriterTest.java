@@ -48,6 +48,8 @@ class CdbWriterTest {
     private final AtomicReference<String> writeBody = new AtomicReference<>("");
     /// The `/write` request, counted from 1, that answers 500; 0 for none.
     private final AtomicInteger failWrite = new AtomicInteger();
+    // the write, counted from 1, that cdb answers as one for a table that does not exist; 0 for none
+    private final AtomicInteger missingWrite = new AtomicInteger();
     private final AtomicInteger writes = new AtomicInteger();
     private final AtomicBoolean up = new AtomicBoolean(true);
     private HttpServer server;
@@ -58,10 +60,18 @@ class CdbWriterTest {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/exec", exchange -> answer(exchange, execStatus.get(), "{\"ddl\":\"OK\"}"));
         server.createContext("/write", exchange -> answer(exchange,
-                writes.incrementAndGet() == failWrite.get() ? 500 : writeStatus.get(), writeBody.get()));
+                missingWrite(writes.incrementAndGet()), writeBody.get()));
         server.start();
         final URI base = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
         endpoint = new Endpoint(base, up);
+    }
+
+    // the status the n-th write gets: 500 for the failing one, 404 for the one whose table is missing, else the set one
+    private int missingWrite(final int n) {
+        if (n == failWrite.get()) {
+            return 500;
+        }
+        return n == missingWrite.get() ? CdbWriter.MISSING : writeStatus.get();
     }
 
     @AfterEach
@@ -86,11 +96,26 @@ class CdbWriterTest {
                 "query=" + CdbWriter.ALTERS.get(0), "query=" + CdbWriter.ALTERS.get(1),
                 "query=" + CdbWriter.ALTERS.get(2));
         assertThat(requests.get(4).method()).isEqualTo("POST");
-        assertThat(requests.get(4).query()).isEqualTo("precision=n");
+        assertThat(requests.get(4).query()).isEqualTo("precision=n&create=false");
         assertThat(requests.get(4).body())
                 .isEqualTo("frontear_packet,node=a,kind=published qos=1i 1\nfrontear_packet,node=a 2\n");
         assertThat(requests.get(5).body()).isEqualTo("frontear_packet,node=a 3\n");
         assertThat(requests).extracting(Request::bearer).containsOnly("Bearer " + SECRET);
+    }
+
+    /// A write cdb answers as one for a table that does not exist (dropped since it was made) makes the table again by
+    /// its DDL and ALTERs, then sends the same lines once more, and they land.
+    @Test
+    void aTableDroppedSinceItWasMadeIsMadeAgainByItsDdl() throws Exception {
+        missingWrite.set(2);
+        try (CdbWriter writer = new CdbWriter(endpoint)) {
+            assertThat(writer.write(List.of("frontear_packet,node=a 1"))).isEqualTo(1);
+            assertThat(writer.write(List.of("frontear_packet,node=a 2"))).isEqualTo(1);
+        }
+        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/exec", "/write",
+                "/write", "/exec", "/exec", "/exec", "/exec", "/write");
+        assertThat(requests.get(6).query()).isEqualTo("query=" + CdbWriter.DDL);
+        assertThat(requests.get(10).body()).isEqualTo("frontear_packet,node=a 2\n");
     }
 
     /// The table declares both payload columns, JSON and text, beside the rest, is partitioned by hour and keeps a
