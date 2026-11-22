@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a log is read-only and a live view: it follows its end while the end is in view, and keeps the reader's place and
 ///   selection
 /// - a Markdown document opens rendered, with an Edit switch, and stays editable
-/// - an HTML document opens as text with a browser button; comando does not render HTML
+/// - an HTML document with no page renderer opens as text with a browser button (rendered: EditorPanelPageTest)
 /// - Clear empties the panel's own text, undoably, and never a document
 /// - the panel's own text opens in the editor with the panel style and may be previewed
 /// - a source file is coloured as its language and has no preview
@@ -159,15 +159,21 @@ class EditorPanelPreviewTest {
         assertThat(json.previewOffered()).as("only Markdown renders").isFalse();
     }
 
-    /// An HTML document opens as editable text with the browser button and no preview; a Markdown document and a
-    /// panel's own `.html` text get no browser button.
+    /// With no page renderer, an HTML document opens as editable text with the browser button and no preview; a
+    /// Markdown document and a panel's own `.html` text get no browser button.
     @Test
     void anHtmlDocumentOpensAsTextWithTheBrowserAtHand() throws Exception {
-        final EditorPanel page = panel("report", p -> {
-            p.editor().load("<html><body><h1>Tests</h1></body></html>");
-            p.file(Path.of("/build/reports/index.html"), true);
+        final EditorPanel[] made = new EditorPanel[1];
+        SwingUtilities.invokeAndWait(() -> {
+            made[0] = new EditorPanel(new PanelState(new PanelId("report"), "report", "", ""), intent -> {
+            }, new SchemaRegistry(), () -> {
+                throw new UnsupportedOperationException("no page renderer here");
+            });
+            made[0].editor().load("<html><body><h1>Tests</h1></body></html>");
+            made[0].file(Path.of("/build/reports/index.html"), true);
         });
-        assertThat(page.previewing()).as("comando does not render HTML").isFalse();
+        final EditorPanel page = made[0];
+        assertThat(page.previewing()).as("no page renderer").isFalse();
         assertThat(page.previewOffered()).isFalse();
         assertThat(page.browserOffered()).isTrue();
         assertThat(page.editable()).isTrue();

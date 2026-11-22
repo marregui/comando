@@ -148,10 +148,10 @@ class LinksUiTest {
         }
     }
 
-    /// A page a session names without a line, found deep under its folder, goes to the browser: no panel and no side
-    /// view opens for it.
+    /// A page a session names without a line, found deep under its folder, opens rendered in a panel, as the Files tab
+    /// opens it: not in the browser, and not as a side view.
     @Test
-    void aPageASessionNamesOpensInTheBrowserNotInAPanel() throws Exception {
+    void aPageASessionNamesOpensInAPanelNotInTheBrowser() throws Exception {
         final Path work = Files.createDirectories(home.resolve("work"));
         final Path page = work.resolve("BRAIN/SCRATCHPAD/2026-11-12/harness/20-icon-inventory.html");
         Files.createDirectories(page.getParent());
@@ -172,10 +172,11 @@ class LinksUiTest {
 
             loop.dispatch(new Intent.OpenFile("lane", "harness/20-icon-inventory.html", 0));
 
-            Awaitility.await("the browser").atMost(Duration.ofSeconds(10)).until(() -> !browsed.isEmpty());
-            assertThat(browsed).hasSize(1);
-            assertThat(Files.isSameFile(browsed.getFirst(), page)).as("the page itself").isTrue();
-            assertThat(loop.state().panels()).as("no panel").hasSize(before);
+            Awaitility.await("the panel").atMost(Duration.ofSeconds(10))
+                    .until(() -> loop.state().panels().stream()
+                            .anyMatch(p -> p.title().equals("20-icon-inventory.html")));
+            assertThat(loop.state().panels()).as("one panel more").hasSize(before + 1);
+            assertThat(browsed).as("not the browser").isEmpty();
             assertThat(loop.state().views()).as("no side view").noneMatch(v -> v.title().contains("20-icon-inventory"));
         } finally {
             Links.browsePagesWith(Browser::openFile);

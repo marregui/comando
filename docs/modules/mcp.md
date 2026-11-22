@@ -58,6 +58,7 @@ The tools, by family:
 | Machines | `machines` | `MachinesTools`, over `MachinesPort`: this machine and the machines paired with it ([record 189](../adr/0189-frontear-across-machines.md)); listen and pair ask the user on a card. |
 | Actions | `panel_*`, `session_*`, `server_start`, `server_stop` and more | The same actions you run by hand. |
 | Terminals | `terminal_list`, `terminal_read`, `terminal_send`, `terminal_start`, `terminal_stop`, `terminal_interrupt` | `TerminalPort`. |
+| Pages | `page_list`, `page_snapshot`, `page_read` | `PageTools`, over `PagePort`: the HTML pages the panels render ([record 190](../adr/0190-html-pages-render-in-a-panel-through-javafx-webview.md)). |
 
 `ui_show_view` takes six kinds of view: `table`, `plot`, `diff`, `markdown`, `text` and `tree`.
 

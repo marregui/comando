@@ -14,10 +14,10 @@ import dev.marregui.comando.ui.kit.text.LocalLinks;
 import dev.marregui.comando.ui.kit.text.NoteLinks;
 
 /**
- * Follows a link double-clicked anywhere in comando: a web address, and a local HTML page, in the browser; any other
- * file, by its path or a {@code [[name]]} note link, in a panel, through the opener the shell installs. One way for
- * every surface: rendered Markdown, the transcript, a tool's result, a tab's card, an editor's text. A page opened from
- * the sidebar is not a link: it opens in a panel, to edit.
+ * Follows a link double-clicked anywhere in comando: a web address in the browser; a file, by its path or a
+ * {@code [[name]]} note link, in a panel, through the opener the shell installs, a local HTML page rendered there.
+ * One way for every surface: rendered Markdown, a rendered page, the transcript, a tool's result, a tab's card, an
+ * editor's text.
  */
 public final class Links {
 
@@ -101,7 +101,7 @@ public final class Links {
             UiErrands.start("note-link", () -> {
                 final Optional<Path> file = NoteLinks.resolve(folder, name);
                 final String missing = "No file for [[" + name + "]]" + (folder == null ? "" : " under " + NoteLinks.rootOf(folder));
-                Edt.later(() -> file.ifPresentOrElse(f -> follow(f, heading, opener), () -> notices.accept(missing)));
+                Edt.later(() -> file.ifPresentOrElse(f -> opener.open(f, heading), () -> notices.accept(missing)));
             });
             return true;
         }
@@ -109,17 +109,8 @@ public final class Links {
         if (file.isEmpty()) {
             return false;
         }
-        follow(file.get(), heading(href), opener);
+        opener.open(file.get(), heading(href));
         return true;
-    }
-
-    /** A page to the browser, any other file to {@code opener} at {@code heading}. */
-    private static void follow(final Path file, final String heading, final Opener opener) {
-        if (isPage(file)) {
-            pages.accept(file);
-        } else {
-            opener.open(file, heading);
-        }
     }
 
     /** The heading a link names after the file's name, as written; null when it names none. */

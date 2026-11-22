@@ -145,6 +145,7 @@ val uiTestClasses = listOf(
     "SessionsMultiSelectUiTest",
     "SessionBarButtonsUiTest",
     "FrontearThemeUiTest",
+    "WebPageViewUiTest",
 )
 
 fun uiShard(spec: String, seconds: String, mac: Boolean): List<String> {
@@ -255,7 +256,9 @@ fun jpackage(name: String, type: String, folder: String, summary: String) = task
         "--main-jar", "app-${project.version}.jar",
         "--main-class", "dev.marregui.comando.app.Main",
         "--add-modules", "java.base,java.desktop,java.logging,java.naming,java.prefs,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr," +
-                "jdk.management,jdk.management.jfr,jdk.management.agent,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs",
+                "jdk.management,jdk.management.jfr,jdk.management.agent,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs," +
+                // what the JavaFX jars' module descriptors require beyond the above, for the WebView of HTML pages
+                "java.net.http,jdk.jsobject,jdk.unsupported.desktop,jdk.xml.dom",
         "--java-options", "--enable-native-access=ALL-UNNAMED",
         "--java-options", "-Xms64m",
         "--java-options", "-Xmx4g",

@@ -267,6 +267,8 @@ public final class App implements AutoCloseable {
             lab.open();
             // agents reach the panels' Terminals through the window, which refuses them until it is built (record 148)
             mcpTools.terminals(ui.terminals());
+            // and the HTML pages the panels render, as the user sees them (record 190)
+            mcpTools.pages(ui.pages());
             // the instances consult each other through frontear (record 123), each on its own node, whose links carry
             // the questions, replies and presences to the others' (record 187); the peer link starts the node at
             // launch; this instance's presence is cleared, and its link closed, before its node stops

@@ -1325,6 +1325,8 @@ public final class Workspace {
                     final PanelId id = p.id();
                     view.editor().onChange(text -> texts.changed(id, text));
                     view.onLocate((f, session) -> locator.accept(f, session));
+                    // a page shown again after an edit renders the saved file, not the last auto-save
+                    view.onSaveNow(texts::saveNow);
                     view.onOpenFile((f, heading) -> {
                         if (heading != null) {
                             headingWhenOpen(f, heading);

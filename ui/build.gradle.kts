@@ -1,3 +1,15 @@
+// The classifier of this build's JavaFX jars, from the system it runs on.
+val javafxPlatform: String
+    get() {
+        val os = providers.systemProperty("os.name").get().lowercase()
+        val arm = providers.systemProperty("os.arch").get() in listOf("aarch64", "arm64")
+        return when {
+            os.contains("mac") -> if (arm) "mac-aarch64" else "mac"
+            os.contains("windows") -> "win"
+            else -> if (arm) "linux-aarch64" else "linux"
+        }
+    }
+
 // Swing shell, panels, dialogs, the widget kit and the widgets.
 dependencies {
     api(project(":core"))
@@ -14,6 +26,15 @@ dependencies {
     testImplementation(project(":testkit"))
     testImplementation(libs.archunit)
     testImplementation(libs.awaitility)
+    // JavaFX's WebView renders HTML pages in panels (record 2), on the class path as comando has no module-info. Its
+    // jars carry native code, one per platform by classifier; their POMs name the platform through Maven profiles
+    // Gradle does not read, so each jar is taken alone. netscape.javascript is JDK 25's own jdk.jsobject.
+    for (javafx in listOf(libs.javafx.base, libs.javafx.graphics, libs.javafx.controls, libs.javafx.media,
+            libs.javafx.web, libs.javafx.swing)) {
+        implementation(variantOf(javafx) { classifier(javafxPlatform) }) {
+            isTransitive = false
+        }
+    }
 }
 
 // Help ▸ Tutorial shows the tutorial from the docs, so the app and the docs never disagree.

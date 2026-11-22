@@ -229,6 +229,7 @@ class ActionToolsTest {
     void eachActionsRunnerSendsItsOwnIntentForAValidCall() throws Exception {
         Files.writeString(home.resolve("agents.json"), "{\"grants\": {\"foreman\": [\"destructive\", \"terminal\"]}}");
         tools.terminals(new TerminalToolsTest.FakeTerminals());
+        tools.pages(new PageToolsTest.FakePages());
         final AppState s = state.get();
         final String p1 = s.panel(States.P1).orElseThrow().title();
         final String p2 = s.panel(States.P2).orElseThrow().title();
@@ -295,6 +296,9 @@ class ActionToolsTest {
         calls.put("terminal_read", "{\"panel\":\"" + p1 + "\"}");
         calls.put("terminal_interrupt", "{\"panel\":\"" + p1 + "\"}");
         calls.put("terminal_stop", "{\"panel\":\"" + p1 + "\"}");
+        calls.put("page_list", "{}");
+        calls.put("page_snapshot", "{\"panel\":\"" + p1 + "\"}");
+        calls.put("page_read", "{\"panel\":\"" + p1 + "\"}");
         final Set<String> built = tools.builtIn();
         assertThat(calls.keySet()).as("a call for every action the runner performs")
                 .containsExactlyInAnyOrderElementsOf(Actions.ALL.stream().map(Action::tool).filter(t -> !built.contains(t)).toList());

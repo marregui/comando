@@ -278,6 +278,24 @@ public final class Actions {
                             + "lost: read what you need with terminal_read first.",
                     List.of(PANEL), Set.of()),
 
+            // ---- pages: the HTML pages the editor panels show, reached through the page port, which sends no intent
+            new Action("page_list", Kind.READ,
+                    "Lists every editor panel holding an HTML page: its panel's title and id, the page's file, and "
+                            + "whether the panel shows it rendered rather than as text. Answers JSON.",
+                    List.of(), Set.of()),
+            new Action("page_snapshot", Kind.READ,
+                    "Draws the panel's rendered HTML page as the user sees it into a PNG and answers its path; look "
+                            + "at it with the Read tool. Refused when the panel shows no rendered page.",
+                    List.of(PANEL), Set.of()),
+            new Action("page_read", Kind.READ,
+                    "Reads a panel's rendered HTML page: its title, its file, the text the user selected on it, then "
+                            + "its visible text, at most max_chars characters, then one closing line [chars, "
+                            + "max_chars, more] saying whether the text was cut. Refused when the panel shows no "
+                            + "rendered page.",
+                    List.of(PANEL, Arg.optional("max_chars", Type.INTEGER,
+                            "the most characters of the page's text to answer; default 65536, at most 262144")),
+                    Set.of()),
+
             // ---- the approval prompt itself, which Claude Code calls
             new Action("approve", Kind.READ, "Claude Code's permission prompt: a card, and a wait for the answer. Claude Code calls it; do not call it yourself.",
                     List.of(), Set.of(Intent.ApprovalRequested.class, Intent.ApprovalWithdrawn.class)));

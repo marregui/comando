@@ -57,13 +57,14 @@ class LinksTest {
         assertThat(opened).isEmpty();
     }
 
-    /// A link to a local HTML page, `.html` or `.htm` in any letter case, goes to the browser and opens no panel.
+    /// A link to a local HTML page, `.html` or `.htm` in any letter case, opens in a panel, where it renders, and not
+    /// in the browser.
     @Test
-    void aLocalPageGoesToTheBrowser() {
+    void aLocalPageOpensInAPanel() {
         assertThat(Links.open("harness/20-icons.html", Path.of("/kb"))).isTrue();
         assertThat(Links.open("OLD.HTM", Path.of("/kb"))).isTrue();
-        assertThat(browsed).containsExactly("/kb/harness/20-icons.html", "/kb/OLD.HTM");
-        assertThat(opened).isEmpty();
+        assertThat(opened).containsExactly("/kb/harness/20-icons.html", "/kb/OLD.HTM");
+        assertThat(browsed).isEmpty();
         assertThat(Links.isPage(Path.of("/kb/notes.md"))).isFalse();
         assertThat(Links.isPage(Path.of("/"))).as("no file name").isFalse();
     }
@@ -107,15 +108,15 @@ class LinksTest {
         assertThat(onEdt).containsExactly(true);
     }
 
-    /// A note link that resolves to an HTML page goes to the browser, not to the opener.
+    /// A note link that resolves to an HTML page goes to the opener, not to the browser.
     @Test
-    void aNoteThatNamesAPageGoesToTheBrowser() throws Exception {
+    void aNoteThatNamesAPageOpensInAPanel() throws Exception {
         Files.createDirectories(repo.resolve(".git"));
         final Path page = Files.writeString(Files.createDirectories(repo.resolve("harness")).resolve("report.html"), "<p>r</p>");
         SwingUtilities.invokeAndWait(() -> Links.open(NoteLinks.href("report.html", null), Links.folderOf("work")));
-        await().atMost(Duration.ofSeconds(5)).until(() -> !browsed.isEmpty());
-        assertThat(browsed).containsExactly(page.toString());
-        assertThat(opened).isEmpty();
+        await().atMost(Duration.ofSeconds(5)).until(() -> !opened.isEmpty());
+        assertThat(opened).containsExactly(page.toString());
+        assertThat(browsed).isEmpty();
     }
 
     /// A note href that resolves to no file tells the user `No file for [[name]] under …` and opens nothing.

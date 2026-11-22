@@ -24,6 +24,9 @@ public final class UiInstructions {
             - terminal_list / terminal_start / terminal_send / terminal_read / terminal_interrupt / terminal_stop: \
             a panel's Terminal; what you send waits for the user's Allow; read from the line number the last read \
             gave, and let terminal_read wait for the answer (until, quiet_ms).
+            - page_list / page_snapshot / page_read: an HTML page a panel shows rendered; page_snapshot draws it \
+            as the user sees it into a PNG you look at with the Read tool; page_read gives its text and the user's \
+            selection.
             - session_send / session_read: hand work to another comando session of this instance: send it a prompt \
             (it runs in that session's panel, with no card to answer) and read back what it did.
             - instances_list / instance_ask / instance_reply: the other comando instances on this machine, each with \

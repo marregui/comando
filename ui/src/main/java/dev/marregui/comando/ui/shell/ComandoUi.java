@@ -53,6 +53,7 @@ import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.LabPort;
 import dev.marregui.comando.core.port.MachinesPort;
+import dev.marregui.comando.core.port.PagePort;
 import dev.marregui.comando.core.port.SearchPort;
 import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.core.port.TopicPort;
@@ -200,6 +201,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private ShellParts parts;
     /** The panels' Terminals as agents reach them (record 148); both suppliers are read on the EDT, where the build sets the parts. */
     private final TerminalAccess terminals;
+    /** The panels' HTML pages as agents reach them; both suppliers are read on the EDT, where the build sets parts. */
+    private final PageAccess pages;
     private LayoutKeeper layout;
     /** The workspace's preview tab, which the Search and Files written views read files in (records 141, 143). */
     private Previews previews;
@@ -262,6 +265,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         this.kit = new KitActions(deps, this::frame);
         this.jobs = new JobActions(deps, this::frame, this::openFile);
         this.terminals = new TerminalAccess(() -> parts == null ? null : parts.lower().terminals(), deps.state());
+        this.pages = new PageAccess(() -> parts == null ? null : parts.workspace()::panel, deps.state());
     }
 
     private JFrame frame() {
@@ -318,6 +322,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** The panels' Terminals for agents (record 148): any thread but the EDT; refused until the window is built. */
     public TerminalPort terminals() {
         return terminals;
+    }
+
+    /** The panels' HTML pages for agents: any thread but the EDT; refused until the window is built. */
+    public PagePort pages() {
+        return pages;
     }
 
     /**

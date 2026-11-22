@@ -23,8 +23,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.BorderFactory;
@@ -45,9 +47,11 @@ import javax.swing.text.Element;
 import javax.swing.text.Highlighter;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.schema.Schema;
@@ -61,7 +65,6 @@ import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
-import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.IconMenus;
@@ -77,6 +80,8 @@ import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.text.TextLinks;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.web.PageView;
+import dev.marregui.comando.ui.kit.web.PageViews;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 
 /**
@@ -84,9 +89,10 @@ import dev.marregui.comando.ui.widgets.editor.CommandEditor;
  * session bar under the lower panel (record 105). A panel's own text is SQL and prompts; a panel opened on a file, such
  * as a document from the folder tabs (Kit, Brain, Scratchpad), is coloured as the file's language, and a Markdown one
  * opens rendered. Such a panel switches between the editor and the rendered text with its header button, which names
- * the other view: Preview while editing, Edit while previewing. An HTML file opens as its text, with a button that
- * opens it in the browser. A link to a file on this machine, of any kind, double-clicked in the rendered text, opens
- * that file in a panel (record 94).
+ * the other view: Preview while editing, Edit while previewing. An HTML file opens rendered as a page, and switches to
+ * its text the same way; a button opens it in the browser. Where no page can be rendered (no display, the renderer
+ * failed) it shows as its text, with no switch. A link to a file on this machine, of any kind, double-clicked in the
+ * rendered text or followed on the page, opens that file in a panel (record 94).
  * Rendered, there is no text to run: the connection, Run and Clear leave the header, and Stop stays while something
  * runs. A production connection frames the panel in red.
  */
@@ -191,12 +197,43 @@ public final class EditorPanel extends JPanel {
     private boolean reloadingText;
     /** The preview tab was asked to stay, for the user's first edit; asked once. EDT only. */
     private boolean pinAsked;
+    private static final System.Logger LOG = System.getLogger(EditorPanel.class.getName());
+    private static final String PAGE = "page";
+    /** Makes the view an HTML file renders in, the first time the panel shows it rendered. EDT only. */
+    private final Supplier<PageView> pageViews;
+    /**
+     * The view the HTML file renders in; null before it first shows rendered, once the file is no longer HTML, and
+     * once the panel is closed. EDT only.
+     */
+    private PageView page;
+    /** The file {@link #page} loaded last; null before it loads one. EDT only. */
+    private Path pageFile;
+    /** No view could be made for this panel: its HTML file shows as text, with no switch. EDT only. */
+    private boolean noRenderer;
+    /** The log said once that HTML files show as text for want of a renderer. EDT only. */
+    private static boolean noRendererTold;
+    /** The text was edited since the page loaded the file: the page loads it once the edit is saved. EDT only. */
+    private boolean pageBehind;
+    /** Writes the panels' text to their files now; completes with null, or with the reason it was not written. */
+    private Supplier<CompletableFuture<String>> saveNow = () -> CompletableFuture.completedFuture(null);
 
     public EditorPanel(final PanelState panel, final IntentSink intents, final SchemaRegistry schemas) {
+        this(panel, intents, schemas, PageViews::create);
+    }
+
+    /** As the shell makes it, its HTML pages rendered in the views {@code pageViews} makes. */
+    @TestOnly
+    public EditorPanel(
+            final PanelState panel,
+            final IntentSink intents,
+            final SchemaRegistry schemas,
+            final Supplier<PageView> pageViews
+    ) {
         super(new BorderLayout(0, 0));
         this.panel = panel;
         this.intents = intents;
         this.schemas = schemas;
+        this.pageViews = pageViews;
         run.setIcon(Icons.get("play"));
         run.getAccessibleContext().setAccessibleName("Run");
         stop.setIcon(Icons.get("stop"));
@@ -221,7 +258,7 @@ public final class EditorPanel extends JPanel {
         browser.setVisible(false);
         browser.addActionListener(e -> {
             if (file != null) {
-                Browser.openFile(file);
+                Links.browsePage(file);
             }
         });
         showMode();
@@ -322,6 +359,24 @@ public final class EditorPanel extends JPanel {
         showLocate();
         connection.addActionListener(e -> connectionMenu().show(connection, 0, connection.getHeight()));
         connectionToggle.addActionListener(e -> toggleConnection());
+        // a closed panel leaves its strip for good, a moved one is back in it within the same turn: the page's view is
+        // released once the panel has been without a parent for a turn
+        addHierarchyListener(e -> {
+            final boolean parentChanged = (e.getChangeFlags() & HierarchyEvent.PARENT_CHANGED) != 0;
+            if (!parentChanged || e.getChanged() != this) {
+                return;
+            }
+            if (getParent() == null) {
+                Edt.later(() -> {
+                    if (getParent() == null) {
+                        closePage();
+                    }
+                });
+            } else if (previewing && isHtml() && page == null) {
+                // back in a strip after its page was released: the page is made again
+                switchView(true);
+            }
+        });
     }
 
     /** The tooltip of the sessions sidebar's menu item that has a session rewrite its panel. */
@@ -383,8 +438,15 @@ public final class EditorPanel extends JPanel {
             return;
         }
         final boolean opened = document && !(this.document && Objects.equals(file, this.file));
+        final boolean pageShown = previewing && page != null;
         this.file = file;
         this.document = document;
+        if (opened) {
+            pageBehind = false;
+        }
+        if (!isHtml()) {
+            closePage();
+        }
         editor.syntax(document && file != null ? Editors.styleFor(file) : CommandEditor.PANEL_STYLE);
         // a log belongs to the program writing it: read here, never written
         editor.area().setEditable(!isLog() && !locked);
@@ -397,7 +459,7 @@ public final class EditorPanel extends JPanel {
         showLocate();
         final boolean renders = rendersAsPage();
         mode.setVisible(renders);
-        outlineButton.setVisible(renders);
+        outlineButton.setVisible(renders && !isHtml());
         if (opened || renders != outlineShows()) {
             layOutBody();
         }
@@ -406,6 +468,9 @@ public final class EditorPanel extends JPanel {
             showPreview(false);
         } else if (renders && opened && !showsHits) {
             showPreview(true);
+        } else if (pageShown && previewing && page == null) {
+            // the page showing was closed with its file: what the panel holds now shows rendered in its place
+            switchView(true);
         }
     }
 
@@ -675,6 +740,9 @@ public final class EditorPanel extends JPanel {
      */
     private void textChanged() {
         clearHits();
+        if (!reloadingText && isHtml()) {
+            pageBehind = true;
+        }
         if (panel.preview() && !pinAsked && !reloadingText) {
             Edt.later(this::pinIfEdited);
         }
@@ -698,9 +766,15 @@ public final class EditorPanel extends JPanel {
         layOutBody();
     }
 
-    /** What takes the keyboard when the panel gets it back: the rendered page while it shows, else the text. */
+    /**
+     * What takes the keyboard when the panel gets it back: the rendered page while it shows (an HTML file's page view,
+     * else the rendered Markdown), else the text.
+     */
     public Component focusTarget() {
-        return previewing ? rendered : editor.area();
+        if (!previewing) {
+            return editor.area();
+        }
+        return isHtml() && page != null ? page.component() : rendered;
     }
 
     /** Whether the outline shows: wanted, the text renders as a page, and it has headings. */
@@ -715,7 +789,7 @@ public final class EditorPanel extends JPanel {
 
     /** Whether the outline follows the text: wanted, and the text renders as a page. */
     private boolean outlineReads() {
-        return outlineWanted && rendersAsPage();
+        return outlineWanted && rendersMarkdown();
     }
 
     /** Lays the body out as the outline stands, and reads the headings when it follows the text. */
@@ -827,13 +901,128 @@ public final class EditorPanel extends JPanel {
         area.requestFocusInWindow();
     }
 
-    /** A panel's own text and a Markdown file show rendered, and switch to the text to edit. */
+    /**
+     * A panel's own text, a Markdown file and an HTML file show rendered, and switch to the text to edit; an HTML file
+     * shows as its text when no page can be rendered here.
+     */
     private boolean rendersAsPage() {
+        return rendersMarkdown() || isHtml() && !noRenderer;
+    }
+
+    /** A panel's own text and a Markdown file render as Markdown, with an outline of their headings. */
+    private boolean rendersMarkdown() {
         return file == null || markdownName(file);
     }
 
-    private boolean isHtml() {
+    /** Whether the panel's file is an HTML page, which renders in a page view. */
+    public boolean isHtml() {
         return file != null && Links.isPage(file);
+    }
+
+    /** The panel's file; null before it has one. */
+    public Path file() {
+        return file;
+    }
+
+    /** The page view while it shows the panel's HTML file rendered; empty while the text shows, or for other files. */
+    public Optional<PageView> shownPage() {
+        return previewing && isHtml() ? Optional.ofNullable(page) : Optional.empty();
+    }
+
+    /**
+     * How the panel's text is written to its file now, before a page that was edited renders again: completes once
+     * written. The shell's, once.
+     */
+    public void onSaveNow(final Supplier<CompletableFuture<String>> save) {
+        saveNow = save;
+    }
+
+    /**
+     * The page view, made the first time an HTML file renders; false when none can be made here, which leaves HTML
+     * files as their text, the switch hidden.
+     */
+    private boolean pageReady() {
+        if (page != null) {
+            return true;
+        }
+        if (noRenderer) {
+            return false;
+        }
+        final PageView made;
+        try {
+            made = pageViews.get();
+        } catch (final UnsupportedOperationException e) {
+            noRenderer = true;
+            mode.setVisible(false);
+            if (!noRendererTold) {
+                noRendererTold = true;
+                LOG.log(System.Logger.Level.WARNING, "cannot render HTML pages, they show as their text [file="
+                        + file + ", reason=" + e.getMessage() + ']');
+            }
+            return false;
+        }
+        page = made;
+        made.onLink(uri -> Links.open(uri.toString(), folder(), (f, heading) -> opener.accept(f, heading)));
+        center.add(made.component(), PAGE);
+        return true;
+    }
+
+    /**
+     * Shows the panel's HTML file in the page view. Text edited since the page loaded is written to the file first;
+     * the page loads it once written, unless the panel moved on meanwhile.
+     */
+    private void showPage() {
+        if (!pageBehind) {
+            loadPage();
+            return;
+        }
+        pageBehind = false;
+        final PageView shown = page;
+        final Path at = file;
+        saveNow.get().whenComplete((_, _) -> Edt.later(() -> {
+            if (page == shown && previewing && at.equals(file)) {
+                loadPage();
+            }
+        }));
+    }
+
+    /** The page loads the panel's file, or reads it again when it has it already. */
+    private void loadPage() {
+        if (file.equals(pageFile)) {
+            page.reload();
+        } else {
+            pageFile = file;
+            page.load(file, trusted(file));
+        }
+    }
+
+    /**
+     * Whether {@code file} lies in one of the folders the Files tab lists, the kit's and the user's own: only such
+     * pages run their scripts, since a script on a {@code file:} page can read any file on this machine (record 190).
+     */
+    private boolean trusted(final Path file) {
+        if (state == null) {
+            return false;
+        }
+        final Path f = file.toAbsolutePath().normalize();
+        for (final FolderRoot root : state.folders()) {
+            if (!root.path().isBlank() && f.startsWith(Path.of(root.path()).toAbsolutePath().normalize())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Takes the page view out of the panel, then closes it; nothing when there is none. */
+    private void closePage() {
+        final PageView v = page;
+        if (v == null) {
+            return;
+        }
+        page = null;
+        pageFile = null;
+        center.remove(v.component());
+        v.close();
     }
 
     private static boolean markdownName(final Path file) {
@@ -953,16 +1142,23 @@ public final class EditorPanel extends JPanel {
         }
     }
 
-    /** Shows the rendered page when {@code on}, else the text, the keyboard left where it is. */
-    private void switchView(final boolean on) {
+    /**
+     * Shows the rendered page when {@code wanted}, else the text, the keyboard left where it is. An HTML file stays as
+     * its text when no page view can be made.
+     */
+    private void switchView(final boolean wanted) {
+        final boolean html = isHtml();
+        final boolean on = wanted && (!html || pageReady());
         previewing = on;
         showMode();
-        if (on) {
+        if (on && html) {
+            showPage();
+        } else if (on) {
             preview.show(editor.text(), folder());
         } else {
             pendingHeading = null;
         }
-        ((CardLayout) center.getLayout()).show(center, on ? PREVIEW : EDIT);
+        ((CardLayout) center.getLayout()).show(center, !on ? EDIT : html ? PAGE : PREVIEW);
         showClear();
         showTextTools();
     }
@@ -1024,13 +1220,15 @@ public final class EditorPanel extends JPanel {
     private void showMode() {
         final String label = previewing ? "Edit" : "Preview";
         mode.setIcon(Icons.get(previewing ? "edit" : "preview"));
-        mode.setToolTipText(KeyText.of(previewing ? "Edit the Markdown (⌘⇧M)" : "Show the Markdown rendered (⌘⇧M)"));
+        final String language = isHtml() ? "HTML" : "Markdown";
+        mode.setToolTipText(KeyText.of(previewing ? "Edit the " + language + " (⌘⇧M)"
+                : "Show the " + (isHtml() ? "page" : "Markdown") + " rendered (⌘⇧M)"));
         mode.getAccessibleContext().setAccessibleName(label);
     }
 
     /**
-     * The file changed outside comando: the editor takes the text, and the preview shows it when it is on. A log whose
-     * caret was at its end stays at the end.
+     * The file changed outside comando: the editor takes the text, and the preview shows it when it is on; an HTML
+     * file's page reads the file again. A log whose caret was at its end stays at the end.
      */
     public void reload(final String text) {
         reloadingText = true;
@@ -1044,7 +1242,9 @@ public final class EditorPanel extends JPanel {
             reloadingText = false;
         }
         showPendingEntry();
-        if (!isLog() && previewing()) {
+        if (isHtml() && previewing() && page != null) {
+            loadPage();
+        } else if (!isLog() && previewing()) {
             final int at = rendered.getCaretPosition();
             rendered.setMarkdown(text, folder());
             rendered.setCaretPosition(Math.min(at, rendered.getDocument().getLength()));

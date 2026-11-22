@@ -31,6 +31,7 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.PagePort;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.core.reduce.Reducer;
@@ -79,6 +80,7 @@ final class ActionTools {
     private final Supplier<AppState> state;
     private final Asker asker;
     private final TerminalTools terminals;
+    private final PageTools pages = new PageTools();
     private volatile Path agentsFile;
     private volatile List<ServerSwitch> servers = List.of();
 
@@ -102,6 +104,11 @@ final class ActionTools {
     /** The panels' Terminals the terminal tools reach; until the application sets them, every one answers not ready. */
     void terminals(final TerminalPort port) {
         terminals.port(port);
+    }
+
+    /** The panels' HTML pages the page tools reach; until the application sets them, every one answers not ready. */
+    void pages(final PagePort port) {
+        pages.port(port);
     }
 
     /** The servers, for the state's {@code servers}. */
@@ -228,6 +235,9 @@ final class ActionTools {
             case "terminal_read" -> terminals.read(s, args);
             case "terminal_interrupt" -> terminals.interrupt(s, args);
             case "terminal_stop" -> terminals.stop(s, args);
+            case "page_list" -> pages.list();
+            case "page_snapshot" -> pages.snapshot(s, args);
+            case "page_read" -> pages.read(s, args);
             default -> throw new IllegalArgumentException(tool + " has no runner yet");
         };
         if (action.kind() != Action.Kind.READ && !done.startsWith("refused")) {

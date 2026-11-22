@@ -128,14 +128,16 @@ failure bounces the Dock while the window is not active. Resting the pointer on 
 
 **Documents.** A Markdown file renders with its pictures (PNG, JPEG, GIF or SVG on this machine), its code blocks in
 the theme's colours and its front matter as a table. Mermaid diagrams draw when `mmdc` is installed. An HTML file
-opens as text to edit. A `.log` file is read-only and follows its end as the file grows. A file edited outside
+opens rendered as a page, by JavaFX's WebView ([record 190](adr/0190-html-pages-render-in-a-panel-through-javafx-webview.md)); ⌘⇧M switches to its text and back, and the session of its panel reads it with the page tools ([Claude Code](claude-code.md)). Its scripts run only when it
+lies in a folder the Files tab lists. Without a display it opens as text. A `.log` file is read-only and follows its end as the file grows. A file edited outside
 comando reloads into its panel ([§7.4](#74-panel-files)).
 
 **Links** are followed at a double click, wherever text shows: a page, a panel, the transcript and its cards.
 
 | Link | Opens |
 |---|---|
-| A web address, or an HTML page | the desktop's browser |
+| A web address | the desktop's browser |
+| An HTML page | that page rendered in a panel |
 | Any other file | that file in a panel, or the panel that has it |
 | `[[name]]` | the note of that name, searched in the document's git repository, else its folder |
 | `#heading` | that heading at the top of the view, in this document or the other one |

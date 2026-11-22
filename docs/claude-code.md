@@ -360,6 +360,7 @@ window sends an intent that has no action.
 | servers | `server_start`, `server_stop` for `frontear` or `cdb`; `frontear` is this instance's own node |
 | commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
 | terminals | `terminal_list`, `terminal_start`, `terminal_send`, `terminal_read`, `terminal_interrupt`, `terminal_stop`\* ([record 148](adr/0148-agents-drive-a-panel-terminal.md)) |
+| pages | `page_list`, `page_snapshot`, `page_read` ([record 190](adr/0190-html-pages-render-in-a-panel-through-javafx-webview.md)) |
 
 Tools marked \* are destructive. Notes on single tools:
 
@@ -369,6 +370,8 @@ Tools marked \* are destructive. Notes on single tools:
   percentage from 0 to 100. The session bar shows the run.
 - `terminal_read` returns numbered lines of plain text, at most 64 kB, and can wait up to 120 s. `terminal_send`
   raises a card ([§4.1](#41-approval-cards)).
+- `page_snapshot` draws the page a panel shows into a PNG and answers its path, for the Read tool; `page_read`
+  answers its title, the user's selection and its visible text, at most 256 kB.
 - The three instance tools are not in the registry: the window has no gesture for them. They work while this
   instance is connected to frontear ([Workbench](workbench.md)).
 

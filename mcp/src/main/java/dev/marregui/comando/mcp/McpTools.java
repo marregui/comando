@@ -44,6 +44,7 @@ import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.LabPort;
 import dev.marregui.comando.core.port.MachinesPort;
+import dev.marregui.comando.core.port.PagePort;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.port.TerminalPort;
@@ -231,6 +232,11 @@ public final class McpTools {
     /** The panels' Terminals agents drive (record 148); the application sets it once its window is built. */
     public void terminals(final TerminalPort port) {
         actions.terminals(port);
+    }
+
+    /** The panels' HTML pages agents see and read; the application sets it once its window is built. */
+    public void pages(final PagePort port) {
+        actions.pages(port);
     }
 
     /** The other comando instances this one consults and answers (record 123); the application sets it once. */
