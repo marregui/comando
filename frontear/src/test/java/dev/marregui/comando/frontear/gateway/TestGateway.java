@@ -23,7 +23,9 @@ import static org.awaitility.Awaitility.await;
 
 /// A gateway on a free loopback port for one test, timed by a clock the test moves by hand: message expiry, will
 /// delay and session expiry fall due when the test says, never by waiting. Its limits are small, so a test reaches
-/// them in a few packets.
+/// them in a few packets. Known limit: its Maximum Packet Size is 64 KiB, so a packet over it ends the connection
+/// with DISCONNECT 0x95 and the test reading its answer fails, never passes; a test that needs a larger packet starts
+/// a gateway of its own with a larger bound.
 final class TestGateway implements AutoCloseable {
 
     /// How long a test waits for something the gateway does on its own threads.

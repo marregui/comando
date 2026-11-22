@@ -20,7 +20,10 @@ import dev.marregui.comando.frontear.protocol.Packet;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// An MQTT client written by hand on a socket: it sends what a test builds, raw bytes included, and reads back each
-/// packet the gateway sends, every read bounded so a missing answer fails the test instead of hanging it.
+/// packet the gateway sends, every read bounded so a missing answer fails the test instead of hanging it. Known limits:
+/// the bound is 10 s, so a test whose answer never comes fails that late, not at once; a read past it throws
+/// `SocketTimeoutException`, which [#untilClosed] does not take for a close, so no test passes on a timeout. A client
+/// made by [#over] has the bound its socket was given.
 final class RawClient implements AutoCloseable {
 
     // a read waiting longer than this fails the test; the gateway answers a local client in milliseconds

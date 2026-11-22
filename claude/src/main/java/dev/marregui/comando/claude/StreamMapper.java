@@ -278,9 +278,12 @@ final class StreamMapper {
         }
     }
 
-    /** Appends the prompt comando sent; called on the strand before the line goes to the process. */
-    void prompt(final String text, final String origin) {
-        transcript.append(new Block.UserPrompt(text, origin, "", System.currentTimeMillis()));
+    /**
+     * Appends the prompt comando sent, {@code delivered} when another session or instance sent it; called on the strand
+     * before the line goes to the process.
+     */
+    void prompt(final String text, final String origin, final boolean delivered) {
+        transcript.append(new Block.UserPrompt(text, origin, "", System.currentTimeMillis(), delivered));
     }
 
     void note(final Block.NoteKind kind, final String text) {

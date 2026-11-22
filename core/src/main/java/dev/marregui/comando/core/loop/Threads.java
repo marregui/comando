@@ -29,14 +29,20 @@ public final class Threads {
     private Threads() {
     }
 
-    /** Every live thread made here, virtual ones included; for tests that check a close left none of an owner's. */
+    /**
+     * Every live thread made here, virtual ones included; for tests that check a close left none of an owner's. A
+     * thread made any other way is not listed: a virtual one started by {@code Thread.ofVirtual()} directly or by a
+     * library shows nowhere a test can read, since {@code Thread.getAllStackTraces()} holds platform threads only and
+     * only a JDK thread dump lists every virtual thread. A leak check reads this list for comando's virtual threads and
+     * {@code Thread.getAllStackTraces()} for the platform ones.
+     */
     public static List<Thread> alive() {
         synchronized (MADE) {
             return MADE.keySet().stream().filter(Thread::isAlive).toList();
         }
     }
 
-    /** The live threads made here named {@code name}, virtual ones included; for tests. */
+    /** The live threads made here named {@code name}, virtual ones included, with the limit {@link #alive()} has. */
     public static List<Thread> alive(final String name) {
         synchronized (MADE) {
             return MADE.keySet().stream().filter(t -> t.isAlive() && t.getName().equals(name)).toList();

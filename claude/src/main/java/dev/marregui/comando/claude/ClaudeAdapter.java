@@ -295,9 +295,20 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
 
     @Override
     public void send(final String name, final String text, final String origin, final String preface) {
+        send(name, text, origin, preface, false);
+    }
+
+    @Override
+    public void send(
+            final String name,
+            final String text,
+            final String origin,
+            final String preface,
+            final boolean delivered
+    ) {
         final Session s = session(name);
         s.run(() -> {
-            s.mapper.prompt(text, origin);
+            s.mapper.prompt(text, origin, delivered);
             s.transcript.changed();
             if (s.current == null || !s.current.isAlive()) {
                 if (s.startFailed) {

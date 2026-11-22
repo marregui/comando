@@ -79,6 +79,8 @@ class FrontearOctopusTest {
     private static final Duration DRAIN = Duration.ofSeconds(60);
     /// Each poll that asks a node for its links opens a client; five a second keeps that cheap.
     private static final Duration POLL = Duration.ofMillis(200);
+    /// The highest base a test starts from: 64 ports above it for its nodes.
+    private static final int BASE_CEILING = 65_535 - 64;
     private static final long PID = ProcessHandle.current().pid();
     private static final String INBOX_Y = Peers.inboxTopic("y");
     private static final String REPLY_X = Peers.replyTopic("x");
@@ -94,7 +96,7 @@ class FrontearOctopusTest {
     @BeforeEach
     void setUp() throws IOException {
         registry = dir.resolve("comando-octopus.json");
-        base = freePort();
+        base = freeBase();
     }
 
     @AfterEach
@@ -766,6 +768,16 @@ class FrontearOctopusTest {
     private static PublicKey publicKey(final Path file) throws Exception {
         return KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(Base64.getDecoder()
                 .decode(Files.readString(file).strip())));
+    }
+
+    /// A free port with room above it for the ports a test's nodes take after it: an ephemeral port near 65535
+    /// left none, and a node found "no port on 127.0.0.1 is free" (seen 2026-11-22, `from=65531`).
+    private static int freeBase() throws IOException {
+        int port = freePort();
+        while (port > BASE_CEILING) {
+            port = freePort();
+        }
+        return port;
     }
 
     private static int freePort() throws IOException {

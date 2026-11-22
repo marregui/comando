@@ -18,6 +18,20 @@ public interface ClaudePort {
      */
     void send(String name, String text, String origin, String preface);
 
+    /**
+     * As {@link #send(String, String, String, String)}, {@code delivered} when another session or instance sent it; an
+     * adapter that keeps no transcript has nothing to mark.
+     */
+    default void send(
+            final String name,
+            final String text,
+            final String origin,
+            final String preface,
+            final boolean delivered
+    ) {
+        send(name, text, origin, preface);
+    }
+
     void interrupt(String name);
 
     /** Drops the blocks of the session's transcript; the conversation, in Claude Code's files, is untouched. */

@@ -65,7 +65,7 @@ class StreamMapperTest {
     /// context size, the window and the cost.
     @Test
     void approvalsAndQuestionRecording() {
-        mapper.prompt("Run the shell command: touch probe-file.txt", "one");
+        mapper.prompt("Run the shell command: touch probe-file.txt", "one", false);
         Fixtures.stream("approvals-and-question").forEach(mapper::accept);
 
         final Intent.SessionInit init = sink.of(Intent.SessionInit.class).getFirst();
@@ -105,7 +105,7 @@ class StreamMapperTest {
     /// metrics kept, or the metrics' own tokens when the replay had none (record 120).
     @Test
     void theContextFollowsEachModelCallAndAStoredConversationReportsItOnce() {
-        mapper.prompt("Run the shell command: touch probe-file.txt", "one");
+        mapper.prompt("Run the shell command: touch probe-file.txt", "one", false);
         Fixtures.stream("approvals-and-question").forEach(mapper::accept);
         final List<Intent.SessionContext> live = sink.of(Intent.SessionContext.class);
         assertThat(live).as("one a model call, before each turn's end").hasSizeGreaterThan(sink.of(Intent.SessionTurnEnded.class).size());
@@ -432,7 +432,7 @@ class StreamMapperTest {
     @Test
     void livePromptsAndTurnEndsCarryComandosClock() {
         final long beforeMillis = System.currentTimeMillis();
-        mapper.prompt("ping", "panel one");
+        mapper.prompt("ping", "panel one", false);
         mapper.accept("{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\",\"total_cost_usd\":0,"
                 + "\"duration_ms\":3,\"num_turns\":1}");
         final long afterMillis = System.currentTimeMillis();
@@ -441,6 +441,16 @@ class StreamMapperTest {
                 .asInstanceOf(InstanceOfAssertFactories.LONG).isBetween(beforeMillis, afterMillis);
         assertThat(blocks(Block.TurnEnd.class)).singleElement().extracting(Block.TurnEnd::atMillis)
                 .asInstanceOf(InstanceOfAssertFactories.LONG).isBetween(beforeMillis, afterMillis);
+    }
+
+    /// A live prompt another session delivered carries that mark into its block; the user's own, headed the same, does
+    /// not.
+    @Test
+    void aDeliveredPromptCarriesItsMark() {
+        mapper.prompt("[from session lead]\nwrite it", "panel one", true);
+        mapper.prompt("[from session lead]\nwrite it", "panel one", false);
+
+        assertThat(blocks(Block.UserPrompt.class)).extracting(Block.UserPrompt::delivered).containsExactly(true, false);
     }
 
     /// The set of background tasks reported follows the session's own background work: an agent is listed while it runs

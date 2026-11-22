@@ -65,12 +65,23 @@ public sealed interface Effect {
     /**
      * Sends a prompt; {@code origin} names the panel it came from, shown on the transcript's user block. A non-empty
      * {@code preface}, the summary a checkpoint carried, goes to Claude in front of the text, and is not shown again on
-     * the user block.
+     * the user block. {@code delivered} when another session or instance sent it ({@link
+     * dev.marregui.comando.core.intent.Intent.PromptSession}): the transcript draws it as theirs by this mark, not by
+     * the header its text starts with, which the user may type too.
      */
-    record SendToClaude(String name, String text, String origin, String preface) implements Effect {
+    record SendToClaude(String name, String text, String origin, String preface, boolean delivered) implements Effect {
+
+        public SendToClaude(final String name, final String text, final String origin, final String preface) {
+            this(name, text, origin, preface, false);
+        }
 
         public SendToClaude(final String name, final String text, final String origin) {
             this(name, text, origin, "");
+        }
+
+        /** This prompt as one another session or instance delivered. */
+        public SendToClaude asDelivered() {
+            return new SendToClaude(name, text, origin, preface, true);
         }
     }
 

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -18,6 +19,8 @@ import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.event.ListDataEvent;
+import javax.swing.event.ListDataListener;
 
 import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.port.MachinesPort.Grant;
@@ -44,6 +47,18 @@ public final class MachinesEditor {
 
     /** What the message line says when the port failed other than by refusing: the errand logged why. */
     static final String FAILED = "The call failed; comando's log says why";
+    /** What this machine's facts say, and its token field, while frontear has not started on this machine. */
+    static final String NOT_STARTED = "none: frontear has not started here";
+    /** What this machine's token field says while no listen address is set: the token names that address. */
+    static final String NOT_LISTENING = "none: set Listen on first";
+    /** What the list says, and the selected machine's facts, while no machine is paired. */
+    static final String NONE_PAIRED = "none: no machine paired yet";
+    /** What the selected machine's facts say while machines are paired and none is selected. */
+    static final String NONE_SELECTED = "none: no machine selected";
+    /** What the token's facts say while no token is typed under Pair with. */
+    static final String NO_TOKEN = "none: paste the other machine's token";
+    /** What the token's facts say while the text typed does not read as a token. */
+    static final String NOT_A_TOKEN = "not a pairing token";
 
     /** A port call's answer: its value, or what the port refused; neither when it failed otherwise. */
     private record Answer<T>(T value, String refused, boolean ok) {
@@ -240,11 +255,12 @@ public final class MachinesEditor {
 
     private void show(final Look look) {
         self = look.self();
-        machine.setText(self.machine().isEmpty() ? "none: frontear has not started here" : Plain.text(self.machine()));
+        machine.setText(self.machine().isEmpty() ? NOT_STARTED : Plain.text(self.machine()));
         listen.setText(self.host());
-        portShown.setText(self.port() == 0 ? "none" : String.valueOf(self.port()));
-        fingerprint.setText(self.fingerprint().isEmpty() ? "none" : self.fingerprint());
+        portShown.setText(self.port() == 0 ? NOT_STARTED : String.valueOf(self.port()));
+        fingerprint.setText(self.fingerprint().isEmpty() ? NOT_STARTED : self.fingerprint());
         token.setText(self.token());
+        token.putClientProperty("JTextField.placeholderText", self.machine().isEmpty() ? NOT_STARTED : NOT_LISTENING);
         token.setCaretPosition(0);
         final String selected = list.getSelectedValue() == null ? wanted : list.getSelectedValue().machine();
         rows.clear();
@@ -262,8 +278,9 @@ public final class MachinesEditor {
     private void load() {
         final Paired p = list.getSelectedValue();
         if (p == null) {
+            final String none = rows.isEmpty() ? NONE_PAIRED : NONE_SELECTED;
             for (final JLabel l : List.of(address, grant, connection, theirFingerprint)) {
-                l.setText(" ");
+                l.setText(none);
             }
         } else {
             address.setText(Plain.text(p.host() + ":" + p.port()));
@@ -278,9 +295,10 @@ public final class MachinesEditor {
     private void held() {
         final String text = theirToken.getText();
         final Optional<Token> h = text.isBlank() ? Optional.empty() : held(text);
-        holds.setText(text.isBlank() ? " " : h.map(t -> Plain.text(t.machine() + " at " + t.host() + ":" + t.port()))
-                .orElse("not a pairing token"));
-        holdsFingerprint.setText(h.map(t -> Plain.text(t.fingerprint())).orElse(" "));
+        holds.setText(text.isBlank() ? NO_TOKEN
+                : h.map(t -> Plain.text(t.machine() + " at " + t.host() + ":" + t.port())).orElse(NOT_A_TOKEN));
+        holdsFingerprint.setText(text.isBlank() ? NO_TOKEN : h.map(t -> Plain.text(t.fingerprint()))
+                .orElse("none: " + NOT_A_TOKEN));
         enable();
     }
 
@@ -291,6 +309,31 @@ public final class MachinesEditor {
         } catch (final IllegalArgumentException _) {
             return Optional.empty();
         }
+    }
+
+    /** {@code list} saying {@code text} while it is empty, as the sidebar's lists say what to do. */
+    private static <T> void emptyText(final JList<T> list, final String text) {
+        final JLabel hint = new JLabel(text);
+        hint.setForeground(Theme.MUTED_STRONG);
+        hint.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_M));
+        list.setLayout(new BorderLayout());
+        list.add(hint, BorderLayout.NORTH);
+        list.getModel().addListDataListener(new ListDataListener() {
+            @Override
+            public void intervalAdded(final ListDataEvent e) {
+                hint.setVisible(list.getModel().getSize() == 0);
+            }
+
+            @Override
+            public void intervalRemoved(final ListDataEvent e) {
+                hint.setVisible(list.getModel().getSize() == 0);
+            }
+
+            @Override
+            public void contentsChanged(final ListDataEvent e) {
+                hint.setVisible(list.getModel().getSize() == 0);
+            }
+        });
     }
 
     private void message() {
@@ -342,7 +385,7 @@ public final class MachinesEditor {
         form.fact("Machine", machine, "This machine's id, which the other machines know it by");
         form.row("Listen on", FormRows.withButton(listen, setListen), listen, "listen",
                 "Set the address the border gateway listens on for other machines; empty stops it",
-                "A Tailscale or LAN address of this machine, never 0.0.0.0; empty: not listening",
+                "A Tailscale or LAN address; empty: not listening",
                 "The address frontear's border gateway, on the node of the instance main, listens on for the paired "
                         + "machines, with mutual TLS. It must be an address of this machine; the wildcard is refused. "
                         + "frontear reads it at its next look, within 5 s.");
@@ -365,10 +408,13 @@ public final class MachinesEditor {
         form.fact("Token holds", holds, "The machine, host and port the token names");
         form.fact("Token's fingerprint", holdsFingerprint, "Compare it with the other machine's Fingerprint");
         form.row("Grant it", grantChoice, grantChoice, "grant", "What the machine's instances may do here",
-                "peer: its questions run in plan mode; overseer: its main asks as this machine's overseer",
-                "");
+                "peer: plan mode; overseer: this machine's overseer",
+                MachineTexts.grant(Grant.PEER) + ". " + MachineTexts.grant(Grant.OVERSEER) + ".");
         form.footer(new JLabel(" "), "Note");
         FormRows.onEdit(this::held, List.of(theirToken));
+        emptyText(list, NONE_PAIRED);
+        load();
+        held();
         FormRows.lay(body, left, form.panel());
     }
 }

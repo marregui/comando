@@ -38,7 +38,7 @@ class SentPromptTest {
     /// `[from session foreman]` names a session: the label is `from foreman` and the body is what follows the line.
     @Test
     void aSessionHeaderNamesTheSendingSession() {
-        final Items.PromptItem.Sender s = Items.PromptItem.sender(SESSION, "foreman");
+        final Items.PromptItem.Sender s = Items.PromptItem.sender(SESSION, "foreman", true);
         assertThat(s).isEqualTo(new Items.PromptItem.Sender("foreman", false, "", "write **slugify**"));
         assertThat(s.label()).isEqualTo("from foreman");
     }
@@ -48,9 +48,9 @@ class SentPromptTest {
     @Test
     void anInstanceHeaderNamesTheInstanceAndItsSession() {
         final String text = "[from instance alice · session Comando G]\nwhat is X?";
-        assertThat(Items.PromptItem.sender(text, "peer:alice").label())
+        assertThat(Items.PromptItem.sender(text, "peer:alice", false).label())
                 .isEqualTo("from alice · Comando G");
-        final Items.PromptItem.Sender bare = Items.PromptItem.sender("[from instance comando]\nwhat is X?\nmore", "");
+        final Items.PromptItem.Sender bare = stored("[from instance comando]\nwhat is X?\nmore");
         assertThat(bare.label()).isEqualTo("from comando");
         assertThat(bare.body()).isEqualTo("what is X?\nmore");
     }
@@ -58,8 +58,8 @@ class SentPromptTest {
     /// The `overseer` mark after the instance's name reads in brackets after it, with a session or without one.
     @Test
     void anOverseerPartReadsInBracketsAfterTheInstance() {
-        assertThat(Items.PromptItem.sender(OVERSEER, "").label()).isEqualTo("from comando (overseer) · Comando UI");
-        final Items.PromptItem.Sender bare = Items.PromptItem.sender("[from instance comando · overseer]\nx", "");
+        assertThat(stored(OVERSEER).label()).isEqualTo("from comando (overseer) · Comando UI");
+        final Items.PromptItem.Sender bare = stored("[from instance comando · overseer]\nx");
         assertThat(bare).isEqualTo(new Items.PromptItem.Sender("comando", true, "", "x"));
         assertThat(bare.label()).isEqualTo("from comando (overseer)");
     }
@@ -68,12 +68,12 @@ class SentPromptTest {
     /// of the line, and the rest is the name.
     @Test
     void aSurrogatesNameKeepsItsOwnSeparator() {
-        final Items.PromptItem.Sender s = Items.PromptItem.sender("[from instance comando · b · session work]\nx", "");
+        final Items.PromptItem.Sender s = stored("[from instance comando · b · session work]\nx");
         assertThat(s).isEqualTo(new Items.PromptItem.Sender("comando · b", false, "work", "x"));
         assertThat(s.label()).isEqualTo("from comando · b · work");
-        assertThat(Items.PromptItem.sender("[from instance comando · b · overseer · session foreman]\nx", "").label())
+        assertThat(stored("[from instance comando · b · overseer · session foreman]\nx").label())
                 .isEqualTo("from comando · b (overseer) · foreman");
-        assertThat(Items.PromptItem.sender("[from instance comando · b]\nx", "").label())
+        assertThat(stored("[from instance comando · b]\nx").label())
                 .isEqualTo("from comando · b");
     }
 
@@ -82,7 +82,7 @@ class SentPromptTest {
     @Test
     void theSessionIsTheLastSessionPart() {
         final Items.PromptItem.Sender s =
-                Items.PromptItem.sender("[from instance comando · session lab · session work]\nx", "");
+                stored("[from instance comando · session lab · session work]\nx");
         assertThat(s).isEqualTo(new Items.PromptItem.Sender("comando · session lab", false, "work", "x"));
         assertThat(s.label()).isEqualTo("from comando · session lab · work");
     }
@@ -90,7 +90,7 @@ class SentPromptTest {
     /// A prompt a peer instance sent without a header line is that peer's, its whole text the body.
     @Test
     void aPeersPromptWithoutAHeaderIsThePeers() {
-        final Items.PromptItem.Sender s = Items.PromptItem.sender("what is X?", "peer:main");
+        final Items.PromptItem.Sender s = Items.PromptItem.sender("what is X?", "peer:main", false);
         assertThat(s.label()).isEqualTo("from main");
         assertThat(s.body()).isEqualTo("what is X?");
     }
@@ -102,7 +102,7 @@ class SentPromptTest {
         for (final String text : List.of("[from session foreman\nwrite it", "[from session ]\nwrite it",
                 "[from instance  · session work]\nwrite it", "[from someone]\nwrite it", "[from session]\nwrite it",
                 "write it\n[from session foreman]")) {
-            assertThat(Items.PromptItem.sender(text, "")).as(text).isNull();
+            assertThat(stored(text)).as(text).isNull();
         }
         canvas.append(0, new Block.UserPrompt("[from session foreman\n# write it", "", ""));
         paint(800);
@@ -110,6 +110,24 @@ class SentPromptTest {
         assertThat(item.sent()).isFalse();
         assertThat(item.label()).isEqualTo("you");
         assertThat(boxes(item)).extracting(TextBox::text).containsExactly("[from session foreman\n# write it");
+    }
+
+    /// A transcript holding a prompt another session delivered and a prompt the user typed or pasted with the same
+    /// header: the delivered one is drawn as the sender's, its body as Markdown; the user's is drawn as the user's, its
+    /// text as typed, the header line included.
+    @Test
+    void aPastedHeaderIsTheUsersAndOnlyADeliveredPromptIsTheSenders() {
+        canvas.append(0, new Block.UserPrompt(SESSION, "Main", "", Block.UNKNOWN_TIME, true));
+        canvas.append(1, new Block.UserPrompt(SESSION, "Main", ""));
+        paint(800);
+        final Items.PromptItem delivered = (Items.PromptItem) canvas.itemAt(0);
+        assertThat(delivered.sent()).isTrue();
+        assertThat(delivered.label()).isEqualTo("from foreman");
+        assertThat(boxes(delivered)).extracting(TextBox::text).containsExactly("write slugify");
+        final Items.PromptItem pasted = (Items.PromptItem) canvas.itemAt(1);
+        assertThat(pasted.sent()).isFalse();
+        assertThat(pasted.label()).isEqualTo("you · Main");
+        assertThat(boxes(pasted)).extracting(TextBox::text).containsExactly(SESSION);
     }
 
     /// The body of a sent prompt lays out as paragraphs: a heading, two list items and a paragraph make four boxes, the
@@ -184,7 +202,7 @@ class SentPromptTest {
     /// all of it gives the body as shown.
     @Test
     void copyGivesTheRawTextWithItsHeader() {
-        canvas.append(0, new Block.UserPrompt(SESSION, "foreman", ""));
+        canvas.append(0, new Block.UserPrompt(SESSION, "foreman", "", Block.UNKNOWN_TIME, true));
         paint(800);
         final Item item = canvas.itemAt(0);
         assertThat(item.text()).isEqualTo(SESSION);
@@ -205,6 +223,11 @@ class SentPromptTest {
         g.setClip(0, 0, width, 600);
         canvas.paint(g);
         g.dispose();
+    }
+
+    /// The sender of a stored prompt: no origin, no mark, its first line the only record of who sent it.
+    private static Items.PromptItem.Sender stored(final String text) {
+        return Items.PromptItem.sender(text, "", false);
     }
 
     private static List<TextBox> boxes(final Item item) {

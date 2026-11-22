@@ -512,7 +512,13 @@ class ReducerTest {
         assertThat(effects).noneSatisfy(e -> assertThat(e).isInstanceOfSatisfying(Effect.EditPanelText.class,
                 t -> assertThat(t.panel()).isEqualTo(P1)));
         assertThat(effects).anySatisfy(e -> assertThat(e).isInstanceOf(Effect.StartClaude.class));
+        assertThat(effects).as("delivered by its sender").anySatisfy(e -> assertThat(e)
+                .isInstanceOfSatisfying(Effect.SendToClaude.class, c -> assertThat(c.delivered()).isTrue()));
         assertThat(state.notice().level()).isNotEqualTo(Notice.Level.ERROR);
+
+        apply(new Intent.RunText(own, "[from session lead]\nwrite it", Target.CLAUDE));
+        assertThat(effects).as("the user's own, the same header typed").anySatisfy(e -> assertThat(e)
+                .isInstanceOfSatisfying(Effect.SendToClaude.class, c -> assertThat(c.delivered()).isFalse()));
 
         apply(new Intent.PromptSession("nobody", "hi", "lead"));
         assertThat(state.notice().level()).isEqualTo(Notice.Level.ERROR);
@@ -1368,7 +1374,7 @@ class ReducerTest {
 
         apply(new Intent.PromptSession("work", "after it", "lead"));
         assertThat(effects).as("queued")
-                .contains(new Effect.SendToClaude("work", "after it", state.panel(P1).orElseThrow().title()));
+                .contains(new Effect.SendToClaude("work", "after it", state.panel(P1).orElseThrow().title(), "", true));
         assertThat(state.session("work").orElseThrow().pendingTurns()).isEqualTo(2);
         assertThat(locked()).as("until the checkpoint's turn ends").isTrue();
         apply(new Intent.SessionTurnEnded("work", 1, 0.1, 9_000L, 1_000_000L, false, "", "## Reflected"));

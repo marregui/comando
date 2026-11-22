@@ -190,17 +190,23 @@ final class Items {
 
         PromptItem(final Block.UserPrompt b) {
             super(b);
-            sender = sender(b.text(), b.origin());
+            sender = sender(b.text(), b.origin(), b.delivered());
         }
 
         /**
          * The sender a prompt names on its first line, {@code [from session <s>]} or {@code [from instance <name>[ ·
          * overseer][ · session <s>]]}, where the name itself may hold {@code " · "} (a surrogate's {@code comando ·
          * b}), so the session and the overseer mark are taken off its end; else, for a prompt a peer instance sent
-         * ({@code peer:<slug>}) without that line, the peer, its whole text the body. Null for anything else: the
+         * ({@code peer:<slug>}) without that line, the peer, its whole text the body. The line is read only from a
+         * prompt comando {@code delivered}, a peer's, or a stored one (no {@code origin}), whose line keeps no mark: a
+         * live prompt from the user's panel that starts with it is the user's, as typed. Null for anything else: the
          * user's own prompts, a subagent's task, a first line that does not close or names no one.
          */
-        static Sender sender(final String text, final String origin) {
+        static Sender sender(final String text, final String origin, final boolean delivered) {
+            final boolean peer = origin.startsWith(PEER) && origin.length() > PEER.length();
+            if (!delivered && !peer && !origin.isEmpty()) {
+                return null;
+            }
             final int eol = text.indexOf('\n');
             final String first = eol < 0 ? text : text.substring(0, eol);
             final String body = eol < 0 ? "" : text.substring(eol + 1);
@@ -222,8 +228,7 @@ final class Items {
                         .strip();
                 return name.isEmpty() ? null : new Sender(name, overseer, session, body);
             }
-            return origin.startsWith(PEER) && origin.length() > PEER.length()
-                    ? new Sender(origin.substring(PEER.length()), false, "", text) : null;
+            return peer ? new Sender(origin.substring(PEER.length()), false, "", text) : null;
         }
 
         private Block.UserPrompt prompt() {
@@ -274,7 +279,7 @@ final class Items {
         void changed(final Block previous, final Block next) {
             built = null;
             final Block.UserPrompt p = (Block.UserPrompt) next;
-            sender = sender(p.text(), p.origin());
+            sender = sender(p.text(), p.origin(), p.delivered());
             if (views != null) {
                 views = sender == null ? null : Paras.reuse(MarkdownDoc.parse(sender.body()), views);
             }

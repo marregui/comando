@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.dialogs.machines;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Dimension;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,9 +15,15 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.text.JTextComponent;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.port.MachinesPort;
@@ -35,6 +42,9 @@ import static org.awaitility.Awaitility.await;
 /// - Unpairing asks first, then calls `unpair` on the selected machine; Keep calls nothing.
 /// - Setting the listen address calls `listen`; Copy hands the token over.
 /// - Every call to the port runs off the event thread.
+/// - Each empty state says `none:` and why: no machine paired (the list and the selected machine's facts), none
+///   selected, frontear not started or not listening (this machine's facts and token), no token typed.
+/// - Under FlatLaf, every hint under a field fits the window at its default size.
 class MachinesEditorTest {
 
     private static final String SELF_FINGERPRINT = "0123456789abcdef".repeat(4);
@@ -45,6 +55,12 @@ class MachinesEditorTest {
     private static final Paired A = new Paired("a", "100.64.0.1", 18893, "aa".repeat(32), Grant.PEER, true, 0L);
     private static final Paired B = new Paired("b", "100.64.0.2", 18893, "bb".repeat(32), Grant.OVERSEER, false,
             1_700_000_000_000L);
+    private static final MachinesPort.Self ME = new MachinesPort.Self("me", "100.64.0.9", 18893, SELF_FINGERPRINT,
+            "comando-pair:1:me:100.64.0.9:18893:" + SELF_FINGERPRINT);
+    /// The selected machine's facts, by accessible name.
+    private static final List<String> SELECTED_FACTS = List.of("Address", "Grant", "Connection", "Its fingerprint");
+
+    private static LookAndFeel previous;
 
     private final Fake port = new Fake();
     private final List<String> asked = new CopyOnWriteArrayList<>();
@@ -53,13 +69,18 @@ class MachinesEditorTest {
     /// where the editor asks.
     private volatile int answer;
 
-    /// The fake port: this machine and A and B; records every call, with whether it ran on the event thread.
+    /// The fake port: this machine and A and B unless a test sets others; records every call, with whether it ran on
+    /// the event thread.
     private static final class Fake implements MachinesPort {
         final List<String> calls = new CopyOnWriteArrayList<>();
         final List<Boolean> onEdt = new CopyOnWriteArrayList<>();
         /// Why `pair` refuses, empty for none: set by the test's thread, read by the editor's `machines-*` errand that
         /// pairs.
         volatile String refusal = "";
+        /// This machine as `self` answers it: set by the test's thread, read by the editor's `machines-look` errand.
+        volatile Self me = ME;
+        /// The machines `paired` answers: set by the test's thread, read by the editor's `machines-look` errand.
+        volatile List<Paired> pairs = List.of(A, B);
 
         private void record(final String call) {
             calls.add(call);
@@ -69,14 +90,13 @@ class MachinesEditorTest {
         @Override
         public Self self() {
             record("self");
-            return new Self("me", "100.64.0.9", 18893, SELF_FINGERPRINT,
-                    "comando-pair:1:me:100.64.0.9:18893:" + SELF_FINGERPRINT);
+            return me;
         }
 
         @Override
         public List<Paired> paired() {
             record("paired");
-            return List.of(A, B);
+            return pairs;
         }
 
         @Override
@@ -100,6 +120,27 @@ class MachinesEditorTest {
         }
     }
 
+    /// The application's look, FlatLaf, whose sizes decide what fits; the previous look is put back after the class.
+    @BeforeAll
+    static void flatLaf() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            previous = UIManager.getLookAndFeel();
+            FlatDarkLaf.setup();
+        });
+    }
+
+    /// Puts back the look the class found.
+    @AfterAll
+    static void restore() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                UIManager.setLookAndFeel(previous);
+            } catch (final UnsupportedLookAndFeelException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+    }
+
     /// Runs `f` on the event thread and answers what it gives.
     private static <T> T on(final Supplier<T> f) throws Exception {
         final AtomicReference<T> out = new AtomicReference<>();
@@ -114,7 +155,8 @@ class MachinesEditorTest {
             return answer;
         };
         final MachinesEditor e = on(() -> new MachinesEditor(port, questions, copied::add));
-        await().atMost(Duration.ofSeconds(5)).until(() -> on(() -> list(e).getModel().getSize()) == 2);
+        await().atMost(Duration.ofSeconds(5)).until(() -> on(() -> !((JLabel) named(e, "Machine")).getText().isBlank()
+                && list(e).getModel().getSize() == port.pairs.size()));
         return e;
     }
 
@@ -297,6 +339,102 @@ class MachinesEditorTest {
         assertThat(port.onEdt).as("calls on the event thread").doesNotContain(true);
     }
 
+    /// With nothing paired, the list says so, and so do the selected machine's facts, rather than stand empty.
+    @Test
+    void withNothingPairedTheListAndTheSelectedMachinesFactsSayNonePaired() throws Exception {
+        port.pairs = List.of();
+        final MachinesEditor e = editor();
+        assertThat(on(() -> emptyText(e))).as("the list's empty text").containsExactly(MachinesEditor.NONE_PAIRED);
+        for (final String fact : SELECTED_FACTS) {
+            assertThat(on(() -> ((JLabel) named(e, fact)).getText())).as(fact).isEqualTo(MachinesEditor.NONE_PAIRED);
+        }
+    }
+
+    /// With machines paired and none selected, the selected machine's facts say none is, and the list shows no empty
+    /// text over its rows.
+    @Test
+    void withNoMachineSelectedItsFactsSayNoneSelected() throws Exception {
+        final MachinesEditor e = editor();
+        assertThat(on(() -> emptyText(e))).as("no empty text over the rows").isEmpty();
+        on(() -> {
+            list(e).clearSelection();
+            return null;
+        });
+        for (final String fact : SELECTED_FACTS) {
+            assertThat(on(() -> ((JLabel) named(e, fact)).getText())).as(fact).isEqualTo(MachinesEditor.NONE_SELECTED);
+        }
+    }
+
+    /// Before frontear starts, this machine's id, port and fingerprint say so, and its empty token field does too;
+    /// started but not listening, the token field says to set the address first.
+    @Test
+    void thisMachinesFactsAndTokenSayWhyTheyAreEmpty() throws Exception {
+        port.me = MachinesPort.NONE.self();
+        final MachinesEditor e = editor();
+        for (final String fact : List.of("Machine", "Port", "Fingerprint")) {
+            assertThat(on(() -> ((JLabel) named(e, fact)).getText())).as(fact).isEqualTo(MachinesEditor.NOT_STARTED);
+        }
+        assertThat(on(() -> ((JTextComponent) named(e, "Token")).getText())).isEmpty();
+        assertThat(on(() -> ((JComponent) named(e, "Token")).getClientProperty("JTextField.placeholderText")))
+                .isEqualTo(MachinesEditor.NOT_STARTED);
+
+        port.me = new MachinesPort.Self("me", "", 18893, SELF_FINGERPRINT, "");
+        final MachinesEditor started = editor();
+        assertThat(on(() -> ((JComponent) named(started, "Token")).getClientProperty("JTextField.placeholderText")))
+                .isEqualTo(MachinesEditor.NOT_LISTENING);
+    }
+
+    /// Until a token is typed under Pair with, what it holds says to paste one; a text that is not a token says so in
+    /// both, and clearing it says to paste one again.
+    @Test
+    void theTokensFactsSayToPasteATokenUntilOneIsTyped() throws Exception {
+        final MachinesEditor e = editor();
+        assertThat(on(() -> ((JLabel) named(e, "Token holds")).getText())).isEqualTo(MachinesEditor.NO_TOKEN);
+        assertThat(on(() -> ((JLabel) named(e, "Token's fingerprint")).getText())).isEqualTo(MachinesEditor.NO_TOKEN);
+        on(() -> {
+            ((JTextComponent) named(e, "Pair with")).setText("carol");
+            return null;
+        });
+        assertThat(on(() -> ((JLabel) named(e, "Token's fingerprint")).getText()))
+                .isEqualTo("none: " + MachinesEditor.NOT_A_TOKEN);
+        on(() -> {
+            ((JTextComponent) named(e, "Pair with")).setText("");
+            return null;
+        });
+        assertThat(on(() -> ((JLabel) named(e, "Token holds")).getText())).isEqualTo(MachinesEditor.NO_TOKEN);
+        assertThat(on(() -> ((JLabel) named(e, "Token's fingerprint")).getText())).isEqualTo(MachinesEditor.NO_TOKEN);
+    }
+
+    /// At the window's default size, its packed one, every hint under a field shows whole, before frontear starts
+    /// (the narrowest window) and after; the grant's longer explanation sits behind its ⓘ.
+    @Test
+    void everyHintFitsTheWindowAtItsDefaultSize() throws Exception {
+        for (final MachinesPort.Self self : List.of(MachinesPort.NONE.self(), ME)) {
+            port.me = self;
+            port.pairs = List.of();
+            final MachinesEditor e = editor();
+            final List<String> cut = on(() -> {
+                final JComponent c = e.component();
+                final Dimension packed = c.getPreferredSize();
+                c.setSize(packed);
+                layout(c);
+                final List<Component> hints = new ArrayList<>();
+                find(c, x -> x instanceof JLabel l && l.getName() != null && l.getName().startsWith("hint:"), hints);
+                final List<String> out = new ArrayList<>();
+                for (final Component h : hints) {
+                    final JLabel l = (JLabel) h;
+                    if (l.getFontMetrics(l.getFont()).stringWidth(l.getText()) > l.getWidth()) {
+                        out.add(l.getText());
+                    }
+                }
+                return out;
+            });
+            assertThat(cut).as("hints cut with machine %s", self.machine()).isEmpty();
+            assertThat(on(() -> ((JComponent) named(e, "Grant it")).getAccessibleContext().getAccessibleDescription()))
+                    .startsWith("peer:").contains("overseer:");
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static JList<Paired> list(final MachinesEditor e) {
         return (JList<Paired>) named(e, "Paired machines");
@@ -322,6 +460,27 @@ class MachinesEditorTest {
         find(e.component(), c -> c instanceof AbstractButton b && tip.equals(b.getToolTipText()), found);
         assertThat(found).as("a button tipped " + tip).isNotEmpty();
         return (AbstractButton) found.getFirst();
+    }
+
+    /// The texts the list shows over its rows, visible now: its empty text while it is empty.
+    private static List<String> emptyText(final MachinesEditor e) {
+        final List<String> out = new ArrayList<>();
+        for (final Component c : list(e).getComponents()) {
+            if (c instanceof JLabel l && l.isVisible()) {
+                out.add(l.getText());
+            }
+        }
+        return out;
+    }
+
+    /// Lays out `c` and everything in it at the size it has, as showing it would.
+    private static void layout(final Container c) {
+        c.doLayout();
+        for (final Component child : c.getComponents()) {
+            if (child instanceof Container sub) {
+                layout(sub);
+            }
+        }
     }
 
     private static void find(final Component c, final Predicate<Component> wanted,

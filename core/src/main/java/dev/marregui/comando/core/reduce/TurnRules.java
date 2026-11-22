@@ -520,7 +520,11 @@ final class TurnRules {
         final Transition edited = PanelRules.editPanel(clock, s, new Intent.EditPanel(panel, i.text(), EditMode.APPEND, i.from()));
         final Transition ran = QueryRules.runText(clock, edited.state(), new Intent.RunText(panel, i.text(), Target.CLAUDE));
         final List<Effect> effects = new ArrayList<>(edited.effects());
-        effects.addAll(ran.effects());
+        // the sender is the mark the transcript draws the prompt by: a header the user types is the user's
+        final boolean delivered = !i.from().isEmpty();
+        for (final Effect e : ran.effects()) {
+            effects.add(delivered && e instanceof Effect.SendToClaude send ? send.asDelivered() : e);
+        }
         return new Transition(ran.state(), effects);
     }
 

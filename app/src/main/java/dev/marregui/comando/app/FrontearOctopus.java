@@ -216,7 +216,8 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     private volatile boolean stoppedByHand;
     /**
      * The node this instance hosts, or null. Written under this by the starts, stops and the close; read by the window,
-     * the peer link's strand, the reconciles and whoever watches the node through {@link #node()}.
+     * the peer link's strand, the reconciles, a start's or stop's errand before it takes the locks ({@link #flip}) and
+     * whoever watches the node through {@link #node()}.
      */
     private volatile Hosted hosted;
     /**
@@ -768,14 +769,40 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
      * can be fenced, so the lock is what makes the read, the port's choice and probe, the node's bind and the write one
      * step no other comando's start or stop can come between. A start that does not get the lock starts nothing:
      * asked, it says so; a look's tries again at the next look.
+     * <p>
+     * No notice is said under the registry's lock or this instance's monitor: a dispatch under them would hold every
+     * other start, stop and close of the registry for as long as the sink takes. "Starting frontear…" or "Stopping
+     * frontear…" is said before either is taken, from whether a node runs read without them, so it is a hint: a start
+     * or stop of another instance's that wins the lock leaves this one "Another comando is starting or stopping
+     * frontear", and the close may stop the node meanwhile. What the start or stop did is said in order once both are
+     * let go.
      */
-    private synchronized void flip(final Boolean want, final boolean onItsOwn) {
+    private void flip(final Boolean want, final boolean onItsOwn) {
+        final List<Intent> said = new ArrayList<>();
+        final boolean up = hosted != null;
+        if (want == null || want != up) {
+            if (up) {
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Stopping frontear…", false));
+            } else if (!onItsOwn) {
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Starting frontear…", false));
+            }
+        }
+        try {
+            flipLocked(want, onItsOwn, said);
+        } finally {
+            // what was said before a failure out of the start or stop is still said, as it was when said at once
+            said.forEach(intents::dispatch);
+        }
+    }
+
+    /** {@link #flip}'s work under this instance's monitor, its notices added to {@code said}. */
+    private synchronized void flipLocked(final Boolean want, final boolean onItsOwn, final List<Intent> said) {
         final boolean held;
         try {
-            held = underLock(lock, () -> flipHeld(want, onItsOwn));
+            held = underLock(lock, () -> flipHeld(want, onItsOwn, said));
         } catch (final IOException ex) {
             say(onItsOwn, Notice.Level.WARN, "Cannot lock the frontear registry [lock=" + lock + ", cause="
-                    + ex.getMessage() + ']', null);
+                    + ex.getMessage() + ']', null, said);
             return;
         } catch (final InterruptedException _) {
             // the octopus is closing: its errands are interrupted
@@ -789,13 +816,13 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
             LOG.log(System.Logger.Level.INFO, "frontear registry held by another start; tried again at the next look"
                     + " [lock=" + lock + ", waited=" + LOCK_WITHIN.toSeconds() + " s]");
         } else {
-            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Another comando is starting or stopping frontear;"
+            said.add(new Intent.Notify(Notice.Level.INFO, "Another comando is starting or stopping frontear;"
                     + " try again in a moment", false));
         }
     }
 
-    /** {@link #flip}'s work, under the registry's lock. */
-    private void flipHeld(final Boolean want, final boolean onItsOwn) {
+    /** {@link #flip}'s work, under the registry's lock, its notices added to {@code said}. */
+    private void flipHeld(final Boolean want, final boolean onItsOwn, final List<Intent> said) {
         final boolean up = hosted != null;
         if (want != null && want == up) {
             // what was asked for holds already
@@ -805,15 +832,13 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
             if (up) {
                 doing = "stopping";
                 stoppedByHand = true;
-                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Stopping frontear…", false));
-                stop();
+                stop(said);
             } else {
                 doing = "starting";
                 if (!onItsOwn) {
                     stoppedByHand = false;
-                    intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Starting frontear…", false));
                 }
-                start(onItsOwn);
+                start(onItsOwn, said);
             }
         } finally {
             doing = "";
@@ -825,25 +850,25 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
      * closed again. A live entry of another process under this slug refuses the start. Under the registry's lock, so
      * no other comando's start takes or binds the port meanwhile.
      */
-    private void start(final boolean onItsOwn) {
+    private void start(final boolean onItsOwn, final List<Intent> said) {
         final Map<String, Entry> nodes;
         try {
             nodes = readForWrite();
         } catch (final IOException ex) {
             say(onItsOwn, Notice.Level.WARN, "Cannot read the frontear registry; remove it if no frontear runs"
-                    + " [registry=" + registry + ", cause=" + ex.getMessage() + ']', null);
+                    + " [registry=" + registry + ", cause=" + ex.getMessage() + ']', null, said);
             return;
         }
         final Entry mine = nodes.get(slug);
         if (mine != null && !ours(mine) && live(mine).isPresent()) {
             say(onItsOwn, Notice.Level.WARN, "Cannot start frontear: another comando named " + slug + " runs its node"
-                    + " [owner=" + mine.owner() + ", pid=" + mine.pid() + ", port=" + mine.port() + ']', null);
+                    + " [owner=" + mine.owner() + ", pid=" + mine.pid() + ", port=" + mine.port() + ']', null, said);
             return;
         }
         final int port = port(nodes, mine);
         if (port < 0) {
             say(onItsOwn, Notice.Level.WARN, "Cannot start frontear: no port on 127.0.0.1 is free [from=" + base
-                    + ']', null);
+                    + ']', null, said);
             return;
         }
         final KeyPair pair;
@@ -851,7 +876,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
             pair = keys(OwnerOnly.folder(root));
         } catch (final IOException | RuntimeException e) {
             say(onItsOwn, Notice.Level.ERROR, "Cannot start frontear [root=" + root + ", cause=" + e.getMessage()
-                    + ']', e);
+                    + ']', e, said);
             return;
         }
         // taken before the bind, so no connection to this node reads an earlier one
@@ -864,7 +889,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
             node = Frontear.start(slug, port, root, Set.of(pair.getPublic()), InstantSource.system(), true, true);
         } catch (final IOException | RuntimeException e) {
             say(onItsOwn, Notice.Level.ERROR, "Cannot start frontear [port=" + port + ", root=" + root + ", cause="
-                    + e.getMessage() + ']', e);
+                    + e.getMessage() + ']', e, said);
             return;
         }
         final Hosted h;
@@ -876,7 +901,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
         } catch (final IOException | RuntimeException e) {
             closeNode(node);
             say(onItsOwn, Notice.Level.ERROR, "Cannot write the frontear registry [registry=" + registry + ", cause="
-                    + e.getMessage() + ']', e);
+                    + e.getMessage() + ']', e, said);
             return;
         }
         hosted = h;
@@ -887,8 +912,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
         saidOnItsOwn = "";
         LOG.log(System.Logger.Level.INFO, "octopus up [node=" + slug + ", port=" + node.port() + ", root=" + root
                 + ", key=" + Signer.keyId(pair.getPublic()) + ", asked=" + !onItsOwn + ']');
-        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is up: MQTT " + HOST + ':' + node.port(),
-                false));
+        said.add(new Intent.Notify(Notice.Level.INFO, "frontear is up: MQTT " + HOST + ':' + node.port(), false));
     }
 
     /**
@@ -922,36 +946,45 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
     }
 
     /**
-     * Says {@code text} at {@code level}, a warning or an error also in comando's log with {@code cause}; for a start
-     * of this instance's own, only when it is not what the last such start said, so a failure met at every look of the
-     * peer link is said once.
+     * Adds to {@code said} the notice {@code text} at {@code level}, a warning or an error also in comando's log with
+     * {@code cause}; for a start of this instance's own, only when it is not what the last such start said, so a
+     * failure met at every look of the peer link is said once.
      */
-    private void say(final boolean onItsOwn, final Notice.Level level, final String text, final Throwable cause) {
+    private void say(
+            final boolean onItsOwn,
+            final Notice.Level level,
+            final String text,
+            final Throwable cause,
+            final List<Intent> said
+    ) {
         if (onItsOwn) {
             if (text.equals(saidOnItsOwn)) {
                 return;
             }
             saidOnItsOwn = text;
         }
-        intents.dispatch(level == Notice.Level.INFO ? new Intent.Notify(level, text, false)
+        said.add(level == Notice.Level.INFO ? new Intent.Notify(level, text, false)
                 : Intent.Notify.logged(LOG, level, text, cause));
     }
 
-    /** Stops this instance's node and marks it down in the registry, its port kept; under the registry's lock. */
-    private void stop() {
+    /**
+     * Stops this instance's node and marks it down in the registry, its port kept, its notices added to {@code said};
+     * under the registry's lock.
+     */
+    private void stop(final List<Intent> said) {
         final Hosted h = hosted;
         hosted = null;
         disconnected();
         try {
             h.node().close();
         } catch (final RuntimeException ex) {
-            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "frontear did not close cleanly [cause="
+            said.add(Intent.Notify.logged(LOG, Notice.Level.WARN, "frontear did not close cleanly [cause="
                     + ex.getMessage() + ']', ex));
         } finally {
             markDown();
         }
         LOG.log(System.Logger.Level.INFO, "octopus stopped [node=" + slug + ", port=" + h.node().port() + ']');
-        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "frontear is down", false));
+        said.add(new Intent.Notify(Notice.Level.INFO, "frontear is down", false));
     }
 
     /** Closes {@code node}, which this instance started and will not keep; a failure is logged. */

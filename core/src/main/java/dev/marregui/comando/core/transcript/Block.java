@@ -18,13 +18,20 @@ public sealed interface Block {
     /**
      * A prompt sent to the session; {@code origin} names the panel, empty for history. {@code atMillis} is when it was
      * sent, epoch milliseconds: comando's clock for a live prompt, the stored line's timestamp for history;
-     * {@link #UNKNOWN_TIME} when neither is known.
+     * {@link #UNKNOWN_TIME} when neither is known. {@code delivered} when comando delivered it from another session or
+     * instance, its text headed with the sender; false for the user's own and for history, whose stored lines keep no
+     * such mark.
      */
-    record UserPrompt(String text, String origin, String parent, long atMillis) implements Block {
+    record UserPrompt(String text, String origin, String parent, long atMillis, boolean delivered) implements Block {
         public UserPrompt {
             Objects.requireNonNull(text, "text");
             Objects.requireNonNull(origin, "origin");
             Objects.requireNonNull(parent, "parent");
+        }
+
+        /** A prompt comando did not deliver from another session or instance. */
+        public UserPrompt(final String text, final String origin, final String parent, final long atMillis) {
+            this(text, origin, parent, atMillis, false);
         }
 
         /** A prompt whose time is not known. */
