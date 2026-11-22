@@ -91,7 +91,8 @@ class FrontearOctopusMachinesTest {
             NODES.forEach((peer, e) -> {
                 if (!peer.equals(slug)) {
                     local.put(peer, new LinkSpec(peer, LOOPBACK, e.port(), Set.of(Peers.inboxTopic(peer),
-                            Peers.replyTopic(peer), Peers.presenceTopic(slug)), Set.of(), FrontearOctopus.HOP_LIMIT));
+                            Peers.replyTopic(peer), Peers.presenceTopic(slug),
+                                    Peers.sessionsTopic(slug)), Set.of(), FrontearOctopus.HOP_LIMIT));
                 }
             });
             assertThat(wanted).as(slug).isEqualTo(local);
@@ -109,6 +110,7 @@ class FrontearOctopusMachinesTest {
         for (final String peer : List.of("alice", "bob")) {
             assertThat(wanted.get(peer)).as(peer).isEqualTo(new LinkSpec(peer, LOOPBACK, NODES.get(peer).port(),
                     Set.of(Peers.inboxTopic(peer), Peers.replyTopic(peer), Peers.presenceTopic(MAIN),
+                            Peers.sessionsTopic(MAIN),
                             "comando/v1/a/instance/" + peer + "/inbox", "comando/v1/a/instance/" + peer + "/reply",
                             "comando/v1/b/instance/+/presence", "comando/v1/c/instance/+/presence"),
                     Set.of(), 3, false));
@@ -131,12 +133,14 @@ class FrontearOctopusMachinesTest {
         assertThat(wanted).containsOnlyKeys(MAIN, "bob");
         assertThat(wanted.get(MAIN)).isEqualTo(new LinkSpec(MAIN, LOOPBACK, NODES.get(MAIN).port(),
                 Set.of(Peers.inboxTopic(MAIN), Peers.replyTopic(MAIN), Peers.presenceTopic("alice"),
+                        Peers.sessionsTopic("alice"),
                         "comando/v1/b/instance/+/inbox", "comando/v1/b/instance/+/reply",
                         "comando/v1/c/instance/+/inbox", "comando/v1/c/instance/+/reply",
                         "comando/v1/a/instance/alice/presence"),
                 Set.of(), 1, false));
         assertThat(wanted.get("bob")).isEqualTo(new LinkSpec("bob", LOOPBACK, NODES.get("bob").port(),
-                Set.of(Peers.inboxTopic("bob"), Peers.replyTopic("bob"), Peers.presenceTopic("alice")), Set.of(), 1,
+                Set.of(Peers.inboxTopic("bob"), Peers.replyTopic("bob"), Peers.presenceTopic("alice"),
+                        Peers.sessionsTopic("alice")), Set.of(), 1,
                 false));
     }
 
@@ -190,7 +194,8 @@ class FrontearOctopusMachinesTest {
         final Path toAlice = dir.resolve("a-main/fabric/alice/link.json");
         await().atMost(WAIT).pollInterval(POLL).until(() -> out(toMain).contains("comando/v1/b/instance/+/inbox"));
         assertThat(out(toMain)).containsExactlyInAnyOrder(Peers.inboxTopic(MAIN), Peers.replyTopic(MAIN),
-                Peers.presenceTopic("alice"), "comando/v1/b/instance/+/inbox", "comando/v1/b/instance/+/reply",
+                Peers.presenceTopic("alice"),
+                        Peers.sessionsTopic("alice"), "comando/v1/b/instance/+/inbox", "comando/v1/b/instance/+/reply",
                 "comando/v1/a/instance/alice/presence");
         assertThat(link(toMain).path("hopLimit").asInt(0)).isEqualTo(FrontearOctopus.HOP_LIMIT);
         await().atMost(WAIT).pollInterval(POLL).until(() -> link(toAlice).path("hopLimit").asInt(0)
@@ -202,13 +207,13 @@ class FrontearOctopusMachinesTest {
         main.reconcile();
         alice.reconcile();
 
-        await().atMost(WAIT).pollInterval(POLL).until(() -> out(toMain).size() == 3);
+        await().atMost(WAIT).pollInterval(POLL).until(() -> out(toMain).size() == 4);
         assertThat(out(toMain)).containsExactlyInAnyOrder(Peers.inboxTopic(MAIN), Peers.replyTopic(MAIN),
-                Peers.presenceTopic("alice"));
+                Peers.presenceTopic("alice"), Peers.sessionsTopic("alice"));
         await().atMost(WAIT).pollInterval(POLL).until(() -> link(toAlice).path("hopLimit").asInt(0)
                 == FrontearOctopus.HOP_LIMIT);
         assertThat(out(toAlice)).containsExactlyInAnyOrder(Peers.inboxTopic("alice"), Peers.replyTopic("alice"),
-                Peers.presenceTopic(MAIN));
+                Peers.presenceTopic(MAIN), Peers.sessionsTopic(MAIN));
     }
 
     /// Machines `a` and `b`, each with a border gateway and one other instance, `alice` on `a` and `carol` on `b`, each

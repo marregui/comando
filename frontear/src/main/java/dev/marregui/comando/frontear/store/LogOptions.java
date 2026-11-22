@@ -12,7 +12,8 @@ import java.util.Objects;
  *                      fails at once with {@link QuotaExceededException}
  * @param forceEvery    the longest a record waits after its append for the force that makes it durable, the group
  *                      commit's window; zero forces as soon as the forcer is free, grouping what arrived meanwhile
- * @param maxRoundBytes the most frame bytes the log holds in memory waiting for the forcer to write and force them
+ * @param maxRoundBytes the most bytes the log holds in memory waiting for the forcer to write and force them, each
+ *                      append counted as its record's frame written whole, a delta's saving aside
  *                      ({@link LinkLog#roundBytes()} is the usage): an append that would pass it while others wait
  *                      fails at once with {@link QuotaExceededException}; a frame larger than it is taken alone
  */

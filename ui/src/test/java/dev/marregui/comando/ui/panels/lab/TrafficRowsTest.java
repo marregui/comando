@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - frontear's control traffic is left out unless asked for
 /// - a publish's path is its appends by topic and size within five seconds, then the steps at their offsets
 /// - each packet says what it is: a comando presence, question or reply by its instance, else by its kind
+/// - the log's line gives its count, span and the newest packet's age, and says when it shows a sample
 class TrafficRowsTest {
 
     /// Five presences one origin published in a row are one row counting 5, named by the first; asking for every
@@ -138,6 +139,28 @@ class TrafficRowsTest {
         final Packet from = published(1, 10_000L, "alpha", "work/a");
         assertThat(TrafficRows.step(from, step(2, 10_003L, Kind.APPENDED, "beta", "work/a", 70L)))
                 .isEqualTo("+3 ms  appended to the log for beta at offset 70");
+    }
+
+    /// The log's line counts its packets, the time from its oldest to its newest, out of order or not, and how long
+    /// ago the newest came; it says it is a sample while the tab misses packets or cdb samples them, and an empty
+    /// log says so.
+    @Test
+    void theWindowLineGivesItsSpanTheNewestsAgeAndWhetherItIsASample() {
+        final List<Packet> packets = new ArrayList<>();
+        for (int i = 0; i < 10_000; i++) {
+            packets.add(published(i, 100_000L + (i * 250L) / 9_999L, "alpha", "work/a"));
+        }
+        packets.add(published(10_000, 100_100L, "alpha", "work/a"));
+        assertThat(TrafficRows.window(packets, 103_250L, 0.0, 0.0))
+                .isEqualTo("10,001 packets · 0.25 s span · newest 3 s ago");
+        assertThat(TrafficRows.window(packets.subList(0, 1), 100_000L + 240_000L, 0.0, 0.0))
+                .isEqualTo("1 packet · 0.00 s span · newest 4 min ago");
+        assertThat(TrafficRows.window(packets, 100_000L, 0.0, 0.0)).as("a clock behind the newest")
+                .endsWith("newest 0 s ago");
+        assertThat(TrafficRows.window(packets, 103_250L, 1_200.0, 38_000.0)).isEqualTo(
+                "10,001 packets · 0.25 s span · newest 3 s ago · a sample: the tab misses 1.2k/s"
+                        + " · cdb keeps a sample: 38.0k/s left out");
+        assertThat(TrafficRows.window(List.of(), 0L, 0.0, 0.0)).isEqualTo("no packets");
     }
 
     static Packet published(final long seq, final long atMillis, final String origin, final String topic) {

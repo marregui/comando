@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Optional;
 
 import dev.marregui.comando.claude.MetricsEndpoint;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 
 /**
  * Writes the lab's lines to the machine's cdb the way the metrics sink does (record 146): {@code /write} with the
@@ -32,16 +34,23 @@ public final class CdbWriter implements PacketSink.Writer {
     /**
      * The table: one row per packet, its kind, node, origin and link as symbols, a publish's payload in
      * {@code payload} when it is JSON and kept whole, else in {@code payload_text} (see {@link PacketSink#json}).
-     * Kept a week (ADR 0187 §2.3).
+     * Partitioned by hour and kept a day: in the load test of 2026-11-22 a day's partition grew to 705 MB, and a
+     * commit that rewrote it ran cdb out of memory and suspended the table; an hour's partition bounds what one commit
+     * rewrites, and the day bounds the disk.
      */
     static final String DDL = "CREATE TABLE IF NOT EXISTS frontear_packet (ts TIMESTAMP, node SYMBOL CAPACITY 4096,"
             + " kind SYMBOL CAPACITY 4096, origin SYMBOL CAPACITY 4096, link SYMBOL CAPACITY 4096, topic VARCHAR,"
             + " qos INT, retain BOOLEAN, bytes INT, hops INT, offset LONG, correlation VARCHAR, code INT,"
-            + " payload JSON, payload_text VARCHAR) TIMESTAMP(ts) PARTITION BY DAY TTL 7 DAYS WAL";
-    /** The payload columns, for a table made before them; a no-op where the column is there, whatever its type. */
+            + " payload JSON, payload_text VARCHAR) TIMESTAMP(ts) PARTITION BY HOUR TTL 24 HOURS WAL";
+    /**
+     * For a table made before the payload columns or the day's TTL: the columns, a no-op where the column is there
+     * whatever its type, and the TTL. cdb has no {@code ALTER} for the partitioning, so a table made by day keeps its
+     * day partitions until it is dropped; a day's TTL is a whole number of them, which cdb requires.
+     */
     static final List<String> ALTERS = List.of(
             "ALTER TABLE frontear_packet ADD COLUMN IF NOT EXISTS payload JSON",
-            "ALTER TABLE frontear_packet ADD COLUMN IF NOT EXISTS payload_text VARCHAR");
+            "ALTER TABLE frontear_packet ADD COLUMN IF NOT EXISTS payload_text VARCHAR",
+            "ALTER TABLE frontear_packet SET TTL 24 HOURS");
     /**
      * The characters one request carries at most: cdb refuses a body over 16 MiB, and a character is at most three
      * bytes of UTF-8 (a surrogate pair, two characters, four), so 4 Mi characters stay under it with room.
@@ -99,7 +108,7 @@ public final class CdbWriter implements PacketSink.Writer {
                 madeOn = null;
                 throw new PacketSink.PartialWrite("cdb refused frontear packets [status=" + answer.statusCode()
                         + ", lines=" + (to - from) + ", landed=" + landed + ", answer=" + shortened(answer.body())
-                        + ']', landed, null);
+                        + ']', landed, null, tableFault(answer.body()));
             }
             landed += to - from;
             from = to;
@@ -144,8 +153,9 @@ public final class CdbWriter implements PacketSink.Writer {
         final HttpResponse<String> answer = http.send(request,
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (answer.statusCode() != 200) {
-            throw new IOException("cdb refused the frontear_packet table [status=" + answer.statusCode()
-                    + ", sql=" + sql + ", answer=" + shortened(answer.body()) + ']');
+            throw new PacketSink.PartialWrite("cdb refused the frontear_packet table [status="
+                    + answer.statusCode() + ", sql=" + sql + ", answer=" + shortened(answer.body()) + ']', 0,
+                    null, tableFault(answer.body()));
         }
     }
 
@@ -161,6 +171,26 @@ public final class CdbWriter implements PacketSink.Writer {
             to++;
         }
         return to;
+    }
+
+    /**
+     * The reason in cdb's answer {@code body} when it says the table takes no writes, else empty: it names a failed
+     * table, as a refused commit does, or a suspended one, as a refused read does (not {@code suspended=false}). The
+     * reason is the message of its JSON error, {@code message} from {@code /write} and {@code error} from
+     * {@code /exec}, or the body as it came. cdb gives no code for it: its text is all the answer says.
+     */
+    static String tableFault(final String body) {
+        if (!body.contains("failed table") && !body.replace("suspended=false", "").contains("suspended")) {
+            return "";
+        }
+        final JsonNode answer = Json.tryReadTree(body);
+        if (answer != null && answer.path("message").isString()) {
+            return answer.path("message").stringValue();
+        }
+        if (answer != null && answer.path("error").isString()) {
+            return answer.path("error").stringValue();
+        }
+        return shortened(body);
     }
 
     private static HttpRequest.Builder authorized(final HttpRequest.Builder request, final Optional<String> secret) {

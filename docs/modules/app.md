@@ -261,6 +261,22 @@ and renews its subscriptions. The MQTT client it uses lives in [`frontear`](fron
 > anybody's address, only the board's. comando's instances meet this way: each pins on its own board, and the boards
 > copy to each other the notes meant for one another.
 
+### The frontear tab's packets in cdb
+
+`LabDrain` reads the node's watch four times a second, keeps the last 10,000 packets in a `LabWindow` for the frontear
+tab, and hands each packet to `PacketSink`, which writes them in batches of up to 1,000 lines to the machine's cdb
+through `CdbWriter` ([record 187](../adr/0187-frontear-lab-node-per-instance.md)). The sink never waits: its queue
+holds 8,192 packets.
+
+| Fact | Value |
+|---|---|
+| Table | `frontear_packet`, `PARTITION BY HOUR TTL 24 HOURS WAL`. On 2026-11-22 a load test filled one day partition to 705 MB; rewriting it ran cdb out of memory, and cdb suspended the table. An hour's partition is a 24th of that |
+| A table made by an earlier comando | Keeps its day partitions: cdb has no `ALTER` for the partitioning. `ALTER TABLE frontear_packet SET TTL 24 HOURS`, sent with the columns' `ALTER`s before the first write, gives it the 24 h TTL, a whole number of days as cdb asks. To get hour partitions, drop the table; the next write makes it again |
+| `payload` or `payload_text` | `payload` (JSON) only when the payload is whole (8 KiB at most), its first non-blank character is `{` or `[`, and it reads as one JSON document; anything else, a bare number or string included, goes to `payload_text`. The check makes no exception per packet: a payload that is not JSON is refused before the parser, and the parser's quiet entry, `Json.tryReadTree`, answers null instead of throwing |
+| Sampling | Above 2,000 packets a second from one node, the sink keeps 1 in N, N the last second's count over 2,000, rising within a second as its count passes each multiple. The packets left out are counted as `sampled`, not as dropped. The limit was set after that load test, where cdb ran out of memory during the step at 40,000 messages a second; it is not cdb's measured limit |
+| Full or down | A packet that finds the queue full is counted `dropped full`. The lines of a batch cdb does not take are counted `dropped down`, and the sink waits 1 s before the next write, doubling to at most 1 min; what comes meanwhile is dropped and counted the same way |
+| A suspended table | When cdb refuses a write and its answer names a failed or suspended table, the sink keeps cdb's reason until a write lands, for Health's faults line (`cdb table suspended`, the reason in its tooltip) |
+
 How frontear works: [the `frontear` module](frontear.md) and [the frontear guide](../frontear.md). What instances say
 to each other: [the `mcp` module](mcp.md). The reasons:
 [instances consult each other](../adr/0123-instances-consult-each-other.md) and
@@ -336,6 +352,7 @@ tabs, the lower tabs and the side pane against the final state. It also saves a 
 | `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest` | The intent log, logging, the lock, the data root |
 | `AppCloseTest`, `DataRootFoldersTest` | The closing order, whatever a part throws; the folders of the data root |
 | `MachineCdbTest`, `FrontearOctopusTest`, `MqttPeerGatewayTest` | The servers, each instance's node, its port and registry entry, the links between the nodes, and the client to its own node |
+| `LabDrainTest`, `LabWindowTest`, `PacketSinkTest`, `CdbWriterTest` | The frontear tab's reads of the node; the packets in cdb: the table and its `ALTER`s, JSON or text without an exception per packet (a JFR recording counts them), sampling, drops and backoff, a suspended table |
 
 Four rule tests read the classes of every module, because only `app` sees every module:
 

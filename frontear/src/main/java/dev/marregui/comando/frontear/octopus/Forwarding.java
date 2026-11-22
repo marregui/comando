@@ -102,6 +102,16 @@ final class Forwarding {
         return record.withMeta(new Packet.Meta(meta.payloadFormat(), expirySeconds, meta.contentType(), kept));
     }
 
+    /** When {@code record} joined a link's log, in epoch milliseconds; -1 when it does not say. */
+    static long queuedMillis(final Packet.Publish record) {
+        for (final Packet.UserProperty p : record.meta().userProperties()) {
+            if (QUEUED.equals(p.name())) {
+                return millis(p.value());
+            }
+        }
+        return -1;
+    }
+
     /**
      * How long to wait before the next connect after {@code attempts} failed in a row, 0 when an accepted connection
      * ended: {@link #BACKOFF_FIRST} doubling per failure up to {@link #BACKOFF_MAX}, less up to {@link #JITTER} of it

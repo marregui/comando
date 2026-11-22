@@ -25,33 +25,6 @@ final class Dedup {
         return dropReplaced(block, timestampColumn, keyColumns, stableOrder(timestamps(block, timestampColumn), n));
     }
 
-    /**
-     * As {@link #order}, for a block whose rows {@code [0, base)} and {@code [base, size)} are each already in that
-     * order and free of rows to drop, as a partition's committed rows and the new rows ordered by {@link #order} are:
-     * the two runs are merged, the committed row first on a tie, so a new row still replaces a committed one.
-     */
-    static int[] mergeOrder(final RowBlock block, final int timestampColumn, final int[] keyColumns, final int base) {
-        if (timestampColumn < 0) {
-            return order(block, timestampColumn, keyColumns);
-        }
-        final int n = block.size;
-        final long[] ts = timestamps(block, timestampColumn);
-        final int[] merged = new int[n];
-        int a = 0;
-        int b = base;
-        int out = 0;
-        while (a < base && b < n) {
-            merged[out++] = ts[b] < ts[a] ? b++ : a++;
-        }
-        while (a < base) {
-            merged[out++] = a++;
-        }
-        while (b < n) {
-            merged[out++] = b++;
-        }
-        return dropReplaced(block, timestampColumn, keyColumns, merged);
-    }
-
     /** {@code sorted}, the rows of {@code block} in timestamp order, without the rows a later one replaces. */
     private static int[] dropReplaced(final RowBlock block, final int timestampColumn, final int[] keyColumns,
             final int[] sorted) {

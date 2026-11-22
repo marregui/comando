@@ -98,7 +98,7 @@ public final class LabDrain implements LabPort, AutoCloseable {
     public Frame read(final long after, final int max) {
         final Node n = node;
         final Counts counts = new Counts(window.dropped(), ringMissed, sink.written(), sink.droppedFull(),
-                sink.droppedDown());
+                sink.droppedDown(), sink.sampled(), sink.tableFault());
         final LabWindow.Read r = window.read(after, max);
         return new Frame(new Node(n.name(), n.port(), n.atMillis(), n.up(), n.totals(), n.links(), n.logs(), counts),
                 r.packets(), r.missed(), r.last());
@@ -237,7 +237,8 @@ public final class LabDrain implements LabPort, AutoCloseable {
             links.add(new Link(l.id(), l.connected(), l.queued(), l.cursor(), l.tail(), l.sent(), l.dropped(),
                     l.reordered(), l.queuedDeliveries(), l.queueMax(),
                     rate == null ? 0.0 : rate.perSecond(nowMillis, false),
-                    rate == null ? 0.0 : rate.perSecond(nowMillis, true), m.upMillis, m.downMillis, m.detail));
+                    rate == null ? 0.0 : rate.perSecond(nowMillis, true), m.upMillis, m.downMillis, m.detail,
+                    l.refused(), l.coalesced(), l.backlogBytes(), l.maxBacklogBytes(), l.backlogGrowing()));
         }
         final List<Log> logs = new ArrayList<>(s.logs().size());
         for (final LogView v : s.logs()) {

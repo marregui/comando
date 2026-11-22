@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -72,6 +73,8 @@ class FrontearStress {
     // the first send's lead over the schedule's start, so the publishers' loops run when the schedule begins
     private static final long LEAD_NANOS = TimeUnit.MILLISECONDS.toNanos(200);
     private static final String LINK = "b";
+    // a reason code is one byte (MQTT 5 §2.4)
+    private static final int REASON_CODES = 256;
     private static final Duration REPORT_EVERY = Duration.ofSeconds(10);
     private static final Duration SETUP = Duration.ofSeconds(15);
     private static final int SMALL = 128;
@@ -94,8 +97,9 @@ class FrontearStress {
                 System.getProperty("os.version"), options);
         final Totals totals = run(options);
         System.out.printf(Locale.ROOT, "totals [sent=%d, arrived=%d, refused=%d, failed=%d, outOfOrder=%d,"
-                + " wallSeconds=%.1f]%n", totals.sent(), totals.arrived(), totals.refused(), totals.failed(),
-                totals.outOfOrder(), totals.wallNanos() / 1e9);
+                + " wallSeconds=%.1f, refusedByReasonCode={%s}, firstFailure=%s]%n", totals.sent(), totals.arrived(),
+                totals.refused(), totals.failed(), totals.outOfOrder(), totals.wallNanos() / 1e9, totals.refusals(),
+                totals.firstFailure());
     }
 
     /// Runs the stress run `COMANDO_STRESS_ARGS` describes (one minute at 2,000 msg/s by default) with its logs in a
@@ -105,8 +109,8 @@ class FrontearStress {
         final String env = System.getenv("COMANDO_STRESS_ARGS");
         final String args = (env == null || env.isBlank() ? DEFAULT_ARGS : env) + " --data " + dir;
         final Totals totals = run(Options.parse(args.strip().split("\\s+")));
-        assertThat(totals.failed()).isZero();
-        assertThat(totals.refused()).isZero();
+        assertThat(totals.failed()).as("acknowledgements failed [first=%s]", totals.firstFailure()).isZero();
+        assertThat(totals.refused()).as("publishes refused [byReasonCode=%s]", totals.refusals()).isZero();
         assertThat(totals.arrived()).isGreaterThanOrEqualTo(totals.sent());
     }
 
@@ -302,8 +306,10 @@ class FrontearStress {
         }
     }
 
-    /// What the run did in all: for the test's assertions and the last line.
-    private record Totals(long sent, long arrived, long refused, long failed, long outOfOrder, long wallNanos) {
+    /// What the run did in all: for the test's assertions and the last line. `refusals` counts the refusals by their
+    /// reason code (`0x97=3280`), `firstFailure` is the first acknowledgement that failed, with its reason code.
+    private record Totals(long sent, long arrived, long refused, long failed, long outOfOrder, long wallNanos,
+            String refusals, String firstFailure) {
     }
 
     /// A latency histogram in nanoseconds, log-linear: 64 sub-buckets per power of two, so a percentile is read to
@@ -493,7 +499,10 @@ class FrontearStress {
         private final Histogram lag = new Histogram();
         private final Options options;
         private final Semaphore window;
+        /// The refusals by the reason code of their acknowledgement, a byte (§3.4.2.1).
+        private final long[] refusedByCode = new long[REASON_CODES];
         private long failed;
+        private Throwable firstFailure;
         private long refused;
         private long sent;
         private long sentTotal;
@@ -541,8 +550,12 @@ class FrontearStress {
                         synchronized (this) {
                             if (e != null) {
                                 failed++;
+                                if (firstFailure == null) {
+                                    firstFailure = e;
+                                }
                             } else if (code != Packet.SUCCESS) {
                                 refused++;
+                                refusedByCode[code & 0xff]++;
                             }
                             ack.record(now - due);
                         }
@@ -574,6 +587,14 @@ class FrontearStress {
 
         synchronized long failed() {
             return failed;
+        }
+
+        synchronized long refusedWith(final int code) {
+            return refusedByCode[code];
+        }
+
+        synchronized Throwable firstFailure() {
+            return firstFailure;
         }
     }
 
@@ -688,11 +709,38 @@ class FrontearStress {
         Totals totals(final long wallNanos) {
             long refused = 0;
             long failed = 0;
+            final long[] byCode = new long[REASON_CODES];
+            Throwable firstFailure = null;
             for (final Publisher p : publishers) {
                 refused += p.refused();
                 failed += p.failed();
+                for (int c = 0; c < REASON_CODES; c++) {
+                    byCode[c] += p.refusedWith(c);
+                }
+                if (firstFailure == null) {
+                    firstFailure = p.firstFailure();
+                }
             }
-            return new Totals(sentTotal(), arrivedTotal(), refused, failed, outOfOrder(), wallNanos);
+            final StringBuilder refusals = new StringBuilder();
+            for (int c = 0; c < REASON_CODES; c++) {
+                if (byCode[c] > 0) {
+                    refusals.append(refusals.isEmpty() ? "" : ", ")
+                            .append(String.format(Locale.ROOT, "0x%02x=%d", c, byCode[c]));
+                }
+            }
+            return new Totals(sentTotal(), arrivedTotal(), refused, failed, outOfOrder(), wallNanos,
+                    refusals.toString(), describe(firstFailure));
+        }
+
+        /// `failure` with its reason code when it carries one, "none" when there is none.
+        private static String describe(final Throwable failure) {
+            if (failure == null) {
+                return "none";
+            }
+            final Throwable cause = failure instanceof CompletionException c && c.getCause() != null
+                    ? c.getCause() : failure;
+            return cause instanceof MqttException m
+                    ? String.format(Locale.ROOT, "%s [reasonCode=0x%02x]", m, m.reasonCode()) : cause.toString();
         }
 
         private static Step stepAt(final List<Step> steps, final long nanos) {

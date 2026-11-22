@@ -1,5 +1,14 @@
 package dev.marregui.comando.frontear.protocol;
 
+import java.io.BufferedInputStream;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -11,6 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -224,6 +234,56 @@ class MqttClientTest {
             assertThat(recorder.causes.getFirst()).isInstanceOfSatisfying(MqttException.class,
                     e -> assertThat(e.reasonCode()).isEqualTo(Packet.KEEP_ALIVE_TIMEOUT));
             assertThat(client.connected()).isFalse();
+        }
+    }
+
+    /// A connection left idle for 5 s waits for each packet with no read timeout: no SocketTimeoutException passes
+    /// through its socket's stream, where a reader woken by a timeout to run its checks would see one a second.
+    @Test
+    void anIdleConnectionReadsWithoutATimeout() throws Exception {
+        final AtomicInteger timeouts = new AtomicInteger();
+        try (MqttClient client = client(60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null)) {
+            client.sockets(() -> new CountingSocket(timeouts));
+            client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            await().during(Duration.ofSeconds(5)).atMost(Duration.ofSeconds(8)).until(client::connected);
+            assertThat(timeouts).hasValue(0);
+            assertThat(recorder.causes).isEmpty();
+        }
+    }
+
+    /// A gateway that accepts the connection and then stops reading blocks the client's writes once the socket
+    /// buffers fill; the watcher ends the connection with Unspecified error no sooner than the write bound, and
+    /// within it and a second of checks, plus slack for a loaded machine.
+    @Test
+    void aWriteThatStallsEndsTheConnection() throws Exception {
+        recorder.retry = null;
+        final CompletableFuture<Socket> accepted = new CompletableFuture<>();
+        try (ServerSocket deaf = new ServerSocket()) {
+            deaf.setReceiveBufferSize(4_096);
+            deaf.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+            final Thread answering = Threads.fork("mqtt-test-deaf-gateway", () -> answerConnectThenStopReading(
+                    deaf, accepted));
+            try (MqttClient client = client(recorder, new MqttClient.Options("127.0.0.1", deaf.getLocalPort(),
+                    "stalled-client", 60, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null))) {
+                client.connect().get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                final byte[] payload = new byte[64 * 1_024];
+                final long startNanos = System.nanoTime();
+                // 32 MiB: more than a loopback socket's send and receive buffers hold together
+                for (int i = 0; i < 512; i++) {
+                    client.publish(new Packet.Publish("s/big", payload, 0, false, false, 0, null, null));
+                }
+                await().atMost(MqttClient.WRITE_WITHIN.plusSeconds(10)).until(() -> !recorder.causes.isEmpty());
+                final Duration took = Duration.ofNanos(System.nanoTime() - startNanos);
+                assertThat(recorder.causes.getFirst()).isInstanceOfSatisfying(MqttException.class,
+                        e -> assertThat(e.reasonCode()).isEqualTo(Packet.UNSPECIFIED));
+                assertThat(took).isGreaterThanOrEqualTo(MqttClient.WRITE_WITHIN);
+                assertThat(client.connected()).isFalse();
+            } finally {
+                answering.join(WAIT.toMillis());
+                if (accepted.isDone() && !accepted.isCompletedExceptionally()) {
+                    accepted.join().close();
+                }
+            }
         }
     }
 
@@ -617,6 +677,63 @@ class MqttClientTest {
     private static int waitingQos0(final String clientId) {
         return Queues.read().stream().filter(r -> r.name().equals("mqtt-qos0-" + clientId))
                 .mapToInt(Queues.Reading::depth).findFirst().orElse(-1);
+    }
+
+    /// Accepts one connection on `deaf`, answers its CONNECT with a successful CONNACK and reads nothing more,
+    /// handing the open socket to `accepted` for the test to close.
+    private static void answerConnectThenStopReading(final ServerSocket deaf,
+            final CompletableFuture<Socket> accepted) {
+        try {
+            final Socket s = deaf.accept();
+            accepted.complete(s);
+            final InputStream in = new BufferedInputStream(s.getInputStream());
+            final int first = in.read();
+            if (first < 0) {
+                return;
+            }
+            Codec.read(in, first, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE);
+            s.getOutputStream().write(Codec.encode(new Packet.ConnAck(false, Packet.SUCCESS,
+                    Packet.DEFAULT_RECEIVE_MAXIMUM, Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, 0,
+                    Packet.NO_SERVER_KEEP_ALIVE, null, null)));
+        } catch (final IOException e) {
+            accepted.completeExceptionally(e);
+        }
+    }
+
+    /// A plain socket whose input stream counts the read timeouts thrown through it into `timeouts`.
+    private static final class CountingSocket extends Socket {
+
+        private final AtomicInteger timeouts;
+
+        CountingSocket(final AtomicInteger timeouts) {
+            this.timeouts = timeouts;
+        }
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            return new FilterInputStream(super.getInputStream()) {
+
+                @Override
+                public int read() throws IOException {
+                    try {
+                        return super.read();
+                    } catch (final SocketTimeoutException e) {
+                        timeouts.incrementAndGet();
+                        throw e;
+                    }
+                }
+
+                @Override
+                public int read(final byte[] b, final int off, final int len) throws IOException {
+                    try {
+                        return super.read(b, off, len);
+                    } catch (final SocketTimeoutException e) {
+                        timeouts.incrementAndGet();
+                        throw e;
+                    }
+                }
+            };
+        }
     }
 
     /// Records as the test's [Recorder] does, and holds the callbacks executor in each message until released.

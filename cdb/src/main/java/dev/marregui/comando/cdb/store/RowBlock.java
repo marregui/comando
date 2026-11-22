@@ -165,6 +165,15 @@ final class RowBlock implements AutoCloseable {
         MemorySegment.copy(values[column], ValueLayout.JAVA_BYTE, start, dst, at, length);
     }
 
+    /**
+     * Copies the UTF-8 bytes {@code [from, from + n)} of text value {@code row} of {@code column}, not NULL, to
+     * {@code dst} at {@code at}.
+     */
+    void copyText(final int column, final int row, final int from, final byte[] dst, final int at, final int n) {
+        final long start = starts[column].getAtIndex(ValueLayout.JAVA_LONG, row);
+        MemorySegment.copy(values[column], ValueLayout.JAVA_BYTE, start + from, dst, at, n);
+    }
+
     /** True when text values {@code a} and {@code b} of {@code column} are equal, both NULL included. */
     boolean textEquals(final int column, final int a, final int b) {
         final int length = lengths[column].getAtIndex(ValueLayout.JAVA_INT, a);

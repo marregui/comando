@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,11 +30,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-/// The lab's cdb writer against a fake cdb on a loopback port: the table is made once with its declared DDL and its
-/// payload columns added before the first write, then each batch is one `/write`; a write returns the lines that
-/// landed, and a refusal part way says how many had; it fails the write and makes the table again before the next;
+/// The lab's cdb writer against a fake cdb on a loopback port: the table is made once with its declared DDL, its
+/// payload columns added and its TTL set before the first write, then each batch is one `/write`; a write returns the
+/// lines that landed, and a refusal part way says how many had; it fails the write and makes the table again before the
+/// next;
 /// behind the sink, a cdb that is down drops and counts the lines, and once it is up again they are written after
-/// the backoff.
+/// the backoff; a refusal that names a failed or suspended table says so.
 class CdbWriterTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
@@ -42,6 +44,8 @@ class CdbWriterTest {
     private final List<Request> requests = new CopyOnWriteArrayList<>();
     private final AtomicInteger execStatus = new AtomicInteger(200);
     private final AtomicInteger writeStatus = new AtomicInteger(204);
+    /// What `/write` answers with its status; empty for none.
+    private final AtomicReference<String> writeBody = new AtomicReference<>("");
     /// The `/write` request, counted from 1, that answers 500; 0 for none.
     private final AtomicInteger failWrite = new AtomicInteger();
     private final AtomicInteger writes = new AtomicInteger();
@@ -54,7 +58,7 @@ class CdbWriterTest {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/exec", exchange -> answer(exchange, execStatus.get(), "{\"ddl\":\"OK\"}"));
         server.createContext("/write", exchange -> answer(exchange,
-                writes.incrementAndGet() == failWrite.get() ? 500 : writeStatus.get(), ""));
+                writes.incrementAndGet() == failWrite.get() ? 500 : writeStatus.get(), writeBody.get()));
         server.start();
         final URI base = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
         endpoint = new Endpoint(base, up);
@@ -65,7 +69,7 @@ class CdbWriterTest {
         server.stop(0);
     }
 
-    /// Two batches: the declared DDL then the two payload column ALTERs, each one `/exec`, once; then one `/write`
+    /// Two batches: the declared DDL then the payload column and TTL ALTERs, each one `/exec`, once; then one `/write`
     /// per batch at nanosecond precision with the lines one per row, each write returning its lines; every request
     /// carries the owner secret.
     @Test
@@ -75,27 +79,31 @@ class CdbWriterTest {
                     "frontear_packet,node=a 2"))).isEqualTo(2);
             assertThat(writer.write(List.of("frontear_packet,node=a 3"))).isEqualTo(1);
         }
-        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/write", "/write");
-        assertThat(requests.subList(0, 3)).extracting(Request::method).containsOnly("GET");
-        assertThat(requests.subList(0, 3)).extracting(Request::query).containsExactly("query=" + CdbWriter.DDL,
-                "query=" + CdbWriter.ALTERS.get(0), "query=" + CdbWriter.ALTERS.get(1));
-        assertThat(requests.get(3).method()).isEqualTo("POST");
-        assertThat(requests.get(3).query()).isEqualTo("precision=n");
-        assertThat(requests.get(3).body())
+        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/exec", "/write",
+                "/write");
+        assertThat(requests.subList(0, 4)).extracting(Request::method).containsOnly("GET");
+        assertThat(requests.subList(0, 4)).extracting(Request::query).containsExactly("query=" + CdbWriter.DDL,
+                "query=" + CdbWriter.ALTERS.get(0), "query=" + CdbWriter.ALTERS.get(1),
+                "query=" + CdbWriter.ALTERS.get(2));
+        assertThat(requests.get(4).method()).isEqualTo("POST");
+        assertThat(requests.get(4).query()).isEqualTo("precision=n");
+        assertThat(requests.get(4).body())
                 .isEqualTo("frontear_packet,node=a,kind=published qos=1i 1\nfrontear_packet,node=a 2\n");
-        assertThat(requests.get(4).body()).isEqualTo("frontear_packet,node=a 3\n");
+        assertThat(requests.get(5).body()).isEqualTo("frontear_packet,node=a 3\n");
         assertThat(requests).extracting(Request::bearer).containsOnly("Bearer " + SECRET);
     }
 
-    /// The table declares both payload columns, JSON and text, beside the rest and keeps a week; a table made before
-    /// them gets each from an ALTER that changes nothing where the column is there.
+    /// The table declares both payload columns, JSON and text, beside the rest, is partitioned by hour and keeps a
+    /// day; a table made before them gets each column from an ALTER that changes nothing where the column is
+    /// there, and the day's TTL from another.
     @Test
     void theTableDeclaresBothPayloadColumnsAndAddsThemToAnOlderTable() {
         assertThat(CdbWriter.DDL).contains("correlation VARCHAR, code INT, payload JSON, payload_text VARCHAR)")
-                .contains("TTL 7 DAYS");
+                .endsWith(" TIMESTAMP(ts) PARTITION BY HOUR TTL 24 HOURS WAL");
         assertThat(CdbWriter.ALTERS).containsExactly(
                 "ALTER TABLE frontear_packet ADD COLUMN IF NOT EXISTS payload JSON",
-                "ALTER TABLE frontear_packet ADD COLUMN IF NOT EXISTS payload_text VARCHAR");
+                "ALTER TABLE frontear_packet ADD COLUMN IF NOT EXISTS payload_text VARCHAR",
+                "ALTER TABLE frontear_packet SET TTL 24 HOURS");
     }
 
     /// A publish whose payload is JSON and kept whole reaches cdb in field `payload`, the JSON column; one that is
@@ -108,8 +116,8 @@ class CdbWriterTest {
         try (CdbWriter writer = new CdbWriter(endpoint)) {
             assertThat(writer.write(List.of(json, text, cut))).isEqualTo(3);
         }
-        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/write");
-        assertThat(requests.get(3).body()).isEqualTo(json + '\n' + text + '\n' + cut + '\n');
+        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/exec", "/write");
+        assertThat(requests.get(4).body()).isEqualTo(json + '\n' + text + '\n' + cut + '\n');
         assertThat(fields(json)).contains("payload").doesNotContain("payload_text");
         assertThat(fields(text)).contains("payload_text").doesNotContain("payload");
         assertThat(fields(cut)).contains("payload_text").doesNotContain("payload");
@@ -127,9 +135,10 @@ class CdbWriterTest {
                     .isInstanceOfSatisfying(PacketSink.PartialWrite.class,
                             e -> assertThat(e.landed()).isEqualTo(1));
         }
-        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/write", "/write");
-        assertThat(requests.get(3).body()).isEqualTo(half + '\n');
-        assertThat(requests.get(4).body()).isEqualTo(half + '\n' + "z\n");
+        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/exec", "/write",
+                "/write");
+        assertThat(requests.get(4).body()).isEqualTo(half + '\n');
+        assertThat(requests.get(5).body()).isEqualTo(half + '\n' + "z\n");
     }
 
     /// cdb refuses a body over 16 MiB: a batch longer than a request carries goes in several, each within the bound,
@@ -143,11 +152,11 @@ class CdbWriterTest {
             assertThat(writer.write(List.of(half, half, "z", tooLong, "w"))).isEqualTo(4);
         }
         assertThat(requests).extracting(Request::path)
-                .containsExactly("/exec", "/exec", "/exec", "/write", "/write", "/write");
-        assertThat(requests.get(3).body()).isEqualTo(half + '\n');
-        assertThat(requests.get(4).body()).isEqualTo(half + '\n' + "z\n");
-        assertThat(requests.get(5).body()).isEqualTo("w\n");
-        assertThat(requests.subList(3, 6)).allSatisfy(r -> assertThat(r.body().length())
+                .containsExactly("/exec", "/exec", "/exec", "/exec", "/write", "/write", "/write");
+        assertThat(requests.get(4).body()).isEqualTo(half + '\n');
+        assertThat(requests.get(5).body()).isEqualTo(half + '\n' + "z\n");
+        assertThat(requests.get(6).body()).isEqualTo("w\n");
+        assertThat(requests.subList(4, 7)).allSatisfy(r -> assertThat(r.body().length())
                 .isLessThanOrEqualTo(CdbWriter.MAX_BODY_CHARS));
     }
 
@@ -169,8 +178,41 @@ class CdbWriterTest {
             writeStatus.set(204);
             writer.write(List.of("frontear_packet,node=a 3"));
         }
-        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/exec", "/write",
-                "/exec", "/exec", "/exec", "/write");
+        assertThat(requests).extracting(Request::path).containsExactly("/exec", "/exec", "/exec", "/exec", "/exec",
+                "/write", "/exec", "/exec", "/exec", "/exec", "/write");
+    }
+
+    /// A `/write` refused for a table cdb suspended fails the write with the reason cdb gave as its table fault; a
+    /// refusal for another cause carries none.
+    @Test
+    void aWriteRefusedForAFailedTableNamesTheFault() throws Exception {
+        final String reason = "refuse commit to failed table [table=frontear_packet]";
+        writeStatus.set(400);
+        writeBody.set("{\"code\":\"invalid\",\"message\":\"" + reason + "\",\"line\":0}");
+        try (CdbWriter writer = new CdbWriter(endpoint)) {
+            assertThatThrownBy(() -> writer.write(List.of("frontear_packet,node=a 1")))
+                    .isInstanceOfSatisfying(PacketSink.PartialWrite.class,
+                            e -> assertThat(e.tableFault()).isEqualTo(reason));
+            writeBody.set("{\"code\":\"invalid\",\"message\":\"unknown column type [column=x]\",\"line\":1}");
+            assertThatThrownBy(() -> writer.write(List.of("frontear_packet,node=a 2")))
+                    .isInstanceOfSatisfying(PacketSink.PartialWrite.class, e -> assertThat(e.tableFault()).isEmpty());
+        }
+    }
+
+    /// An answer names a table fault when it says a table failed or is suspended, not when it says
+    /// `suspended=false`: the reason is the JSON error's `message` from `/write` or its `error` from `/exec`, else
+    /// the body as it came.
+    @Test
+    void anAnswerNamesATableFaultWhenItSaysTheTableFailedOrIsSuspended() {
+        assertThat(CdbWriter.tableFault("{\"code\":\"invalid\",\"message\":\"refuse commit to failed table"
+                + " [table=t]\",\"line\":0}")).isEqualTo("refuse commit to failed table [table=t]");
+        assertThat(CdbWriter.tableFault("{\"query\":\"q\",\"error\":\"cannot read table [table=t,"
+                + " suspended=true]\",\"position\":0}")).isEqualTo("cannot read table [table=t, suspended=true]");
+        assertThat(CdbWriter.tableFault("table t is suspended")).isEqualTo("table t is suspended");
+        assertThat(CdbWriter.tableFault("{\"query\":\"q\",\"error\":\"cannot read table [table=t,"
+                + " suspended=false]\",\"position\":0}")).isEmpty();
+        assertThat(CdbWriter.tableFault("{\"code\":\"invalid\",\"message\":\"bad line\",\"line\":3}")).isEmpty();
+        assertThat(CdbWriter.tableFault("")).isEmpty();
     }
 
     /// A cdb that runs no more, or whose port no longer answers, fails the write before anything is sent.
@@ -209,8 +251,8 @@ class CdbWriterTest {
             });
             assertThat(sink.droppedDown()).isGreaterThanOrEqualTo(2L);
         }
-        assertThat(requests).extracting(Request::path).startsWith("/exec", "/exec", "/exec", "/write");
-        assertThat(requests.get(3).body()).startsWith("frontear_packet,node=a,kind=published");
+        assertThat(requests).extracting(Request::path).startsWith("/exec", "/exec", "/exec", "/exec", "/write");
+        assertThat(requests.get(4).body()).startsWith("frontear_packet,node=a,kind=published");
     }
 
     private void answer(final HttpExchange exchange, final int status, final String text) throws IOException {

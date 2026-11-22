@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.IntFunction;
+import java.util.function.Supplier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 
@@ -45,11 +46,13 @@ import dev.marregui.comando.frontear.tls.Tls;
  * An MQTT 5 client over a blocking socket, for the one gateway its {@link Options} name: QoS 0 and 1 both ways,
  * subscriptions, keep alive, a last will, and reconnection when its {@link Handler} asks for it.
  *
- * <p>Threads. One reader, a timed strand named {@code mqtt-<client id>}, opens each connection, reads it, keeps it
- * alive and runs the reconnects the handler schedules; it never writes once the connection is up, so a gateway that
- * stops reading cannot stall it. Every later write runs on the writer strand, {@code mqtt-writer-<client id>}, in the
- * order the client queued it, and takes the connection's write lock. A write that lasts longer than
- * {@link #WRITE_WITHIN} is cut by the reader, which closes the socket. The handler's {@code connected} and
+ * <p>Threads. One reader, a timed strand named {@code mqtt-<client id>}, opens each connection, reads it with no
+ * read timeout once the gateway accepted it, and runs the reconnects the handler schedules; it never writes once the
+ * connection is up, so a gateway that stops reading cannot stall it. Every later write runs on the writer strand,
+ * {@code mqtt-writer-<client id>}, in the order the client queued it, and takes the connection's write lock. The
+ * watcher, a timed strand named {@code mqtt-watch-<client id>}, keeps the connection alive: it pings, and ends the
+ * connection by closing its socket when a ping goes unanswered or a write lasts longer than {@link #WRITE_WITHIN};
+ * the reader's read then fails and the connection ends with the watcher's cause. The handler's {@code connected} and
  * {@code received} calls, and the completion of every future but {@link #connect}'s and {@link #disconnect}'s, run on
  * the {@code callbacks} executor in the order they happened; {@code disconnected} runs on the reader, and so does the
  * completion of {@link #connect}'s future, or on the thread that disconnects first.
@@ -82,7 +85,7 @@ public final class MqttClient implements AutoCloseable {
      * catches a gateway that stopped reading.
      */
     static final Duration WRITE_WITHIN = Duration.ofSeconds(10);
-    /** How often the reader wakes to check the writes when no keep-alive deadline wakes it sooner. Unmeasured. */
+    /** How often the watcher checks the writes when no keep-alive deadline wakes it sooner. Unmeasured. */
     private static final Duration WATCH_EVERY = Duration.ofSeconds(1);
     /** How long before the keep alive ends a ping goes out: the HiveMQ client's margin, which this client replaced. */
     private static final Duration PING_EARLY = Duration.ofMillis(100);
@@ -121,6 +124,11 @@ public final class MqttClient implements AutoCloseable {
      * {@link #WRITE_WITHIN} closes the connection and fails what waits.
      */
     private final ExecutorService writer;
+    /**
+     * Runs the accepted connection's checks, one at a time, each scheduling the next: the reader blocks in its read
+     * with no timeout, so the deadlines are kept here instead.
+     */
+    private final ScheduledExecutorService watcher;
     private final Object lock = new Object();
     /**
      * The QoS 0 messages in that wait for the handler on the callbacks executor, beside the bound
@@ -153,6 +161,11 @@ public final class MqttClient implements AutoCloseable {
      * through {@link #beforeSession}, read by the reader.
      */
     private volatile Runnable beforeSession = () -> { };
+    /**
+     * Makes the unconnected socket of each connection; written by a test's thread through {@link #sockets}, read by
+     * the reader.
+     */
+    private volatile Supplier<Socket> sockets = Socket::new;
     /** Guarded by lock. */
     private boolean started;
     /** Set by {@link #disconnect}; guarded by lock. */
@@ -186,6 +199,7 @@ public final class MqttClient implements AutoCloseable {
         this.tls = tls;
         this.reader = Threads.timedStrand("mqtt-" + options.clientId());
         this.writer = Threads.strand("mqtt-writer-" + options.clientId());
+        this.watcher = Threads.timedStrand("mqtt-watch-" + options.clientId());
         this.waitingQos0 = Queues.gauge(qos0Name());
     }
 
@@ -421,7 +435,7 @@ public final class MqttClient implements AutoCloseable {
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        ExecutorStop.now("mqtt-" + options.clientId(), reader, writer);
+        ExecutorStop.now("mqtt-" + options.clientId(), reader, writer, watcher);
         // again here: a disconnect cut short by the wait may never reach finish
         Queues.drop(qos0Name(), waitingQos0);
     }
@@ -430,6 +444,12 @@ public final class MqttClient implements AutoCloseable {
     @TestOnly
     void beforeSession(final Runnable hook) {
         beforeSession = hook;
+    }
+
+    /** Opens each later connection on a socket from {@code make}, unconnected. */
+    @TestOnly
+    void sockets(final Supplier<Socket> make) {
+        sockets = make;
     }
 
     /**
@@ -448,7 +468,7 @@ public final class MqttClient implements AutoCloseable {
                 return;
             }
             running = true;
-            c = new Connection();
+            c = new Connection(sockets.get());
             opening = c;
         }
         ended(c, attempt(c));
@@ -519,6 +539,9 @@ public final class MqttClient implements AutoCloseable {
             current = c;
             failures = 0;
         }
+        if (!watchIn(c, 0L)) {
+            return null;
+        }
         firstConnect.complete(null);
         post(handler::connected);
         return readLoop(c);
@@ -560,25 +583,27 @@ public final class MqttClient implements AutoCloseable {
 
     /**
      * Reads packets until the gateway disconnects, whose DISCONNECT this returns; throws when the connection
-     * breaks.
+     * breaks, with the watcher's cause when the watcher ended it. The first byte of a packet is waited for with no
+     * timeout, the rest of it for the keep alive.
      */
     private MqttException readLoop(final Connection c) throws IOException {
         while (true) {
-            final long now = System.nanoTime();
-            watch(c, now);
-            c.socket.setSoTimeout(wakeMillis(c, now));
-            final int first;
+            final Packet packet;
             try {
-                first = c.in.read();
-            } catch (final SocketTimeoutException _) {
-                continue;
+                c.socket.setSoTimeout(0);
+                final int first = c.in.read();
+                if (first < 0) {
+                    throw new EOFException("the gateway closed the connection");
+                }
+                c.lastReadNanos = System.nanoTime();
+                c.socket.setSoTimeout(c.bodyMillis);
+                packet = Codec.read(c.in, first, options.maximumPacketSize());
+            } catch (final IOException e) {
+                // the watcher sets the failure before it closes the socket, so a read it cut finds it here
+                final MqttException cut = c.failure;
+                throw cut == null ? e : cut;
             }
-            if (first < 0) {
-                throw new EOFException("the gateway closed the connection");
-            }
-            c.lastReadNanos = System.nanoTime();
-            c.socket.setSoTimeout(c.bodyMillis);
-            final MqttException told = handle(c, Codec.read(c.in, first, options.maximumPacketSize()));
+            final MqttException told = handle(c, packet);
             if (told != null) {
                 return told;
             }
@@ -586,10 +611,45 @@ public final class MqttClient implements AutoCloseable {
     }
 
     /**
-     * The reader's checks between reads: a write that lasts past {@link #WRITE_WITHIN} or a ping unanswered for the
-     * keep alive ends the connection; a connection idle in either direction for the keep alive is pinged, as the
-     * HiveMQ client did. Only a PINGRESP answers a ping (§3.12.4): a gateway that sends messages but never answers is
-     * timed out all the same.
+     * Schedules {@code c}'s next check {@code delayNanos} from now; false, scheduling nothing, once the watcher has
+     * stopped.
+     */
+    private boolean watchIn(final Connection c, final long delayNanos) {
+        final ScheduledFuture<?> next;
+        try {
+            next = watcher.schedule(() -> tick(c), delayNanos, TimeUnit.NANOSECONDS);
+        } catch (final RejectedExecutionException _) {
+            return false;
+        }
+        c.watching = next;
+        // c.watching is written before c.closed is read here, and close writes c.closed before it reads c.watching,
+        // all volatile: a close that runs meanwhile cancels this check, or this sees it and cancels it
+        if (c.closed) {
+            next.cancel(false);
+        }
+        return true;
+    }
+
+    /** One check of {@code c} on the watcher: ends the connection on a failed one, else schedules the next. */
+    private void tick(final Connection c) {
+        if (c.closed) {
+            return;
+        }
+        final long now = System.nanoTime();
+        try {
+            watch(c, now);
+        } catch (final MqttException e) {
+            c.fail(e);
+            return;
+        }
+        watchIn(c, wakeNanos(c, now));
+    }
+
+    /**
+     * The watcher's checks: a write that lasts past {@link #WRITE_WITHIN} or a ping unanswered for the keep alive
+     * ends the connection; a connection idle in either direction for the keep alive is pinged, as the HiveMQ client
+     * did. Only a PINGRESP answers a ping (§3.12.4): a gateway that sends messages but never answers is timed out all
+     * the same.
      */
     private void watch(final Connection c, final long now) throws MqttException {
         // c.writing is written after c.writeStartedNanos, both volatile, so a write seen in progress has its start
@@ -607,21 +667,22 @@ public final class MqttClient implements AutoCloseable {
                         + "[keepAliveMillis=" + TimeUnit.NANOSECONDS.toMillis(c.keepAliveNanos) + ']');
             }
         } else if (now - idleSince(c) >= interval) {
-            c.pingOutstanding = true;
+            // pingSentNanos before pingOutstanding: the reader clears the flag only after the PINGRESP to this ping
             c.pingSentNanos = now;
+            c.pingOutstanding = true;
             send(c, Codec.encode(new Packet.PingReq()), null);
         }
     }
 
-    /** How long the reader may wait for the next byte before {@link #watch} must run again, in milliseconds. */
-    private static int wakeMillis(final Connection c, final long now) {
+    /** How long after {@code now} {@link #watch} must run again, in nanoseconds, at least a millisecond. */
+    private static long wakeNanos(final Connection c, final long now) {
         long wakeNanos = WATCH_EVERY.toNanos();
         if (c.keepAliveNanos > 0) {
             final long interval = c.keepAliveNanos - PING_EARLY.toNanos();
             final long from = c.pingOutstanding ? c.pingSentNanos : idleSince(c);
             wakeNanos = Math.min(wakeNanos, from + interval - now);
         }
-        return (int) Math.max(1, Math.ceilDiv(wakeNanos, 1_000_000L));
+        return Math.max(TimeUnit.MILLISECONDS.toNanos(1), wakeNanos);
     }
 
     /** The older of the last read and the last write: the connection has been idle in one direction since. */
@@ -956,6 +1017,7 @@ public final class MqttClient implements AutoCloseable {
     private void finish() {
         reader.shutdown();
         writer.shutdown();
+        watcher.shutdown();
         Queues.drop(qos0Name(), waitingQos0);
         stopped.complete(null);
     }
@@ -1107,7 +1169,7 @@ public final class MqttClient implements AutoCloseable {
     /** One TCP connection, with the TLS layered over it when the client has one, and what the client knows of it. */
     private static final class Connection {
 
-        private final Socket socket = new Socket();
+        private final Socket socket;
         /** Serialises the writes: CONNECT from the reader, everything after from the writer. */
         private final ReentrantLock writeLock = new ReentrantLock();
         /** QoS 1 messages in not acknowledged yet; incremented by the reader, decremented by the writer. */
@@ -1125,7 +1187,10 @@ public final class MqttClient implements AutoCloseable {
         private OutputStream out;
         /** Written by the reader at CONNACK; read by {@link #disconnect} and the writer. */
         private volatile boolean accepted;
-        /** The gateway's limits and the keep alive, written by the reader before {@link #accepted}. */
+        /**
+         * The gateway's limits and the keep alive, written by the reader before {@link #accepted} and before the
+         * watcher's first check is scheduled, which publishes them to it.
+         */
         private int receiveMaximum;
         private int maximumPacketSize = Packet.PROTOCOL_MAXIMUM_PACKET_SIZE;
         private int maximumQos = Packet.Capabilities.DEFAULT.maximumQos();
@@ -1134,18 +1199,28 @@ public final class MqttClient implements AutoCloseable {
         private int bodyMillis;
         /** QoS 1 publishes out awaiting their PUBACK; guarded by the client's lock. */
         private int inflight;
-        /** Written by the writer (the reader for CONNECT); read by the reader. */
+        /** Written by the writer (the reader for CONNECT); read by the watcher. */
         private volatile long lastWriteNanos;
-        /** Written by the writer before {@link #writing} goes true; read by the reader. */
+        /** Written by the writer before {@link #writing} goes true; read by the watcher. */
         private volatile long writeStartedNanos;
-        /** Whether a write is under way; written by the writer, read by the reader. */
+        /** Whether a write is under way; written by the writer, read by the watcher. */
         private volatile boolean writing;
-        /** Reader only. */
-        private long lastReadNanos;
-        /** Reader only. */
+        /** Written by the reader; read by the watcher. */
+        private volatile long lastReadNanos;
+        /** Watcher only. */
         private long pingSentNanos;
-        /** Reader only. */
-        private boolean pingOutstanding;
+        /** Set by the watcher when it pings, cleared by the reader at the PINGRESP; read by the watcher. */
+        private volatile boolean pingOutstanding;
+        /** The watcher's next check; written by the watcher (the reader for the first), read by {@link #close}. */
+        private volatile ScheduledFuture<?> watching;
+        /** Why the watcher ended the connection; written by it before it closes the socket, read by the reader. */
+        private volatile MqttException failure;
+        /** Set by {@link #close} before it closes the socket; read by the watcher. */
+        private volatile boolean closed;
+
+        Connection(final Socket socket) {
+            this.socket = socket;
+        }
 
         /**
          * Takes the streams of {@code wire}, the socket itself or the TLS layered over it; on the reader, once
@@ -1178,7 +1253,7 @@ public final class MqttClient implements AutoCloseable {
 
         /**
          * Writes {@code bytes} whole, after at most {@link #WRITE_WITHIN} for the write lock; a write that then stalls
-         * is ended by the reader closing the socket.
+         * is ended by the watcher closing the socket.
          */
         void write(final byte[] bytes) throws IOException, InterruptedException {
             if (!writeLock.tryLock(WRITE_WITHIN.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -1196,8 +1271,19 @@ public final class MqttClient implements AutoCloseable {
             }
         }
 
-        /** Closes the socket, which ends a read or a write blocked on it; idempotent. */
+        /** Ends the connection with {@code cause}, which the reader's failed read throws. On the watcher. */
+        void fail(final MqttException cause) {
+            failure = cause;
+            close();
+        }
+
+        /** Stops the watcher's checks and closes the socket, which ends a read or a write blocked on it; idempotent. */
         void close() {
+            closed = true;
+            final ScheduledFuture<?> next = watching;
+            if (next != null) {
+                next.cancel(false);
+            }
             try {
                 socket.close();
             } catch (final IOException e) {

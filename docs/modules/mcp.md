@@ -133,6 +133,18 @@ card. The exception is a `Bash` command that contains the word `rm` or `rmdir`, 
 `Peers` connects this comando to the others through a `PeerGateway`, an interface `app` implements over MQTT.
 It publishes this instance's presence every 2 s and keeps a list of the instances it sees.
 
+- The presence, retained on `comando/v1/local/instance/<slug>/presence`, says whether the instance hosts frontear
+  and, for each session, its name, whether it is busy and its state. It changes only when a session starts or ends a
+  turn or changes state, and is sent only then: about 1.3 KB for 20 sessions.
+- The sessions' details go retained on `comando/v1/local/instance/<slug>/sessions`, before the presence, each time
+  they change: since when each turn runs, model, effort, context, folder, branch, background tasks, and the first
+  line of the last prompt and reply. A peer reads them beside the presence; details with no presence, left by an
+  instance that died, show nothing, and its next start replaces them.
+- What a turn is doing now is not sent: it changes too often. A peer shows the session busy, without it.
+- Both carry `schema` 2 (`Peers.PRESENCE_SCHEMA`). A presence of schema 1, from an older comando, carries every
+  detail in its sessions and is read as it is; an older comando reads a schema 2 presence for the keys it has and
+  shows its sessions without details. Questions and replies stay at schema 1 (`Peers.PEER_SCHEMA`).
+
 - `instance_ask` sends a question to another instance, optionally to a named session there (`session`, sent as
   `to`), and waits for the answer.
 - The asked instance answers in the session named, made when it is missing, else in `consult-<asker>`. A session

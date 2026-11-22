@@ -583,7 +583,7 @@ final class FrontearOctopus implements ServerToggle, ServerSwitch, AutoCloseable
                 continue;
             }
             final Set<String> out = new TreeSet<>(List.of(Peers.inboxTopic(peer), Peers.replyTopic(peer),
-                    Peers.presenceTopic(slug)));
+                    Peers.presenceTopic(slug), Peers.sessionsTopic(slug)));
             int hopLimit = HOP_LIMIT;
             if (across && border) {
                 out.add(Peers.inboxTopic(machine, peer));

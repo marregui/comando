@@ -115,7 +115,9 @@ final class LabTools {
                 .put("cursor", l.cursor()).put("tail", l.tail()).put("sent", l.sent()).put("dropped", l.dropped())
                 .put("reordered", l.reordered()).put("queuedDeliveries", l.queuedDeliveries())
                 .put("queueMax", l.queueMax()).put("lastUpMillis", l.lastUpMillis())
-                .put("lastDownMillis", l.lastDownMillis()).put("lastDetail", l.lastDetail());
+                .put("lastDownMillis", l.lastDownMillis()).put("lastDetail", l.lastDetail()).put("refused", l.refused())
+                .put("coalesced", l.coalesced()).put("backlogBytes", l.backlogBytes())
+                .put("maxBacklogBytes", l.maxBacklogBytes()).put("backlogGrowing", l.backlogGrowing());
     }
 
     private static ObjectNode log(final Log l) {

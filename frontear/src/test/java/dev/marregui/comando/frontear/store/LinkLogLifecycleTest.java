@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -33,7 +34,8 @@ class LinkLogLifecycleTest {
     // past the close's wait for its forcer, so a held force outlasts it
     private static final long HOLD_SECONDS = 30;
     private static final byte[] RECORD = new byte[100];
-    // a 16-byte header and two frames of 108 bytes fill 232 of 256: the third record rolls
+    // a 16-byte header and two frames of 108 bytes fill 232 of 256: the third record rolls, when it is stored whole
+    // (distinct) and not as a delta of the one before
     private static final LogOptions ROLLING = new LogOptions(256, 1L << 20, Duration.ZERO);
     // as ROLLING, the round bounded at two frames
     private static final LogOptions TWO_FRAME_ROUND = new LogOptions(256, 1L << 20, Duration.ZERO,
@@ -150,15 +152,15 @@ class LinkLogLifecycleTest {
         final HoldingFiles files = new HoldingFiles();
         final LinkLog log = LinkLog.open(files, dir, ROLLING);
         try {
-            final CompletableFuture<Long> first = log.append(RECORD);
-            final CompletableFuture<Long> second = log.append(RECORD);
+            final CompletableFuture<Long> first = log.append(distinct(1));
+            final CompletableFuture<Long> second = log.append(distinct(2));
             assertThat(first.get(WAIT_SECONDS, TimeUnit.SECONDS)).isZero();
             assertThat(second.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(1L);
             files.holdMove.set(true);
             log.ack(1L);
             // the forcer is now in the cursor save, its completion step done while segment 0 was still active
             assertThat(files.held.await(WAIT_SECONDS, TimeUnit.SECONDS)).isTrue();
-            final CompletableFuture<Long> third = log.append(RECORD);
+            final CompletableFuture<Long> third = log.append(distinct(3));
             assertThat(files.open.get()).as("writers open while the rolled segment waits for the forcer").isEqualTo(1);
             files.release.countDown();
             assertThat(third.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(2L);
@@ -222,6 +224,14 @@ class LinkLogLifecycleTest {
             }
         }
         return found;
+    }
+
+    /// A record of RECORD's size, every byte `n`: two records of different `n` share no byte, so the log stores
+    /// each whole.
+    private static byte[] distinct(final int n) {
+        final byte[] record = new byte[RECORD.length];
+        Arrays.fill(record, (byte) n);
+        return record;
     }
 
     /// The disk, counting the writers open and the file reads, recording each write and finished force in order and

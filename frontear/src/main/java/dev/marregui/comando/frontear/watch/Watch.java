@@ -38,7 +38,7 @@ public final class Watch {
     /**
      * The payload bytes a {@link Published} keeps: a payload this long or shorter by reference, a longer one as a copy
      * of its first this many bytes, so the ring holds at most its capacity times this (16,384 slots, 128 MiB) however
-     * large the messages are; comando's presence, about 6 KB, fits whole.
+     * large the messages are; comando's presence, about 1.3 KB for 20 sessions, fits whole.
      */
     public static final int PAYLOAD_BYTES = 8 * 1024;
 

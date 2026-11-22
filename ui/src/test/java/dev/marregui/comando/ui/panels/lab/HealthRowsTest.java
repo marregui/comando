@@ -17,7 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [HealthRows], the Health view's rows without Swing.
 /// - a link that is down sorts first, says how long, and names the step for a local instance or another machine
 /// - a full log, a queue growing for 5 s, a drop within a minute and a slow force each have their status
-/// - the faults line names only the counters that are not zero
+/// - the faults line names only the counters that are not zero; each with its rate over a minute and its total, led
+///   by a suspended cdb table whose reason is the tooltip
 /// - the detail names every figure of the link and its log
 class HealthRowsTest {
 
@@ -33,6 +34,15 @@ class HealthRowsTest {
         assertThat(rows.get(1).step()).startsWith("the machine is unreachable");
         assertThat(rows.get(2).status()).isEqualTo(Status.OK);
         assertThat(rows.get(2).step()).isEmpty();
+    }
+
+    /// A down link whose backlog grew for 5 minutes says so beside how long it has been down.
+    @Test
+    void aDownLinkWhoseBacklogGrowsSaysSo() {
+        final Link growing = new Link("bob", false, 5L, 0L, 5L, 0L, 0L, 0L, 0, 64, 0.0, 0.0, 1L, 20_000L, "",
+                3L, 4L, 1_024L, 4_096L, true);
+        assertThat(new HealthRows().read(node(200_000L, growing)).getFirst().label())
+                .isEqualTo("down 3m, backlog growing");
     }
 
     /// A queue that is above what it was 5 s before, while up, is backing up; one that stays level is ok, and the
@@ -81,6 +91,67 @@ class HealthRowsTest {
                 "dropped full 2 · refused 1 · packets missed 4 · watch window dropped 5 · cdb dropped down 4");
     }
 
+    /// Each fault counter reads its rate over the last minute and its total, the node's clock its only clock: 72 000
+    /// packets missed over the first minute read 1.2k a second, still so half a minute on, as the window then starts
+    /// at the read half a minute in, which had none; a minute after the last of them, none a second. A total that
+    /// went back starts its window again, and the tab's rate of misses and the sink's of samples come with the line.
+    @Test
+    void eachFaultCounterReadsItsRateOverTheLastMinuteAndItsTotal() {
+        final HealthRows h = new HealthRows();
+        assertThat(h.faults(counted(0L, 0L), 0L, 0L, "").text()).isEmpty();
+        assertThat(h.faults(counted(30_000L, 0L), 0L, 0L, "").text()).isEmpty();
+        final HealthRows.Faults minute = h.faults(counted(60_000L, 2_000L), 70_000L, 120_000L, "");
+        assertThat(minute.text()).isEqualTo("packets missed 1.2k/s · 72.0k total");
+        assertThat(minute.missedPerSecond()).isEqualTo(1_200.0);
+        assertThat(minute.sampledPerSecond()).isEqualTo(2_000.0);
+        assertThat(h.faults(counted(90_000L, 2_000L), 70_000L, 120_000L, "").text())
+                .isEqualTo("packets missed 1.2k/s · 72.0k total");
+        final HealthRows.Faults quiet = h.faults(counted(120_000L, 2_000L), 70_000L, 120_000L, "");
+        assertThat(quiet.text()).isEqualTo("packets missed 0/s · 72.0k total");
+        assertThat(quiet.sampledPerSecond()).isZero();
+
+        final Node many = new Node("main", 18883, 180_000L, true, new Totals(0, 0, 0, 0L, 7_800_000L, 0L, 0L, 0L, 0L),
+                List.of(), List.of(), new Counts(0L, 0L, 0L, 0L, 5L));
+        assertThat(h.faults(many, 0L, 0L, "").text())
+                .isEqualTo("dropped full 130.0k/s · 7.8M total; cdb dropped down 0.1/s · 5 total");
+        final Node again = new Node("main", 18883, 240_000L, true, new Totals(0, 0, 0, 0L, 600L, 0L, 0L, 0L, 0L),
+                List.of(), List.of(), Counts.NONE);
+        assertThat(h.faults(again, 0L, 0L, "").text()).as("a node started again")
+                .isEqualTo("dropped full 0/s · 600 total");
+    }
+
+    /// While cdb refuses the lab's rows for a table it suspended, the faults line starts `cdb table suspended` and
+    /// the tooltip gives cdb's reason; once rows land again the line says no more of it.
+    @Test
+    void aSuspendedTableLeadsTheFaultsLineWithItsReasonInTheTooltip() {
+        final HealthRows h = new HealthRows();
+        final String reason = "refuse commit to failed table [table=frontear_packet]";
+        final HealthRows.Faults suspended = h.faults(counted(1_000L, 0L), 0L, 0L, reason);
+        assertThat(suspended.text()).isEqualTo("cdb table suspended");
+        assertThat(suspended.tip()).isEqualTo(reason);
+        final Node dropping = new Node("main", 18883, 2_000L, true, Totals.NONE, List.of(), List.of(),
+                new Counts(0L, 0L, 0L, 0L, 4L));
+        assertThat(h.faults(dropping, 0L, 0L, reason).text())
+                .isEqualTo("cdb table suspended; cdb dropped down 4/s · 4 total");
+        final HealthRows.Faults landed = h.faults(dropping, 0L, 0L, "");
+        assertThat(landed.text()).doesNotContain(HealthRows.SUSPENDED);
+        assertThat(landed.tip()).isEmpty();
+    }
+
+    /// Counts read in at most four figures and a unit.
+    @Test
+    void aCountReadsInAtMostFourFiguresAndAUnit() {
+        assertThat(HealthRows.compact(0.0)).isEqualTo("0");
+        assertThat(HealthRows.compact(0.5)).isEqualTo("0.5");
+        assertThat(HealthRows.compact(7.0)).isEqualTo("7");
+        assertThat(HealthRows.compact(999.0)).isEqualTo("999");
+        assertThat(HealthRows.compact(999.6)).isEqualTo("1.0k");
+        assertThat(HealthRows.compact(1_200.0)).isEqualTo("1.2k");
+        assertThat(HealthRows.compact(999_960.0)).isEqualTo("1.0M");
+        assertThat(HealthRows.compact(7_800_000.0)).isEqualTo("7.8M");
+        assertThat(HealthRows.compact(3_000_000_000.0)).isEqualTo("3.0G");
+    }
+
     /// The detail names the link, its status and step, its last reason, and every figure of the link and its log.
     @Test
     void theDetailNamesEveryFigure() {
@@ -106,6 +177,12 @@ class HealthRowsTest {
 
     private static Node node(final long atMillis, final Link... links) {
         return new Node("main", 18883, atMillis, true, Totals.NONE, List.of(links), List.of(), Counts.NONE);
+    }
+
+    /// A node read at `atMillis` whose ring overwrote `ringMissed` packets, and nothing else.
+    private static Node counted(final long atMillis, final long ringMissed) {
+        return new Node("main", 18883, atMillis, true, Totals.NONE, List.of(), List.of(),
+                new Counts(0L, ringMissed, 0L, 0L, 0L));
     }
 
     private static Link link(final String id, final boolean up, final long queued, final long dropped) {

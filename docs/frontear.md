@@ -140,6 +140,7 @@ passed a whole segment, the segment is deleted, so the disk is freed while the l
 | Trim | Segments wholly below the saved cursor are deleted. |
 | Quota | A log holds at most 1 GiB. An append past it is refused, and the publisher gets `0x97` (§8.4). |
 | Recovery | At start the log checks every record and cuts off a half-written one (§8.6). |
+| Format | A record is stored as the bytes it differs by from the record before it, since a link's records repeat their topic and the properties the link stamps: a message with a 128-byte payload on a 35-character topic takes about 144 bytes on disk instead of 234. The first record of a segment, every 64th after it and the first after a start are stored whole. Each segment names its format version, and a log written by an older comando is read as it is; an older comando cannot read a segment this one starts ([record 191](adr/0191-frontear-compact-link-log-records.md)). |
 
 > **Learn: the write-ahead log.** Memory is fast and forgets everything when the power goes. A disk is slow and
 > remembers. A write-ahead log makes one promise from both: write the fact to the end of a file, force the file to
@@ -536,6 +537,8 @@ picture of §2.3 shows the path.
 | Order | Messages reach the peer in the order of the log. One exception: a message the peer refuses for now (`0x97` or `0x89`) is sent again alone, and counted in `reordered`. |
 | Loops | The link subscribes with No Local and never sends back what came in through it. Each link also adds 1 to the user property `frontear-hops` and stops a message that has reached its `hopLimit`. |
 | Expiry | A message's expiry keeps running while it waits in the log, across a restart too. An expired message is dropped and counted. |
+| Backlog | What waits for the peer is bounded: 64 MiB and 24 h by default (`LinkOptions`). While the peer is down, the link drops the oldest messages past either bound and counts them in `dropped`; a retained message at the head of the backlog that a newer one on its topic supersedes is dropped too and counted in `coalesced`. While the peer is up, a message past the byte bound gets `0x97` (QoS 0: dropped). A superseded retained message is never sent, wherever it waits, so a presence republished while the peer is down reaches it once. A restart reads the backlog it left before it takes a message. `coalesced`, `refused` and the backlog's bytes are counters of the link's `LinkState`; the state topic of §7.1 does not carry them. |
+| Refusals | In front of the log, the link queues at most 1,000 messages (§8.4). Publishers whose windows add up to more than that, such as 4 publishers with 512 in flight each, get `0x97` for the messages that arrive faster than the link logs them: a QoS 1 message is counted in `refused`, a QoS 0 one in `dropped`. No acknowledgement is lost: the publisher sees each `0x97` and may send again. |
 | Reconnect | A lost connection is retried after 1 s, doubling to 30 s. Up to a fifth of each wait is taken off at random. A peer that is back does not wait out that backoff: when the peer's own link to this node connects (client `<peer>~<node>`), this node's link to it is tried at once, at most once a second. A peer that refuses with `0x88` (Server unavailable) is running, so the link tries it again after the first wait, 1 s, and the wait does not grow. |
 
 > **Learn: at least once.** A sender that hears no acknowledgement cannot know whether its message arrived. It has two
@@ -564,7 +567,7 @@ second.
 | `cursor` | The offset of the next message to deliver. |
 | `tail` | The offset the next logged message takes. |
 | `sent` | Messages sent to the peer. |
-| `dropped` | Messages not carried: past the hop limit, expired, refused by the peer for good, or QoS 0 over the queue bound; and messages from the peer outside the `in` filters. |
+| `dropped` | Messages not carried: past the hop limit, expired, refused by the peer for good, QoS 0 over the queue bound, or let go from a down link's backlog past its bounds (§6); and messages from the peer outside the `in` filters. |
 | `reordered` | Messages the peer refused for now and accepted after a later one. |
 
 `cursor` and `tail` come from the log and survive a restart. `sent`, `dropped` and `reordered` start at 0 with the
@@ -661,7 +664,8 @@ Every queue in frontear has a limit, so a slow peer or a flooding client cannot 
 | Bound | Limit | When you hit it | What to do |
 |---|---|---|---|
 | A link's log on disk | 1 GiB | Publishers of matching QoS 1 messages get PUBACK `0x97`. | Bring the peer back. Or discard the backlog (§8.5). |
-| Messages a link has not yet logged | 1,000 messages, and 8 MiB waiting for the disk | QoS 1 gets `0x97`. QoS 0 is dropped and counted in `dropped`. | Publish slower and retry on `0x97`. |
+| A link's backlog, what the peer has not acknowledged | 64 MiB and 24 h | While the peer is down, the oldest messages are dropped and counted in `dropped`; a superseded retained message is dropped and counted in `coalesced`. While it is up, a message past 64 MiB gets `0x97`. A link down for 5 min with its backlog growing says so in its state (`LinkState.backlogGrowing`). | Bring the peer back. Or discard the backlog (§8.5). |
+| Messages a link has not yet logged | 1,000 messages, and 8 MiB waiting for the disk | QoS 1 gets `0x97` and is counted in `refused`. QoS 0 is dropped and counted in `dropped`. A burst of 4 publishers at 512 in flight each reaches it (§6). | Publish slower and retry on `0x97`. |
 | Messages in flight to a peer | The peer's Receive Maximum, at most 1,000 | The link waits for acknowledgements. | Nothing. |
 | Unacknowledged QoS 1 publishes from a client | 1,024 | The client is disconnected with `0x93`. | Honour the Receive Maximum of the CONNACK. |
 | Packet size | 16 MiB | The client is disconnected with `0x95`. | Send smaller messages. |

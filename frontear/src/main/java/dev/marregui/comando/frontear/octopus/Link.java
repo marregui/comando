@@ -6,8 +6,11 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.InstantSource;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -56,6 +59,15 @@ import dev.marregui.comando.frontear.watch.Watch;
  * the peer before it ({@code reordered}). A lost connection sends again, in order, everything past the cursor, so the
  * peer may see a message twice.
  *
+ * <p>Backlog. What waits between the cursor and the tail is bounded by {@link LinkOptions#maxBacklogBytes} and
+ * {@link LinkOptions#maxBacklogAge}. While the link is down it moves its cursor past the oldest records the bounds no
+ * longer hold, counted in {@code dropped}, and past the oldest retained records a newer one on their topic supersedes,
+ * counted in {@code coalesced}; while it is up it answers a message past the byte bound 0x97. A retained record
+ * superseded while it waited is never sent, wherever it waits: only the newest of each topic reaches the peer. The
+ * queue in front of the strand is a second bound: at {@link LinkOptions#queueMax}, smaller than one publisher's
+ * Receive Maximum, a burst that arrives faster than the strand appends is answered 0x97, a QoS 1 message counted in
+ * {@code refused}, a QoS 0 one in {@code dropped}; the publisher sees each answer, never a lost acknowledgement.
+ *
  * <p>In, at least once. The link subscribes to its IN filters on the peer with No Local, so what it sends does not
  * come back, and publishes what arrives on the local gateway as {@code $link/<id>}, whose own OUT subscription, No
  * Local under that owner, leaves it; the peer's PUBACK waits for that local publish and carries its reason code. A
@@ -95,6 +107,15 @@ final class Link implements AutoCloseable {
     static final String NO_TLS = "no TLS context for the link: it connects once the octopus network gives it one";
     /** Why a message in from the peer was dropped when none of the link's IN filters covers its topic. */
     static final String NOT_IN = "not in the link's in filters";
+    /** Why a retained record was not sent: a newer retained record on its topic waits after it. */
+    static final String SUPERSEDED = "superseded by a newer retained message on its topic";
+    /**
+     * How long a link stays down, its queue growing, before its state warns ({@link LinkState#backlogGrowing}): chosen
+     * in task 232, longer than a node's restart and shorter than an operator's patience.
+     */
+    static final long BACKLOG_WARN_NANOS = TimeUnit.MINUTES.toNanos(5);
+    /** The records a restart reads at a time to learn the backlog it left; unmeasured: a sizing hint only. */
+    private static final int SCAN_BATCH = 256;
 
     private final String id;
     private final String owner;
@@ -121,6 +142,20 @@ final class Link implements AutoCloseable {
     private final AtomicBoolean pumpPosted = new AtomicBoolean();
     /** The QoS 0 messages dropped over the queue's bound; written by the gateway's threads, read by {@link #state}. */
     private final AtomicLong shed = new AtomicLong();
+    /**
+     * The gateway's QoS 1 messages answered 0x97, over the queue's bound, the log's or the backlog's; written by the
+     * gateway's threads, the log's completions and the strand, read by {@link #state}.
+     */
+    private final AtomicLong refusedOut = new AtomicLong();
+    /**
+     * Every offset below it is durable, so the log acknowledges it; raised by the log's completions, read by the
+     * strand.
+     */
+    private final AtomicLong durable;
+    /** What waits between the cursor and the tail, oldest first; strand only. */
+    private final Backlog backlog = new Backlog();
+    /** The newest retained record of each topic between the cursor and the tail, by topic; strand only. */
+    private final Map<String, Latest> latest = new HashMap<>();
     /** When {@link #wake} last went through, by {@link System#nanoTime}; any thread, by compare-and-set. */
     private final AtomicLong wokenAtNanos = new AtomicLong(System.nanoTime() - WAKE_EVERY_NANOS);
     /** Guards {@link #shedIn} and the replacing of {@link #peer}, so {@link #state} counts a client's drops once. */
@@ -179,11 +214,21 @@ final class Link implements AutoCloseable {
     private volatile long sent;
     private volatile long dropped;
     private volatile long reordered;
+    private volatile long coalesced;
+    private volatile long backlogBytes;
     /**
      * Why the link is down: empty while up or connecting, else the last failure or {@link #NO_TLS}; written by the
      * strand only, read by {@link #state} from any thread.
      */
     private volatile String reason = "";
+    /**
+     * When the link last went down, by {@link System#nanoTime}, and what it had queued then: written by the strand,
+     * and by the constructor for a link that starts down, before {@link #downMarked}; read by {@link #state} after it.
+     */
+    private volatile long downAtNanos;
+    private volatile long downQueued;
+    /** Whether {@link #downAtNanos} and {@link #downQueued} hold: set on going down, cleared on up; strand. */
+    private volatile boolean downMarked;
 
     private Link(final String id, final String localId, final Gateway gateway, final LinkLog log,
             final LinkOptions options, final InstantSource clock, final Watch watch) {
@@ -198,8 +243,11 @@ final class Link implements AutoCloseable {
         this.deliveries = new ArrayBlockingQueue<>(options.queueMax());
         this.cursor = log.cursor();
         this.tail = log.tail();
+        // what an open finds in the log was read from its files, so all of it is durable
+        this.durable = new AtomicLong(log.tail());
         this.strand = Threads.timedStrand("link-" + id);
         this.waiting = Queues.sampled(waitingName(), deliveries::size);
+        markDown();
     }
 
     /**
@@ -298,6 +346,8 @@ final class Link implements AutoCloseable {
     /** Starts the link as {@code s} says: registers its OUT filters and starts connecting to the peer. */
     void start(final LinkSpec s) {
         spec = s;
+        // posted before the OUT filters are registered, so the strand learns the backlog before it appends to it
+        post(this::scanBacklog);
         out(s.out());
         connect(s);
     }
@@ -365,8 +415,22 @@ final class Link implements AutoCloseable {
         // the cursor is read before the tail, and neither moves back, so the tail read is at least the cursor
         final long c = cursor;
         final long t = tail;
-        return new LinkState(id, connected, Math.max(0, t - c), c, t, sent, dropped + shed.get() + droppedIn(),
-                reordered, waiting.depth(), options.queueMax(), reason);
+        final long queued = Math.max(0, t - c);
+        final boolean up = connected;
+        // downMarked is read before the two values the strand writes ahead of it
+        final boolean marked = downMarked;
+        final boolean warn = !up && marked && growing(queued, downQueued, System.nanoTime() - downAtNanos);
+        return new LinkState(id, up, queued, c, t, sent, dropped + shed.get() + droppedIn(), reordered,
+                waiting.depth(), options.queueMax(), reason, refusedOut.get(), coalesced, backlogBytes,
+                options.maxBacklogBytes(), warn);
+    }
+
+    /**
+     * Whether a link down for {@code downForNanos}, with {@code queued} records where it had {@code queuedWhenDown}
+     * when it went down, warns that its backlog grows: down past {@link #BACKLOG_WARN_NANOS} and more queued.
+     */
+    static boolean growing(final long queued, final long queuedWhenDown, final long downForNanos) {
+        return queued > queuedWhenDown && downForNanos - BACKLOG_WARN_NANOS >= 0;
     }
 
     /** The link's log now; from any thread. */
@@ -444,9 +508,7 @@ final class Link implements AutoCloseable {
         }
         final Delivery d = new Delivery(m, new CompletableFuture<>());
         if (!deliveries.offer(d)) {
-            if (m.qos() == 0) {
-                shed.incrementAndGet();
-            }
+            turnedAway(m);
             LOG.log(System.Logger.Level.DEBUG, () -> "message refused: the link's queue is full [link=" + id
                     + ", topic=" + m.topic() + ", qos=" + m.qos() + ", queueMax=" + options.queueMax() + ']');
             watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "the link's queue is full");
@@ -500,25 +562,54 @@ final class Link implements AutoCloseable {
             done.complete(Packet.SUCCESS);
             return;
         }
-        final CompletableFuture<Long> appended;
+        final long queuedMillis = clock.millis();
+        final byte[] record;
         try {
-            appended = log.append(PublishRecord.encode(Forwarding.queued(m, hops + 1, clock.millis())));
+            record = PublishRecord.encode(Forwarding.queued(m, hops + 1, queuedMillis));
         } catch (final MqttException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "message not queued [link=" + id + ", topic=" + m.topic() + ']', e);
             done.complete(Packet.UNSPECIFIED);
             return;
         }
+        if (!fits(record.length)) {
+            turnedAway(m);
+            LOG.log(System.Logger.Level.DEBUG, () -> "message refused: the link's backlog is full [link=" + id
+                    + ", topic=" + m.topic() + ", backlogBytes=" + backlog.bytes() + ", maxBacklogBytes="
+                    + options.maxBacklogBytes() + ']');
+            watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "the link's backlog is full");
+            done.complete(Packet.QUOTA_EXCEEDED);
+            return;
+        }
+        final long offset = log.tail();
+        final CompletableFuture<Long> appended;
+        try {
+            appended = log.append(record);
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "message not queued [link=" + id + ", topic=" + m.topic() + ']', e);
+            done.complete(Packet.UNSPECIFIED);
+            return;
+        }
+        if (log.tail() != offset) {
+            // the log took the record, whatever its force does: it waits between the cursor and the tail now
+            track(offset, record.length, m.payload().length, queuedMillis, m);
+            if (!up && m.retain()) {
+                // the record may supersede the oldest waiting: a down link passes it now, not at the next append
+                trim(0);
+            }
+        }
         tail = log.tail();
         // handle, not whenComplete: on a failed future whenComplete wraps the failure in a new CompletionException,
         // one per message refused while the log is full
-        appended.handle((offset, e) -> {
+        appended.handle((at, e) -> {
             if (e == null) {
-                LOG.log(System.Logger.Level.DEBUG, () -> "message queued [link=" + id + ", offset=" + offset
+                durable.accumulateAndGet(at + 1, Math::max);
+                LOG.log(System.Logger.Level.DEBUG, () -> "message queued [link=" + id + ", offset=" + at
                         + ", topic=" + m.topic() + ']');
-                watch.step(id, LinkStep.Kind.APPENDED, offset, m.topic(), m.payload().length, "");
+                watch.step(id, LinkStep.Kind.APPENDED, at, m.topic(), m.payload().length, "");
                 done.complete(Packet.SUCCESS);
                 schedulePump();
             } else if (cause(e) instanceof QuotaExceededException) {
+                turnedAway(m);
                 LOG.log(System.Logger.Level.DEBUG, () -> "message refused: the link's log is full [link=" + id
                         + ", topic=" + m.topic() + ']');
                 watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "the link's log is full");
@@ -534,6 +625,150 @@ final class Link implements AutoCloseable {
             }
             return null;
         });
+    }
+
+    /** Counts a message of the gateway's answered 0x97: a QoS 0 one is dropped, a QoS 1 one refused. Any thread. */
+    private void turnedAway(final Packet.Publish m) {
+        if (m.qos() == 0) {
+            shed.incrementAndGet();
+        } else {
+            refusedOut.incrementAndGet();
+        }
+    }
+
+    /**
+     * Whether a record of {@code recordBytes} fits the backlog's byte bound; a link that is down first moves its
+     * cursor past what the bounds let go. Strand.
+     */
+    private boolean fits(final int recordBytes) {
+        if (!up) {
+            trim(recordBytes);
+        }
+        return backlog.bytes() + recordBytes <= options.maxBacklogBytes();
+    }
+
+    /**
+     * Moves the cursor past the oldest records that need not wait any more: a retained one a newer one on its topic
+     * supersedes, counted in {@code coalesced}; one older than {@link LinkOptions#maxBacklogAge}; and the oldest while
+     * {@code need} more bytes would pass {@link LinkOptions#maxBacklogBytes}, both counted in {@code dropped}. Only
+     * durable records go, the log acknowledges no other, and only while nothing is in flight: the link is down or
+     * coming up. Strand.
+     */
+    private void trim(final int need) {
+        final long from = cursor;
+        final long durableTo = durable.get();
+        final long oldestMillis = clock.millis() - options.maxBacklogAge().toMillis();
+        // the watch's steps wait for the acknowledgement, which reads the records' topics off the backlog
+        final List<LinkStep> steps = watch.on() ? new ArrayList<>() : null;
+        long freed = 0;
+        int superseded = 0;
+        int n = 0;
+        while (n < backlog.size() && from + n < durableTo) {
+            final Latest key = backlog.key(n);
+            final long queuedAt = backlog.queuedMillis(n);
+            final String why;
+            if (key != null && key.offset > from + n) {
+                superseded++;
+                why = SUPERSEDED;
+            } else if (queuedAt >= 0 && queuedAt - oldestMillis < 0) {
+                why = "older than the link's backlog age bound";
+            } else if (backlog.bytes() - freed + need > options.maxBacklogBytes()) {
+                why = "past the link's backlog byte bound";
+            } else {
+                break;
+            }
+            if (steps != null) {
+                steps.add(new LinkStep(0, 0, id, LinkStep.Kind.DROPPED, from + n, key == null ? null : key.topic,
+                        backlog.payloadBytes(n), why));
+            }
+            freed += backlog.recordBytes(n);
+            n++;
+        }
+        if (n == 0) {
+            return;
+        }
+        ack(from + n - 1);
+        if (cursor != from + n) {
+            // the log kept its cursor and said why: what was not passed is passed by a later trim
+            return;
+        }
+        coalesced += superseded;
+        dropped += n - superseded;
+        final int records = n;
+        final int passed = superseded;
+        final long bytes = freed;
+        LOG.log(System.Logger.Level.DEBUG, () -> "link backlog trimmed while down [link=" + id + ", from=" + from
+                + ", records=" + records + ", superseded=" + passed + ", bytes=" + bytes + ']');
+        if (steps != null) {
+            for (final LinkStep s : steps) {
+                watch.step(id, s.kind(), s.offset(), s.topic(), s.bytes(), s.detail());
+            }
+        }
+    }
+
+    /**
+     * Record {@code offset} of {@code recordBytes}, the message {@code m} (null when unreadable) whose payload is
+     * {@code payloadBytes} long, queued at {@code queuedMillis} (-1 unknown), joins the backlog at its tail. Strand.
+     */
+    private void track(final long offset, final int recordBytes, final int payloadBytes, final long queuedMillis,
+            final Packet.Publish m) {
+        Latest key = null;
+        if (m != null && m.retain()) {
+            key = latest.computeIfAbsent(m.topic(), Latest::new);
+            key.offset = offset;
+        }
+        backlog.add(recordBytes, payloadBytes, queuedMillis, key);
+        backlogBytes = backlog.bytes();
+    }
+
+    /**
+     * Learns what a restart left between the cursor and the tail: each record's size, queue time and retained topic.
+     * A record that cannot be read waits as one of no size, queue time or topic, so the backlog stays in step with
+     * the log. Strand, before the first append.
+     */
+    private void scanBacklog() {
+        final long to = log.tail();
+        long from = log.cursor();
+        while (from < to) {
+            final List<Record> records;
+            try {
+                records = log.read(from, SCAN_BATCH);
+            } catch (final IOException e) {
+                LOG.log(System.Logger.Level.WARNING, "link backlog not read, its bounds count it from here [link="
+                        + id + ", offset=" + from + ", tail=" + to + ']', e);
+                break;
+            }
+            if (records.isEmpty()) {
+                break;
+            }
+            for (final Record r : records) {
+                Packet.Publish m;
+                try {
+                    m = PublishRecord.decode(r.bytes());
+                } catch (final MqttException _) {
+                    // sent as unreadable, and dropped, when its turn comes
+                    m = null;
+                }
+                track(r.offset(), r.bytes().length, m == null ? 0 : m.payload().length,
+                        m == null ? -1 : Forwarding.queuedMillis(m), m);
+            }
+            from = records.getLast().offset() + 1;
+        }
+        for (long o = log.cursor() + backlog.size(); o < to; o++) {
+            track(o, 0, 0, -1, null);
+        }
+        if (backlog.size() > 0) {
+            LOG.log(System.Logger.Level.INFO, "link backlog found [link=" + id + ", records=" + backlog.size()
+                    + ", bytes=" + backlog.bytes() + ", retainedTopics=" + latest.size() + ']');
+        }
+    }
+
+    /** The link is down from now, with what it has queued now. Strand, or the constructor. */
+    private void markDown() {
+        downAtNanos = System.nanoTime();
+        downQueued = tail - cursor;
+        // set last: state reads it first, so it never pairs a mark with the values of an older one
+        downMarked = true;
     }
 
     /** One pump on the strand for any number of appends made durable before it starts. From the log's completions. */
@@ -578,18 +813,25 @@ final class Link implements AutoCloseable {
         }
     }
 
-    /** Sends record {@code r} to the peer, or marks it dropped when it cannot be read or has expired. Strand. */
+    /**
+     * Sends record {@code r} to the peer, or marks it dropped when it cannot be read or has expired, coalesced when a
+     * newer retained record on its topic waits after it. Strand.
+     */
     private void send(final Peer p, final Record r) {
         next = r.offset() + 1;
         final Flight f = new Flight(r.offset());
         flights.add(f);
-        if (!publish(p, f, r)) {
-            f.outcome = Outcome.DROPPED;
+        final Outcome o = publish(p, f, r);
+        if (o != Outcome.PENDING) {
+            f.outcome = o;
         }
     }
 
-    /** Publishes record {@code r} of flight {@code f}; false when it cannot be read or has expired. Strand. */
-    private boolean publish(final Peer p, final Flight f, final Record r) {
+    /**
+     * Publishes record {@code r} of flight {@code f}, pending its answer; dropped when it cannot be read or has
+     * expired, coalesced, and not sent, when a newer retained record on its topic waits after it. Strand.
+     */
+    private Outcome publish(final Peer p, final Flight f, final Record r) {
         final Packet.Publish m;
         try {
             m = Forwarding.outgoing(PublishRecord.decode(r.bytes()), clock.millis());
@@ -597,19 +839,33 @@ final class Link implements AutoCloseable {
             LOG.log(System.Logger.Level.WARNING, "link record unreadable, dropped [link=" + id + ", offset="
                     + r.offset() + ']', e);
             f.detail = "the record is unreadable";
-            return false;
+            return Outcome.DROPPED;
         }
         if (m == null) {
             LOG.log(System.Logger.Level.DEBUG, () -> "message expired in the link's log, dropped [link=" + id
                     + ", offset=" + r.offset() + ']');
             f.detail = "expired in the link's log";
-            return false;
+            return Outcome.DROPPED;
         }
         f.topic = m.topic();
         f.bytes = m.payload().length;
+        if (superseded(r.offset())) {
+            f.detail = SUPERSEDED;
+            return Outcome.COALESCED;
+        }
         final int sentIn = epoch;
         p.client.publishAcknowledged(m).whenComplete((code, e) -> post(() -> answered(sentIn, f, code, e)));
-        return true;
+        return Outcome.PENDING;
+    }
+
+    /** Whether the record at {@code offset} is retained and a newer retained record on its topic waits. Strand. */
+    private boolean superseded(final long offset) {
+        final long i = offset - cursor;
+        if (i < 0 || i >= backlog.size()) {
+            return false;
+        }
+        final Latest key = backlog.key((int) i);
+        return key != null && key.offset > offset;
     }
 
     /** The peer answered record {@code f} sent in epoch {@code sentIn}, or no answer can come. Strand. */
@@ -764,12 +1020,13 @@ final class Link implements AutoCloseable {
                 return;
             }
             f.resent = true;
-            if (publish(p, f, records.getFirst())) {
+            final Outcome o = publish(p, f, records.getFirst());
+            if (o == Outcome.PENDING) {
                 return;
             }
             f.refused = false;
             f.resent = false;
-            f.outcome = Outcome.DROPPED;
+            f.outcome = o;
             held--;
             drain();
         }
@@ -796,6 +1053,10 @@ final class Link implements AutoCloseable {
                     dropped++;
                     watch.step(id, LinkStep.Kind.DROPPED, f.offset, f.topic, f.bytes, f.detail);
                 }
+                case COALESCED -> {
+                    coalesced++;
+                    watch.step(id, LinkStep.Kind.DROPPED, f.offset, f.topic, f.bytes, f.detail);
+                }
             }
             flights.poll();
             done = f.offset;
@@ -803,7 +1064,10 @@ final class Link implements AutoCloseable {
         ack(done);
     }
 
-    /** Every record at or below {@code offset} is done, none when it is negative. Strand. */
+    /**
+     * Every record at or below {@code offset} is done, none when it is negative: the backlog lets go of what the
+     * cursor passed, and a topic whose newest retained record it passed has none waiting. Strand.
+     */
     private void ack(final long offset) {
         if (offset < 0) {
             return;
@@ -814,11 +1078,27 @@ final class Link implements AutoCloseable {
             // the cursor stays: what it covers goes again, at least once
             LOG.log(System.Logger.Level.WARNING, "link cursor not moved [link=" + id + ", offset=" + offset + ']', e);
         }
-        cursor = log.cursor();
+        final long from = cursor;
+        final long to = log.cursor();
+        for (long o = from; o < to; o++) {
+            final Latest key = backlog.removeHead();
+            if (key != null && key.offset == o) {
+                latest.remove(key.topic);
+            }
+        }
+        cursor = to;
+        backlogBytes = backlog.bytes();
     }
 
-    /** The peer accepted connection {@code p}: asks for the IN filters and sends from the cursor. Strand. */
+    /**
+     * The peer accepted connection {@code p}: lets go of what the backlog's bounds no longer hold, asks for the IN
+     * filters and sends from the cursor. Strand.
+     */
     private void up(final Peer p) {
+        // nothing is in flight, so the cursor may pass the records the down link kept past its bounds
+        rewindToCursor();
+        trim(0);
+        downMarked = false;
         up = true;
         reason = "";
         connected = true;
@@ -846,6 +1126,9 @@ final class Link implements AutoCloseable {
         }
         if (cause != null) {
             reason = disconnected(cause);
+        }
+        if (up) {
+            markDown();
         }
         up = false;
         connected = false;
@@ -1013,11 +1296,135 @@ final class Link implements AutoCloseable {
         }
     }
 
-    /** What became of a record sent. */
+    /** What became of a record sent: coalesced is one not sent, a newer retained record on its topic waiting. */
     private enum Outcome {
         PENDING,
         SENT,
-        DROPPED
+        DROPPED,
+        COALESCED
+    }
+
+    /** The newest retained record of a topic between the cursor and the tail; strand only. */
+    private static final class Latest {
+
+        private final String topic;
+        private long offset;
+
+        Latest(final String topic) {
+            this.topic = topic;
+        }
+    }
+
+    /**
+     * Each record between the cursor and the tail, oldest first: its bytes in the log, its payload's length, when it
+     * was queued (-1 unknown) and, for a retained one, its topic's {@link Latest}. A ring of parallel arrays, its
+     * capacity a power of two that doubles as it fills; strand only.
+     */
+    private static final class Backlog {
+
+        // a sizing hint: a link that keeps up holds about a window
+        private static final int INITIAL = 64;
+        // a sizing hint: a ring emptied after it grew this large goes back to its first size
+        private static final int SHRINK_ABOVE = 1 << 16;
+        // the largest power of two an array may hold
+        private static final int MAX_CAPACITY = 1 << 30;
+
+        private int[] recordBytes = new int[INITIAL];
+        private int[] payloadBytes = new int[INITIAL];
+        private long[] queuedMillis = new long[INITIAL];
+        private Latest[] keys = new Latest[INITIAL];
+        private int head;
+        private int size;
+        private long bytes;
+
+        void add(final int record, final int payload, final long queuedAtMillis, final Latest key) {
+            if (size == keys.length) {
+                grow();
+            }
+            final int i = slot(size);
+            recordBytes[i] = record;
+            payloadBytes[i] = payload;
+            queuedMillis[i] = queuedAtMillis;
+            keys[i] = key;
+            size++;
+            bytes += record;
+        }
+
+        /** Lets go of the oldest record and returns its key; null when it had none or the ring is empty. */
+        Latest removeHead() {
+            if (size == 0) {
+                return null;
+            }
+            final Latest key = keys[head];
+            keys[head] = null;
+            bytes -= recordBytes[head];
+            head = (head + 1) & (keys.length - 1);
+            size--;
+            if (size == 0) {
+                head = 0;
+                if (keys.length > SHRINK_ABOVE) {
+                    allocate(INITIAL);
+                }
+            }
+            return key;
+        }
+
+        int size() {
+            return size;
+        }
+
+        long bytes() {
+            return bytes;
+        }
+
+        int recordBytes(final int i) {
+            return recordBytes[slot(i)];
+        }
+
+        int payloadBytes(final int i) {
+            return payloadBytes[slot(i)];
+        }
+
+        long queuedMillis(final int i) {
+            return queuedMillis[slot(i)];
+        }
+
+        Latest key(final int i) {
+            return keys[slot(i)];
+        }
+
+        private int slot(final int i) {
+            return (head + i) & (keys.length - 1);
+        }
+
+        private void grow() {
+            if (keys.length >= MAX_CAPACITY) {
+                throw new IllegalStateException("refuse link backlog past its capacity [records=" + size
+                        + ", capacity=" + MAX_CAPACITY + ']');
+            }
+            final int[] oldRecord = recordBytes;
+            final int[] oldPayload = payloadBytes;
+            final long[] oldQueued = queuedMillis;
+            final Latest[] oldKeys = keys;
+            final int oldHead = head;
+            final int mask = oldKeys.length - 1;
+            allocate(oldKeys.length << 1);
+            for (int n = 0; n < size; n++) {
+                final int from = (oldHead + n) & mask;
+                recordBytes[n] = oldRecord[from];
+                payloadBytes[n] = oldPayload[from];
+                queuedMillis[n] = oldQueued[from];
+                keys[n] = oldKeys[from];
+            }
+            head = 0;
+        }
+
+        private void allocate(final int capacity) {
+            recordBytes = new int[capacity];
+            payloadBytes = new int[capacity];
+            queuedMillis = new long[capacity];
+            keys = new Latest[capacity];
+        }
     }
 
     /** A message the gateway handed the link and the future its outcome completes. */

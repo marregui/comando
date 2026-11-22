@@ -86,7 +86,8 @@ class PeersTest {
 
         b.peers.close();
         assertThat(call(main, "instances_list", "{}").text()).doesNotContain("instance b").contains("instance c");
-        assertThat(bus.retained).containsOnlyKeys(Peers.presenceTopic("main"), Peers.presenceTopic("c"));
+        assertThat(bus.retained).containsOnlyKeys(Peers.presenceTopic("main"), Peers.presenceTopic("c"),
+                Peers.sessionsTopic("main"), Peers.sessionsTopic("c"));
 
         c.link.die();
         assertThat(call(main, "instances_list", "{}").text()).contains("no other instance is connected");
@@ -190,7 +191,8 @@ class PeersTest {
                 Peers.replyTopic("main"), "q-9".getBytes(StandardCharsets.UTF_8));
         assertThat(replies).singleElement().asString().contains("\"status\":\"refused\"").contains("schema 1");
         assertThat(b.window.recorded.of(Intent.PromptSession.class)).isEmpty();
-        assertThat(new String(bus.retained.get(Peers.presenceTopic("b")), StandardCharsets.UTF_8)).contains("\"schema\":1");
+        assertThat(new String(bus.retained.get(Peers.presenceTopic("b")), StandardCharsets.UTF_8))
+                .contains("\"schema\":" + Peers.PRESENCE_SCHEMA);
     }
 
     /// A question whose reply never comes, its peer gone while this instance was off frontear so no presence clears it,
@@ -312,9 +314,10 @@ class PeersTest {
         main.window.recorded.await(Intent.InstancesChanged.class, i -> !i.instances().connected(), WAIT);
     }
 
-    /// A presence says what each session is doing, so another instance knows without asking: its state, what its turn
-    /// does and since when, its model, effort, context, folder and branch, its background tasks, and the first line of
-    /// its last prompt and reply (a consult's header skipped); and whether the instance hosts frontear.
+    /// A presence and its sessions' details say what each session is doing, so another instance knows without asking:
+    /// its state, whether a turn runs and since when, its model, effort, context, folder and branch, its background
+    /// tasks, and the first line of its last prompt and reply (a consult's header skipped); and whether the instance
+    /// hosts frontear. What the turn is doing now stays on its machine.
     @Test
     void thePresenceSaysWhatEachSessionIsDoingAndWhoHostsFrontear() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
@@ -326,19 +329,19 @@ class PeersTest {
         b.window.transcripts.of("work").append(new Block.AssistantText("m1", 0, "X is a link.\nDetails.", false, ""));
         b.window.transcripts.of("work").append(new Block.UserPrompt("a subagent's prompt", "work", "tool-1"));
         b.peers.tick();
-        // the presence after the last change: the periodic tick or the connect may send one made between the updates
-        // above, busy without its activity or before the transcript's lines
+        // the details after the last change: the periodic tick or the connect may send some made between the updates
+        // above, before the context or the transcript's lines
         final InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
                 i -> i.instances().others().stream().anyMatch(o -> o.host() && o.sessions().stream()
-                        .anyMatch(m -> m.busy() && "running Bash".equals(m.activity()) && !m.reply().isEmpty())), WAIT)
+                        .anyMatch(m -> m.busy() && m.context() == 42 && !m.reply().isEmpty())), WAIT)
                 .instances();
         final InstancesState.Member work = seen.others().getFirst().sessions().getFirst();
-        assertThat(work.activity()).isEqualTo("running Bash");
+        assertThat(work.activity()).as("not sent").isEmpty();
         assertThat(work.status()).isEqualTo("OPEN");
-        assertThat(work.context()).isEqualTo(42);
-        assertThat(work.prompt()).as("the consult header skipped, the subagent's prompt not the session's").isEqualTo("what is X?");
+        assertThat(work.prompt()).as("the consult header skipped, the subagent's prompt not the session's")
+                .isEqualTo("what is X?");
         assertThat(work.reply()).isEqualTo("X is a link.");
-        assertThat(call(main, "instances_list", "{}").text()).contains("work (busy: running Bash) last asked: what is X?");
+        assertThat(call(main, "instances_list", "{}").text()).contains("work (busy) last asked: what is X?");
     }
 
     /// A session's folder goes out with the home folder written `~`: `/Users/ann/repo` as `~/repo`, while
@@ -362,6 +365,113 @@ class PeersTest {
         } finally {
             System.setProperty("user.home", userHome);
         }
+    }
+
+    /// The presence of an instance of twenty sessions, half of them busy, each with a long folder, branch, prompt and
+    /// reply, fits in 1.5 KB: those travel in the sessions' details, which another instance reads beside it.
+    @Test
+    void aPresenceOfTwentySessionsFitsInOneAndAHalfKilobytesAndTheirDetailsTravelBesideIt() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        b.peers.host(() -> true);
+        b.peers.kit("v3.14.0-12-g796f7c0");
+        // the node's own session, work, is the first of the twenty
+        for (int i = 1; i < 20; i++) {
+            final String name = "t2%02d-frontear-load".formatted(i);
+            final String folder = "/tmp/workspace/comando-clones/t2%02d-frontear-load-presence".formatted(i);
+            final int busy = i % 2;
+            b.window.state.updateAndGet(s -> turns(withSession(s, SessionSpec.fresh(name, folder)), name, busy)
+                    .withSession(name, x -> x.withBranch(name + "-presence-split").withContext(61_000, 200_000)));
+            b.window.transcripts.of(name).append(new Block.UserPrompt("Implement the spec of " + name + " and report "
+                    + "against its acceptance, with every row run and its output quoted", name, ""));
+            b.window.transcripts.of(name).append(new Block.AssistantText("m" + i, 0, "Done: every acceptance row of "
+                    + name + " passes, the report is written and stamped", false, ""));
+        }
+        b.peers.tick();
+
+        final byte[] presence = bus.retained.get(Peers.presenceTopic("b"));
+        assertThat(presence.length).as(new String(presence, StandardCharsets.UTF_8)).isLessThanOrEqualTo(1_536);
+        assertThat(Json.readTree(presence).path("sessions").size()).isEqualTo(20);
+        final InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> o.sessions().size() == 20
+                        && o.sessions().stream().filter(m -> m.name().startsWith("t2"))
+                        .allMatch(m -> m.folder().contains(m.name()) && m.branch().startsWith(m.name())
+                                && m.context() == 30 && m.prompt().contains(m.name())
+                                && m.reply().contains(m.name()))), WAIT).instances();
+        assertThat(seen.others().getFirst().sessions()).filteredOn(InstancesState.Member::busy).hasSize(10);
+    }
+
+    /// A presence goes out only when what it says changes: what a busy session's turn is doing and its context leave
+    /// it as it was, the context going out in the sessions' details instead, and a turn that ends sends one presence.
+    @Test
+    void aPresenceIsSentOnlyWhenASessionStartsEndsOrChangesState() throws Exception {
+        node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final String presence = Peers.presenceTopic("b");
+        final String sessions = Peers.sessionsTopic("b");
+        b.window.state.updateAndGet(s -> turns(s, "work", 1));
+        b.peers.tick();
+        final long presences = settled(b, presence);
+        final long details = sent(b, sessions);
+
+        b.window.state.updateAndGet(s -> s.withSession("work", x -> x.withActivity("running Bash", 1L)));
+        b.peers.tick();
+        b.window.state.updateAndGet(s -> s.withSession("work", x -> x.withActivity("running Read", 2L)));
+        b.peers.tick();
+        assertThat(sent(b, presence)).as("what the turn does").isEqualTo(presences);
+        assertThat(sent(b, sessions)).as("what the turn does").isEqualTo(details);
+
+        b.window.state.updateAndGet(s -> s.withSession("work", x -> x.withContext(42_000, 100_000)));
+        b.peers.tick();
+        assertThat(sent(b, presence)).as("the context").isEqualTo(presences);
+        assertThat(sent(b, sessions)).as("the context").isEqualTo(details + 1);
+
+        b.window.state.updateAndGet(s -> turns(s, "work", -1));
+        b.peers.tick();
+        b.peers.tick();
+        assertThat(sent(b, presence)).as("the turn ended").isEqualTo(presences + 1);
+    }
+
+    /// A presence of schema 1, from a comando before the sessions' details left it, is read whole: each session's
+    /// details, what its turn is doing included, come from the presence itself.
+    @Test
+    void aPresenceOfSchemaOneIsReadWithTheDetailsItCarries() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final String presence = "{\"schema\":1,\"name\":\"comando · old\",\"slug\":\"old\",\"version\":\"1.9.0\","
+                + "\"busy\":true,\"sessions\":[{\"name\":\"work\",\"busy\":true,\"status\":\"OPEN\","
+                + "\"activity\":\"running Bash\",\"turnStarted\":5,\"model\":\"opus\",\"effort\":\"high\","
+                + "\"context\":42,\"folder\":\"~/repo\",\"branch\":\"main\",\"tasks\":[\"build\"],"
+                + "\"prompt\":\"what is X?\",\"reply\":\"X is a link.\"}]}";
+        bus.publish(Peers.presenceTopic("old"), presence.getBytes(StandardCharsets.UTF_8), true, null, null);
+
+        final InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> o.slug().equals("old")), WAIT).instances();
+        assertThat(seen.others().getFirst().sessions()).containsExactly(new InstancesState.Member("work", true,
+                "OPEN", "running Bash", 5L, "opus", "high", 42, "~/repo", "main", List.of("build"), "what is X?",
+                "X is a link."));
+    }
+
+    /// The sessions' details are read whichever comes first: details that come after their presence fill its sessions
+    /// in, and details with no presence, as an instance that died leaves them retained, show no instance.
+    @Test
+    void theSessionsDetailsFillInAPresenceThatCameFirstAndShowNoInstanceWithoutOne() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final String ghost = "{\"schema\":2,\"sessions\":[{\"name\":\"work\",\"folder\":\"~/ghost\"}]}";
+        bus.publish(Peers.sessionsTopic("ghost"), ghost.getBytes(StandardCharsets.UTF_8), true, null, null);
+        final String presence = "{\"schema\":2,\"name\":\"comando · late\",\"slug\":\"late\",\"version\":\"2.0.0\","
+                + "\"busy\":false,\"sessions\":[{\"name\":\"work\",\"busy\":false,\"status\":\"OPEN\"}]}";
+        bus.publish(Peers.presenceTopic("late"), presence.getBytes(StandardCharsets.UTF_8), true, null, null);
+        main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> o.slug().equals("late")), WAIT);
+
+        final String details = "{\"schema\":2,\"sessions\":[{\"name\":\"work\",\"model\":\"opus\","
+                + "\"folder\":\"~/late\"}]}";
+        bus.publish(Peers.sessionsTopic("late"), details.getBytes(StandardCharsets.UTF_8), true, null, null);
+        final InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> o.sessions().stream()
+                        .anyMatch(m -> m.folder().equals("~/late"))), WAIT).instances();
+        assertThat(seen.others()).extracting(InstancesState.Instance::slug).containsExactly("late");
+        assertThat(seen.others().getFirst().sessions().getFirst().model()).isEqualTo("opus");
     }
 
     /// An instance that leaves stays listed, not present, with when it was last seen; the data root remembers it across
@@ -914,7 +1024,7 @@ class PeersTest {
         x.peers.resendPresence();
         x.peers.tick();
         final String cut = Peers.presenceTopic("a", "x");
-        final JsonNode full = Json.readTree(a.retained.get(Peers.presenceTopic("x")));
+        final JsonNode full = Json.readTree(a.retained.get(Peers.sessionsTopic("x")));
         assertThat(full.path("sessions").get(0).propertyNames()).as("this machine's")
                 .contains("folder", "branch", "prompt", "reply", "tasks");
         final JsonNode p = Json.readTree(b.retained.get(cut));

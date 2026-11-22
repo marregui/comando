@@ -26,6 +26,15 @@ public final class Json {
     }
 
     /**
+     * The document {@code text} holds, as {@link #readTree(String)} reads it; the missing node when it holds only
+     * whitespace, and null, not an exception, when it is not one JSON document. For text that is often not JSON, where
+     * a failure per read would cost an exception each time.
+     */
+    public static JsonNode tryReadTree(final String text) {
+        return JsonParser.tryParse(JsonInput.of(text));
+    }
+
+    /**
      * The document the UTF-8 {@code bytes} hold; the missing node when they hold only whitespace.
      *
      * @throws JsonException when the bytes are not one JSON document, trailing content included

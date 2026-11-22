@@ -136,11 +136,13 @@ class FrontearOctopusTest {
         assertThat(spec.path("id").asString()).isEqualTo("y");
         assertThat(spec.path("host").asString()).isEqualTo("127.0.0.1");
         assertThat(spec.path("port").asInt()).isEqualTo(yp);
-        assertThat(strings(spec.path("out"))).containsExactlyInAnyOrder(INBOX_Y, Peers.replyTopic("y"), PRESENCE_X);
+        assertThat(strings(spec.path("out"))).containsExactlyInAnyOrder(INBOX_Y, Peers.replyTopic("y"), PRESENCE_X,
+                Peers.sessionsTopic("x"));
         assertThat(strings(spec.path("in"))).isEmpty();
         assertThat(spec.path("hopLimit").asInt()).isEqualTo(FrontearOctopus.HOP_LIMIT);
         assertThat(strings(Json.readTree(Files.readString(dir.resolve("y/fabric/x/link.json"))).path("out")))
-                .containsExactlyInAnyOrder(Peers.inboxTopic("x"), REPLY_X, Peers.presenceTopic("y"));
+                .containsExactlyInAnyOrder(Peers.inboxTopic("x"), REPLY_X, Peers.presenceTopic("y"),
+                        Peers.sessionsTopic("y"));
         await().atMost(WAIT).pollInterval(POLL).until(() -> connected("x", xp, "y") && connected("y", yp, "x"));
         assertThat(links("x", xp).keySet()).containsExactly("y");
     }

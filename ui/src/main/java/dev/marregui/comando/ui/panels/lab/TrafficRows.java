@@ -30,6 +30,9 @@ public final class TrafficRows {
     private static final int INSTANCE_LEVELS = 6;
     /** The machine level of this machine's own instance topics. */
     private static final String LOCAL = "local";
+    private static final double MILLIS_PER_SECOND = 1_000.0;
+    private static final long SECONDS_PER_MINUTE = 60L;
+    private static final long SECONDS_PER_HOUR = 3_600L;
 
     /**
      * The topics of frontear's own traffic, by their start: the links' checks every 5 s and their replies, and the
@@ -75,6 +78,42 @@ public final class TrafficRows {
             rows.add(new Row(p, 1, p.seq()));
         }
         return rows;
+    }
+
+    /**
+     * What the log holds, in one line: how many packets, the time from the oldest to the newest, and how long before
+     * {@code nowMillis}, on the node's clock, the newest came, {@code 10,000 packets · 0.25 s span · newest 3 s ago};
+     * then that it is a sample while the tab misses packets or the database sink samples them, at the rates given
+     * per second (0 for none); {@code no packets} when it holds none.
+     */
+    public static String window(
+            final Collection<Packet> packets,
+            final long nowMillis,
+            final double missedPerSecond,
+            final double sampledPerSecond
+    ) {
+        final StringBuilder b = new StringBuilder();
+        if (packets.isEmpty()) {
+            b.append("no packets");
+        } else {
+            long oldestMillis = Long.MAX_VALUE;
+            long newestMillis = Long.MIN_VALUE;
+            for (final Packet p : packets) {
+                oldestMillis = Math.min(oldestMillis, p.atMillis());
+                newestMillis = Math.max(newestMillis, p.atMillis());
+            }
+            b.append(String.format(Locale.ROOT, "%,d", packets.size()))
+                    .append(packets.size() == 1 ? " packet · " : " packets · ")
+                    .append(String.format(Locale.ROOT, "%.2f", (newestMillis - oldestMillis) / MILLIS_PER_SECOND))
+                    .append(" s span · newest ").append(ago(Math.max(0L, nowMillis - newestMillis)));
+        }
+        if (missedPerSecond > 0.0) {
+            b.append(" · a sample: the tab misses ").append(HealthRows.compact(missedPerSecond)).append("/s");
+        }
+        if (sampledPerSecond > 0.0) {
+            b.append(" · cdb keeps a sample: ").append(HealthRows.compact(sampledPerSecond)).append("/s left out");
+        }
+        return b.toString();
     }
 
     /** Whether {@code p} is frontear's own control traffic: its topic starts with one of {@link #CONTROL_TOPICS}. */
@@ -163,6 +202,14 @@ public final class TrafficRows {
             case PUBLISHED, ARRIVED, CONNECTED, DISCONNECTED -> p.kind().name().toLowerCase(Locale.ROOT) + " "
                     + p.link();
         };
+    }
+
+    /** {@code millis} ago in its largest whole unit: {@code 3 s ago}, {@code 4 min ago}, {@code 2 h ago}. */
+    private static String ago(final long millis) {
+        final long seconds = millis / 1_000L;
+        return (seconds < SECONDS_PER_MINUTE ? seconds + " s"
+                : seconds < SECONDS_PER_HOUR ? seconds / SECONDS_PER_MINUTE + " min"
+                : seconds / SECONDS_PER_HOUR + " h") + " ago";
     }
 
     /** A publish named by what its comando topic says, {@code comando/v1/<machine>/instance/<slug>/<kind>}. */

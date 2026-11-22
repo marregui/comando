@@ -85,6 +85,7 @@ final class FrontearTab {
     private final JToggleButton everyPresence = Plain.only(new JToggleButton());
     private final JToggleButton pause = Plain.only(new JToggleButton());
     private final JLabel missedLabel = label("frontear.missed");
+    private final JLabel windowLabel = label("frontear.window");
     private final LabTable traffic = new LabTable("frontear.traffic",
             new Column("time", "When the node saw the event, local time"),
             new Column("kind", "Published: a client published here; else one step of a message on a link"),
@@ -249,6 +250,7 @@ final class FrontearTab {
         bar.add(everyPresence);
         bar.add(pause);
         bar.add(missedLabel);
+        bar.add(windowLabel);
         final JTable t = traffic.table();
         // one row at a time: a publish's steps are listed beside the log, not selected in it
         t.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -280,11 +282,13 @@ final class FrontearTab {
                 + " · sessions " + b.sessions() + " · connections " + b.connections() + " · retained "
                 + b.retained() + " (" + b.retainedBytes() + " bytes) · cdb written " + n.counts().sinkWritten()
                 : "no frontear node runs in this instance");
-        final String fault = HealthRows.faults(n, missed);
-        faults.setText(fault.isEmpty() ? "no faults" : "faults: " + fault);
-        faults.setForeground(fault.isEmpty() ? Theme.OK : Theme.DANGER);
+        final HealthRows.Faults f = healthRows.faults(n, missed, n.counts().sinkSampled(), n.counts().sinkFault());
+        faults.setText(f.text().isEmpty() ? "no faults" : "faults: " + f.text());
+        faults.setForeground(f.text().isEmpty() ? Theme.OK : Theme.DANGER);
+        faults.setToolTipText(f.tip().isEmpty() ? null : f.tip());
         final long lost = missed + n.counts().ringMissed();
         missedLabel.setText(lost == 0L ? "" : "missed " + lost);
+        windowLabel.setText(TrafficRows.window(packets, n.atMillis(), f.missedPerSecond(), f.sampledPerSecond()));
         // read at every refresh, so the queues' growth and the drops are seen however the table is
         final List<Health> read = healthRows.read(n);
         if (health.table().getSelectionModel().getValueIsAdjusting()) {

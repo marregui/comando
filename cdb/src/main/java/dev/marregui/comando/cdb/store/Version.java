@@ -334,6 +334,65 @@ final class Version implements PartitionReader {
         return column < dataFiles.length && dataFiles[column] != null ? dataLength[column] : 0L;
     }
 
+    /**
+     * Copies the committed bytes {@code [from, from + n)} of {@code column}'s data file, read as {@code type}, into
+     * {@code dst} at {@code at}, as they lie there. The column has its files in this version (below
+     * {@link #fileColumns}).
+     */
+    void copyData(final int column, final CdbType type, final long from, final byte[] dst, final int at,
+            final int n) {
+        final Mapped m = acquire(column, type);
+        try {
+            MemorySegment.copy(filed(m, column).data(), ValueLayout.JAVA_BYTE, from, dst, at, n);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * The end, in text column {@code column}'s data file, of row {@code row}'s text, where the next row's starts: 0
+     * for row -1. The column has its files in this version.
+     */
+    long textEnd(final int column, final long row) {
+        if (row < 0L) {
+            return 0L;
+        }
+        final Mapped m = acquire(column, CdbType.VARCHAR);
+        try {
+            final MemorySegment data = filed(m, column).data();
+            final long start = row == 0L ? 0L : decodeEnd(m.index().get(LONG_LE, (row - 1L) * Long.BYTES));
+            return checkedEnd(column, row, m.index().get(LONG_LE, row * Long.BYTES), start, data);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Writes the index entries of text rows {@code [from, from + n)} of {@code column} into {@code dst} at {@code at},
+     * little-endian, as a file whose row {@code from} starts at byte {@code base} holds them: every end moved by the
+     * same distance, a NULL's still the complement of its end. Each entry is checked as {@link #texts} checks it.
+     * Returns the end in this version of row {@code from + n - 1}. The column has its files in this version.
+     */
+    long copyEnds(final int column, final long from, final int n, final byte[] dst, final int at, final long base) {
+        final Mapped m = acquire(column, CdbType.VARCHAR);
+        try {
+            final MemorySegment data = filed(m, column).data();
+            final MemorySegment ends = m.index();
+            final long first = from == 0L ? 0L : decodeEnd(ends.get(LONG_LE, (from - 1L) * Long.BYTES));
+            long start = first;
+            for (int i = 0; i < n; i++) {
+                final long raw = ends.get(LONG_LE, (from + i) * Long.BYTES);
+                final long end = checkedEnd(column, from + i, raw, start, data);
+                final long moved = base + (end - first);
+                BYTES_AS_LONGS.set(dst, at + i * Long.BYTES, raw < 0L ? ~moved : moved);
+                start = end;
+            }
+            return start;
+        } finally {
+            release();
+        }
+    }
+
     @Override
     public void longs(final int column, final long from, final int n, final long[] dst) {
         final Mapped m = acquire(column, CdbType.LONG, CdbType.TIMESTAMP);
@@ -889,6 +948,15 @@ final class Version implements PartitionReader {
                     + ']', -1);
         }
         return end;
+    }
+
+    // m, the mapping a copy of a rewrite acquired: refused when the column has no files here
+    private Mapped filed(final Mapped m, final int column) {
+        if (m == null) {
+            throw new IllegalStateException("refuse copy of a column without files [dir=" + dir + ", column=" + column
+                    + ']');
+        }
+        return m;
     }
 
     /** {@link #acquire(int, CdbType, CdbType)} of a vector of {@code type}: the column types its read accepts. */

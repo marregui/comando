@@ -81,7 +81,10 @@ class FrontearTabTest {
             assertThat(table(tab, "frontear.traffic").getRowCount()).as("five presences in one row").isEqualTo(4);
             assertThat(find(tab, "frontear.node", JLabel.class).getText()).startsWith("node alpha on port 1883");
             final JLabel faults = find(tab, "frontear.faults", JLabel.class);
-            assertThat(faults.getText()).isEqualTo("faults: dropped full 1 · packets missed 4 · cdb dropped full 6");
+            assertThat(faults.getText()).as("one read: no rate yet").isEqualTo("faults: dropped full 0/s · 1 total;"
+                    + " packets missed 0/s · 4 total; cdb dropped full 0/s · 6 total");
+            assertThat(find(tab, "frontear.window", JLabel.class).getText())
+                    .isEqualTo("8 packets · 5.00 s span · newest 3 s ago");
             assertThat(faults.getForeground()).isEqualTo(Theme.DANGER);
             assertThat(find(tab, "frontear.missed", JLabel.class).getText()).isEqualTo("missed 4");
         });

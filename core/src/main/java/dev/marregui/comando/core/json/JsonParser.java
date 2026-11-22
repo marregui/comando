@@ -28,7 +28,11 @@ final class JsonParser {
     private static final int LONG_BITS = 63;
     private static final int HEX_DIGITS = 4;
     private static final int FIRST_PRINTABLE = 0x20;
+    /** What a quiet parser throws for every failure, built once: it stays inside {@link #tryParse(JsonInput)}. */
+    private static final JsonException NOT_ONE_DOCUMENT = new JsonException("input is not one JSON document");
     private final JsonInput input;
+    /** Whether a failure is {@link #NOT_ONE_DOCUMENT}, with no message to build and no exception to make. */
+    private final boolean quiet;
     private final char[] buffer = new char[BUFFER_CHARS];
     private final StringBuilder text = new StringBuilder();
     private int position;
@@ -40,8 +44,9 @@ final class JsonParser {
     private long lineStart;
     private int depth;
 
-    private JsonParser(final JsonInput input) {
+    private JsonParser(final JsonInput input, final boolean quiet) {
         this.input = input;
+        this.quiet = quiet;
     }
 
     /**
@@ -51,16 +56,33 @@ final class JsonParser {
      * @throws JsonException when the input is not JSON, or cannot be read
      */
     static JsonNode parse(final JsonInput input, final boolean strict) {
-        final JsonParser parser = new JsonParser(input);
-        final int first = parser.skipWhitespace();
+        return new JsonParser(input, false).document(strict);
+    }
+
+    /**
+     * The one document {@code input} holds, as {@link #parse(JsonInput, boolean)} reads it strictly, or null when it
+     * does not hold one: no exception is made for the failure, so a caller that expects much input not to be JSON
+     * pays only for the characters read.
+     */
+    static JsonNode tryParse(final JsonInput input) {
+        try {
+            return new JsonParser(input, true).document(true);
+        } catch (final JsonException _) {
+            return null;
+        }
+    }
+
+    private JsonNode document(final boolean strict) {
+        final int first = skipWhitespace();
         if (first < 0) {
             return MissingNode.INSTANCE;
         }
-        final JsonNode root = parser.value(first);
+        final JsonNode root = value(first);
         if (strict) {
-            final int next = parser.skipWhitespace();
+            final int next = skipWhitespace();
             if (next >= 0) {
-                throw parser.failHere("unexpected content after the document", "character=" + (char) next);
+                throw quiet ? NOT_ONE_DOCUMENT : failHere("unexpected content after the document",
+                        "character=" + (char) next);
             }
         }
         return root;
@@ -404,6 +426,9 @@ final class JsonParser {
 
     /** The failure of a character, or of the end of the input, where {@code expected} should be. */
     private JsonException unexpected(final int c, final String expected) {
+        if (quiet) {
+            return NOT_ONE_DOCUMENT;
+        }
         if (c < 0) {
             return failHere("ran out of input", "expected=" + expected);
         }
@@ -415,7 +440,7 @@ final class JsonParser {
     }
 
     private JsonException failAt(final long at, final String what, final String details) {
-        return new JsonException(what, details, line, at - lineStart + 1L);
+        return quiet ? NOT_ONE_DOCUMENT : new JsonException(what, details, line, at - lineStart + 1L);
     }
 
     private static boolean isDigit(final int c) {

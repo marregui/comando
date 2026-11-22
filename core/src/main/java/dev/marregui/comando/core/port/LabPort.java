@@ -121,7 +121,9 @@ public interface LabPort {
 
     /**
      * One link to a peer: the octopus's figures, the rates of its SENT packets over the last five seconds, and its last
-     * connect and disconnect ({@code 0} for none) with the reason the last of them gave.
+     * connect and disconnect ({@code 0} for none) with the reason the last of them gave, and its backlog: the messages
+     * refused with 0x97 and the retained ones a newer one on their topic replaced, its bytes and bound, and whether it
+     * grew for 5 minutes while the link was down.
      */
     record Link(
             String id,
@@ -138,8 +140,35 @@ public interface LabPort {
             double bytesPerSecond,
             long lastUpMillis,
             long lastDownMillis,
-            String lastDetail
+            String lastDetail,
+            long refused,
+            long coalesced,
+            long backlogBytes,
+            long maxBacklogBytes,
+            boolean backlogGrowing
     ) {
+
+        /** A link without the backlog's figures: none refused or coalesced, no backlog and no bound. */
+        public Link(
+                final String id,
+                final boolean connected,
+                final long queued,
+                final long cursor,
+                final long tail,
+                final long sent,
+                final long dropped,
+                final long reordered,
+                final int queuedDeliveries,
+                final int queueMax,
+                final double messagesPerSecond,
+                final double bytesPerSecond,
+                final long lastUpMillis,
+                final long lastDownMillis,
+                final String lastDetail
+        ) {
+            this(id, connected, queued, cursor, tail, sent, dropped, reordered, queuedDeliveries, queueMax,
+                    messagesPerSecond, bytesPerSecond, lastUpMillis, lastDownMillis, lastDetail, 0L, 0L, 0L, 0L, false);
+        }
     }
 
     /**
@@ -164,10 +193,30 @@ public interface LabPort {
 
     /**
      * What this instance lost of the watch: packets the window let go of ({@code windowDropped}), packets the node's
-     * ring overwrote before they were read ({@code ringMissed}), and the database's rows written and dropped, at a full
-     * queue or while it was down.
+     * ring overwrote before they were read ({@code ringMissed}), the database's rows written and dropped, at a full
+     * queue or while it was down, the packets it left out by sampling ({@code sinkSampled}), and why cdb last said its
+     * table takes no writes ({@code sinkFault}, "" while it takes them).
      */
-    record Counts(long windowDropped, long ringMissed, long sinkWritten, long sinkDroppedFull, long sinkDroppedDown) {
+    record Counts(
+            long windowDropped,
+            long ringMissed,
+            long sinkWritten,
+            long sinkDroppedFull,
+            long sinkDroppedDown,
+            long sinkSampled,
+            String sinkFault
+    ) {
         public static final Counts NONE = new Counts(0L, 0L, 0L, 0L, 0L);
+
+        /** The counts of a sink that samples nothing and whose table takes writes. */
+        public Counts(
+                final long windowDropped,
+                final long ringMissed,
+                final long sinkWritten,
+                final long sinkDroppedFull,
+                final long sinkDroppedDown
+        ) {
+            this(windowDropped, ringMissed, sinkWritten, sinkDroppedFull, sinkDroppedDown, 0L, "");
+        }
     }
 }

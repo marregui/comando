@@ -62,6 +62,24 @@ class JsonParserTest {
         }
     }
 
+    /// `tryReadTree` reads what `readTree` reads, the missing node for whitespace included, and answers null where
+    /// `readTree` throws: broken grammar, trailing content, nesting past the bound, binary bytes as text.
+    @Test
+    void tryReadTreeAnswersNullWhereReadTreeThrows() {
+        for (final String text : new String[] {"{\"a\":[1,2.5,\"x\",null,true]}", "[]", "42", "\"s\"", " {} "}) {
+            assertThat(Json.write(Json.tryReadTree(text))).as(text).isEqualTo(Json.write(Json.readTree(text)));
+        }
+        assertThat(Json.tryReadTree(" \n").isMissingNode()).isTrue();
+        final String[] broken = {
+            "[1,]", "{\"a\":1,}", "01", "nul", "{", "\"abc", "1 2", "{} {}", "[1] x", "\u0000\u0001\u00ff\u0007",
+            nested(JsonParser.MAX_DEPTH + 1),
+        };
+        for (final String text : broken) {
+            assertThatThrownBy(() -> Json.readTree(text)).as(text).isInstanceOf(JsonException.class);
+            assertThat(Json.tryReadTree(text)).as(text).isNull();
+        }
+    }
+
     /// A parse failure's message ends with the line and column of the offending character, both from 1, and the
     /// original message leaves them out.
     @Test

@@ -389,6 +389,7 @@ class LinksTest {
             assertThat(a.publish(new Packet.Publish("t/x", bytes(0), 0, false, false, 0, null, null), "test"))
                     .succeedsWithin(Duration.ofSeconds(5)).isEqualTo(Packet.QUOTA_EXCEEDED);
             assertThat(state(links, "ab").dropped()).isEqualTo(1);
+            assertThat(state(links, "ab").refused()).as("the QoS 1 message answered 0x97").isEqualTo(1);
             assertThat(waiting).noneMatch(CompletableFuture::isDone);
             release.countDown();
             for (final CompletableFuture<Integer> w : waiting) {
@@ -1069,7 +1070,7 @@ class LinksTest {
     }
 
     /// A clock the test moves by hand, read by the links from their strands.
-    private static final class ManualClock implements InstantSource {
+    static final class ManualClock implements InstantSource {
 
         private final AtomicLong nowMillis;
 

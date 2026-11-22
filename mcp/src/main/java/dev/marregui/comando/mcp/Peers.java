@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -72,10 +73,13 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
  * refused.
  * <p>
  * A presence says what the instance is doing, so another knows without asking: whether it hosts frontear, and for
- * each session its state, what its turn is doing and for how long, its model, effort, context, folder and branch, its
- * background tasks, and the first line of its last prompt and of its last reply. Those two lines are the only words of
- * a conversation it carries; on a gateway off this machine they leave it. The instances seen are remembered in the data
- * root's {@code instances-seen.json}, so one that left stays listed, as last seen, until the user forgets it.
+ * each session its name, whether it is busy and its state. Beside it, retained on {@link #sessionsTopic} and sent
+ * before it when they change, go its sessions' details: since when its turn runs, its model, effort, context, folder
+ * and branch, its background tasks, and the first line of its last prompt and of its last reply. Those two lines are
+ * the only words of a conversation they carry; on a gateway off this machine they leave it. What a turn is doing now
+ * moves too often to send and stays on this machine's window. The presence stays small (about 1.3 KB for 20 sessions)
+ * and changes only when a session starts, ends or changes state. The instances seen are remembered in the data root's
+ * {@code instances-seen.json}, so one that left stays listed, as last seen, until the user forgets it.
  * <p>
  * The instances, this one's connection and the questions asked and answered reach the window as
  * {@link Intent.InstancesChanged} after each change (record 124), and the user asks and refuses from the Instances tab
@@ -244,11 +248,20 @@ public final class Peers implements AutoCloseable, InstancesPort {
      */
     static final int FILE_VERSION = 1;
     /**
-     * The schema of the messages between instances, presence, question and reply, in their {@code schema} key (record
-     * 133; the presence's {@code version} is comando's release). A question of a later schema is refused; a presence or
-     * reply of a later schema is read for the keys this schema has, as it is shown and never stored.
+     * The schema of the messages between instances, question, reply and the cut presence of another machine, in their
+     * {@code schema} key (record 133; a presence's {@code version} is comando's release). A question of a later schema
+     * is refused; a presence or reply of a later schema is read for the keys this schema has, as it is shown and never
+     * stored.
      */
     static final int PEER_SCHEMA = 1;
+    /**
+     * The schema of this machine's presence and of its sessions' details, in their {@code schema} key: 2 since each
+     * session's details left the presence for {@link #sessionsTopic} and its activity left the wire. A presence of
+     * schema 1 carries the details in its sessions and is read as it is; one of schema 2 is read with the details of
+     * the same instance. A comando of schema 1 reads a presence of schema 2 for the keys it has, as
+     * {@link #PEER_SCHEMA} says, and shows its sessions without details.
+     */
+    static final int PRESENCE_SCHEMA = 2;
     /** The presence's key saying whether the instance hosts frontear. */
     static final String HOST_KEY = "host";
     /**
@@ -336,6 +349,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
     });
     private final Object consultLock = new Object();
     private String lastPresence;
+    /** The sessions' details last sent; guarded by {@link #presenceLock}. */
+    private String lastSessions;
+    /**
+     * The latest presence and sessions' details of each instance of this machine, as they came, so that either one
+     * rebuilds its {@link Peer} with the other: written and read on the gateway's strand, cleared at each connect. A
+     * presence emptied drops its entry; details emptied drop theirs.
+     */
+    private final Map<String, JsonNode> presences = new ConcurrentHashMap<>();
+    private final Map<String, JsonNode> details = new ConcurrentHashMap<>();
     private volatile boolean closed;
     /** How long a presence from another machine shows its instance present after it came: {@link #REMOTE_EXPIRY}. */
     private final Duration presentFor;
@@ -591,6 +613,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
         return TOPICS + slug + "/presence";
     }
 
+    /**
+     * The topic of the details of instance {@code slug}'s sessions, retained beside its presence. Its last will clears
+     * only the presence, so the details an instance that died left stay retained: no peer shows them without its
+     * presence, and its next start replaces them.
+     */
+    public static String sessionsTopic(final String slug) {
+        return TOPICS + slug + "/sessions";
+    }
+
     /** The topic instance {@code slug} takes questions on. */
     public static String inboxTopic(final String slug) {
         return TOPICS + slug + "/inbox";
@@ -620,12 +651,13 @@ public final class Peers implements AutoCloseable, InstancesPort {
      * Sets the last will, subscribes, and publishes presence on every connect and every change; call it before the
      * gateway connects. Every subscription is at least once (QoS 1), each consumer idempotent: a question delivered
      * again (its asker and correlation data) is answered once, a reply completes its waiting ask once and a later one
-     * changes nothing, and a presence is retained state that the next one replaces.
+     * changes nothing, and a presence or a sessions' details is retained state that the next one replaces.
      */
     public void start() {
         gateway.will(presenceTopic(me.slug()), new byte[0], true);
         gateway.onConnected(this::connected);
         gateway.subscribe(TOPICS + "+/presence", this::presence);
+        gateway.subscribe(TOPICS + "+/sessions", this::sessions);
         gateway.subscribe(inboxTopic(me.slug()), this::inbox);
         gateway.subscribe(replyTopic(me.slug()), this::reply);
         synchronized (machineLock) {
@@ -641,6 +673,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
      */
     private void connected() {
         peers.clear();
+        presences.clear();
+        details.clear();
         resendPresence();
     }
 
@@ -651,6 +685,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     public void resendPresence() {
         synchronized (presenceLock) {
             lastPresence = null;
+            lastSessions = null;
             lastCut = null;
         }
         onTicks();
@@ -690,9 +725,10 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     /**
-     * Publishes presence when it changed since it was last sent, expires the questions whose reply cannot come any
-     * more, and tells the window what changed. The application runs it on the ticks' strand only, so presences are
-     * published in order, outside the lock.
+     * Publishes the sessions' details, then the presence, each when it changed since it was last sent, expires the
+     * questions whose reply cannot come any more, and tells the window what changed. The application runs it on the
+     * ticks' strand only, so presences are published in order, outside the lock. The details go first, so a peer that
+     * reads a new session in a presence has its details already.
      */
     void tick() {
         // an exception escaping a periodic task cancels every later run
@@ -705,7 +741,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
             // the presence is built, compared and handed to the gateway under one lock, so two ticks on different
             // threads (a test's, the strand's) cannot hand the gateway an older presence after the newer one it keeps
             synchronized (presenceLock) {
-                final String now = presenceJson();
+                final AppState s = state.get();
+                final List<InstancesState.Member> members = members(s);
+                final String sessions = sessionsJson(members);
+                if (!sessions.equals(lastSessions)) {
+                    lastSessions = sessions;
+                    sent(gateway.publish(sessionsTopic(me.slug()), sessions.getBytes(StandardCharsets.UTF_8), true,
+                            null, null));
+                }
+                final String now = presenceJson(s, members);
                 if (!now.equals(lastPresence)) {
                     lastPresence = now;
                     sent(gateway.publish(presenceTopic(me.slug()), now.getBytes(StandardCharsets.UTF_8), true, null,
@@ -792,16 +836,19 @@ public final class Peers implements AutoCloseable, InstancesPort {
         });
     }
 
-    String presenceJson() {
+    /**
+     * This machine's presence of {@code s}, whose sessions are {@code members}: for each session only what changes when
+     * a turn starts or ends, so neither what the turn is doing nor its context sends a new one.
+     */
+    private String presenceJson(final AppState s, final List<InstancesState.Member> members) {
         final ObjectNode p = Json.object();
-        p.put("schema", PEER_SCHEMA);
+        p.put("schema", PRESENCE_SCHEMA);
         p.put("name", me.name());
         p.put("slug", me.slug());
         p.put("version", me.version());
         p.put("role", role);
         p.put("kit", kit);
         p.put("started", started);
-        final AppState s = state.get();
         final boolean hosts = host.getAsBoolean();
         p.put(HOST_KEY, hosts);
         // a comando before record 186 reads only this key; written beside HOST_KEY for one release after record 186,
@@ -809,10 +856,21 @@ public final class Peers implements AutoCloseable, InstancesPort {
         p.put(OLD_HOST_KEY, hosts);
         p.put("busy", s.sessions().stream().anyMatch(SessionState::isBusy));
         final ArrayNode sessions = p.putArray("sessions");
-        for (final InstancesState.Member m : members(s)) {
-            final ObjectNode o = sessions.addObject().put("name", m.name()).put("busy", m.busy()).put("status", m.status())
-                    .put("activity", m.activity()).put("turnStarted", m.turnStarted()).put("model", m.model()).put("effort", m.effort())
-                    .put("context", m.context()).put("folder", m.folder()).put("branch", m.branch());
+        for (final InstancesState.Member m : members) {
+            sessions.addObject().put("name", m.name()).put("busy", m.busy()).put("status", m.status());
+        }
+        return p.toString();
+    }
+
+    /** The details of {@code members}, this instance's sessions, as {@link #sessionsTopic} carries them. */
+    private static String sessionsJson(final List<InstancesState.Member> members) {
+        final ObjectNode p = Json.object();
+        p.put("schema", PRESENCE_SCHEMA);
+        final ArrayNode sessions = p.putArray("sessions");
+        for (final InstancesState.Member m : members) {
+            final ObjectNode o = sessions.addObject().put("name", m.name()).put("turnStarted", m.turnStarted())
+                    .put("model", m.model()).put("effort", m.effort()).put("context", m.context())
+                    .put("folder", m.folder()).put("branch", m.branch());
             final ArrayNode tasks = o.putArray("tasks");
             m.tasks().forEach(tasks::add);
             o.put("prompt", m.prompt()).put("reply", m.reply());
@@ -860,20 +918,39 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 .map(l -> McpTools.clip(l, LINE_CHARS)).orElse("");
     }
 
-    /** A presence, or a remembered one, read. */
+    /** A presence, or a remembered one, read without details of its sessions. */
     private static Peer peer(final String slug, final JsonNode p) {
+        return peer(slug, p, Json.missing());
+    }
+
+    /**
+     * Presence {@code p} read with {@code d}, the details of its sessions: each key a session's entry in {@code p} has
+     * is read from it (a presence of schema 1 has them all), any other from the entry of the same name in {@code d}.
+     */
+    private static Peer peer(final String slug, final JsonNode p, final JsonNode d) {
+        final Map<String, JsonNode> more = new HashMap<>();
+        d.path("sessions").forEach(y -> more.putIfAbsent(y.path("name").asString(""), y));
         final List<InstancesState.Member> sessions = new ArrayList<>();
         p.path("sessions").forEach(x -> {
+            final String name = x.path("name").asString("");
+            final JsonNode y = more.getOrDefault(name, Json.missing());
             final List<String> tasks = new ArrayList<>();
-            x.path("tasks").forEach(t -> tasks.add(t.asString("")));
-            sessions.add(new InstancesState.Member(x.path("name").asString(""), x.path("busy").asBoolean(false), x.path("status").asString(""),
-                    x.path("activity").asString(""), x.path("turnStarted").asLong(0L), x.path("model").asString(""),
-                    x.path("effort").asString(""), x.path("context").asInt(-1), x.path("folder").asString(""), x.path("branch").asString(""),
-                    tasks, x.path("prompt").asString(""), x.path("reply").asString("")));
+            either(x, y, "tasks").forEach(t -> tasks.add(t.asString("")));
+            sessions.add(new InstancesState.Member(name, x.path("busy").asBoolean(false),
+                    x.path("status").asString(""), either(x, y, "activity").asString(""),
+                    either(x, y, "turnStarted").asLong(0L), either(x, y, "model").asString(""),
+                    either(x, y, "effort").asString(""), either(x, y, "context").asInt(-1),
+                    either(x, y, "folder").asString(""), either(x, y, "branch").asString(""), tasks,
+                    either(x, y, "prompt").asString(""), either(x, y, "reply").asString("")));
         });
         return new Peer(slug, p.path("name").asString(slug), p.path("version").asString(""), p.path("role").asString(""),
                 p.path("kit").asString(""), p.path("busy").asBoolean(false), p.path("started").asString(""), List.copyOf(sessions),
                 p.path(HOST_KEY).asBoolean(p.path(OLD_HOST_KEY).asBoolean(false)));
+    }
+
+    /** {@code x}'s key {@code key} when it has it, else {@code y}'s. */
+    private static JsonNode either(final JsonNode x, final JsonNode y, final String key) {
+        return x.has(key) ? x.path(key) : y.path(key);
     }
 
     private void presence(final PeerGateway.Message m) {
@@ -882,6 +959,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return;
         }
         if (m.payload() == null || m.payload().length == 0) {
+            presences.remove(slug);
             final Peer gone = peers.remove(slug);
             final String name = gone == null ? slug : gone.name();
             if (gone != null) {
@@ -896,7 +974,9 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return;
         }
         try {
-            final Peer p = peer(slug, Json.readTree(m.payload()));
+            final JsonNode node = Json.readTree(m.payload());
+            presences.put(slug, node);
+            final Peer p = peer(slug, node, details.getOrDefault(slug, Json.missing()));
             final Peer before = peers.put(slug, p);
             if (!slug.equals(me.slug()) && (before == null || !sameIdentity(before, p))) {
                 remember(p, 0L);
@@ -908,6 +988,34 @@ public final class Peers implements AutoCloseable, InstancesPort {
             show();
         } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + slug + ", cause=" + e.getMessage() + ']');
+        }
+    }
+
+    /**
+     * The details of the sessions of an instance of this machine, {@code comando/v1/local/instance/<slug>/sessions}:
+     * kept for its presence, and its peer rebuilt with them when its presence has come; an empty payload drops them.
+     */
+    private void sessions(final PeerGateway.Message m) {
+        final String slug = between(m.topic(), TOPICS, "/sessions");
+        if (slug.isEmpty()) {
+            return;
+        }
+        try {
+            if (m.payload() == null || m.payload().length == 0) {
+                details.remove(slug);
+            } else {
+                details.put(slug, Json.readTree(m.payload()));
+            }
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.DEBUG, "unreadable sessions' details [instance=" + slug + ", cause="
+                    + e.getMessage() + ']');
+            return;
+        }
+        final JsonNode p = presences.get(slug);
+        // a peer the presence emptied, or gone, is not made again by its details
+        if (p != null && peers.computeIfPresent(slug, (_, _) -> peer(slug, p, details.getOrDefault(slug,
+                Json.missing()))) != null) {
+            show();
         }
     }
 
@@ -1881,8 +1989,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     /**
-     * Clears this instance's presence, stops answering and fails the questions still waiting; call it before the
-     * gateway closes.
+     * Clears this instance's presence and its sessions' details, stops answering and fails the questions still
+     * waiting; call it before the gateway closes.
      */
     @Override
     public void close() {
@@ -1905,12 +2013,17 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 cut = cutTopic;
             }
             try {
+                // the details' clear is awaited after the presence's, so a late one cannot keep the presence from being
+                // cleared
+                final CompletableFuture<Void> sessions = gateway.publish(sessionsTopic(me.slug()), new byte[0], true,
+                        null, null);
                 if (!cut.isEmpty()) {
                     gateway.publish(cut, new byte[0], true, null, null)
                             .get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
                 }
                 gateway.publish(presenceTopic(me.slug()), new byte[0], true, null, null)
                         .get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
+                sessions.get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
             } catch (final ExecutionException | TimeoutException e) {
                 LOG.log(System.Logger.Level.WARNING, "presence not cleared at close", e);
             } catch (final InterruptedException e) {

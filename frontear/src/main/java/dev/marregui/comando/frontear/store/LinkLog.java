@@ -26,9 +26,15 @@ import dev.marregui.comando.frontear.watch.Watch;
  * cursor are read again after one.
  *
  * <p>Files, every number little-endian. Segments are named by their base offset, 20 digits, {@code .log}. A segment
- * is a header (u32 magic {@code FTLG}, u32 version 1, u64 base offset), then one frame per record: u32 length, u32
- * CRC32C, the record's bytes. The CRC covers the record's offset (u64) and length (u32), then its bytes, so a frame
- * read at another offset, or a stretch of zeros, fails it. Offsets are gap-free: a segment's base is the previous
+ * is a header (u32 magic {@code FTLG}, u32 version, u64 base offset), then one frame per record: u32 length, u32
+ * CRC32C, the frame's bytes. In version 2, the one written, a length with its top bit ({@link #DELTA}) set marks a
+ * delta: the bytes are the record as it differs from the record before it in the segment ({@link Deltas}); otherwise,
+ * and always in version 1, they are the record. A record is written whole when it is its segment's first or every
+ * {@link #KEYFRAME_EVERY}th after it, the first after an open, or when a delta would save little, so a read that
+ * starts anywhere decodes at most that many records before its first. A version 1 segment the log ends on at open
+ * takes the next records whole, as version 1 writes them; every segment started is version 2. The CRC covers the
+ * record's offset (u64) and the length field (u32), then the frame's bytes, so a frame read at another offset, or a
+ * stretch of zeros, fails it. Offsets are gap-free: a segment's base is the previous
  * segment's base plus its record count. The file {@code cursor} is u32 magic {@code FTCR}, u32 version 1, u64 cursor,
  * u32 CRC32C of the 16 bytes before it, replaced whole: written to {@code cursor.tmp}, forced, moved over, the folder
  * forced.</p>
@@ -82,12 +88,28 @@ public final class LinkLog implements AutoCloseable {
      * delivers again at most about a second of acknowledged records, which at-least-once allows.
      */
     static final long CURSOR_EVERY_NANOS = 1_000_000_000L;
+    /** The segment format written: frames whole or deltas. */
+    static final int VERSION = 2;
+    /** The first segment format, frames whole only: still read, and continued by the log that opens on one. */
+    static final int VERSION_1 = 1;
+    /** The bit of a frame's length field that marks a delta, in a version 2 segment. */
+    static final int DELTA = 0x8000_0000;
+    /**
+     * A record whose offset from its segment's base is a multiple of this is written whole, so a read that does not
+     * go on from the last one decodes at most this many records before its first. Not tuned: for the PUBLISH a link
+     * logs with a 128-byte payload (a frame of 234 bytes whole, 144 on average measured with deltas), one whole record
+     * in 64 adds under 2 bytes a record, and a read away from the last decodes at most 14 KiB; a profile of a link
+     * catching up would settle it.
+     */
+    static final int KEYFRAME_EVERY = 64;
 
     private static final System.Logger LOG = System.getLogger(LinkLog.class.getName());
     // "FTLG" and "FTCR" read as little-endian ints
     private static final int MAGIC = 0x474C5446;
     private static final int CURSOR_MAGIC = 0x52435446;
-    private static final int VERSION = 1;
+    private static final int CURSOR_VERSION = 1;
+    // a frame's length field without its delta bit
+    private static final int LENGTH = ~DELTA;
     // magic, version, cursor, CRC
     private static final int CURSOR_BYTES = 20;
     private static final String CURSOR = "cursor";
@@ -141,14 +163,16 @@ public final class LinkLog implements AutoCloseable {
     private volatile long cursor;
     // the retained bytes: written under the lock by the writer's thread (an append) and the forcer (a deletion)
     private volatile long bytes;
-    // the frame bytes of the appends not yet durable: written under the lock by the writer's thread (an append), the
-    // forcer (a completion, a failure) and the closing thread (a close that gave up waiting), read by anyone
+    // the bytes the appends not yet durable hold, each its record whole and a frame's FRAME bytes: written under the
+    // lock by the writer's thread (an append), the forcer (a completion, a failure) and the closing thread (a close
+    // that gave up waiting), read by anyone
     private volatile long roundBytes;
-    // the writer's thread's alone: where the last read of a file ended, so a read that goes on from there walks no
-    // frame twice
+    // the writer's thread's alone: where the last read of a file ended, and a copy of the record before that, so a
+    // read that goes on from there walks no frame twice and decodes the delta there
     private Segment hintSegment;
     private long hintOffset;
     private long hintPosition;
+    private byte[] hintPrevious;
     // the forcer's alone: when it last tried to save the cursor, from System.nanoTime
     private long savedAtNanos;
 
@@ -210,32 +234,43 @@ public final class LinkLog implements AutoCloseable {
         Objects.requireNonNull(record, "record");
         // the forcer writes it after the caller moves on, which may reuse the array
         final byte[] copy = record.clone();
-        final long frame = FRAME + (long) copy.length;
+        final long held = FRAME + (long) copy.length;
         final CompletableFuture<Long> future = new CompletableFuture<>();
         synchronized (lock) {
             final IOException refused = refusal("append");
             if (refused != null) {
                 return CompletableFuture.failedFuture(refused);
             }
-            final boolean roll = active == null || active.count > 0L && active.size + frame > options.segmentBytes();
+            final long offset = tail;
+            byte[] delta = active == null || active.version != VERSION || active.previous == null
+                    || (offset - active.base) % KEYFRAME_EVERY == 0L ? null : Deltas.encode(active.previous, copy);
+            final boolean roll = active == null || active.count > 0L && active.size + FRAME
+                    + (delta == null ? copy.length : delta.length) > options.segmentBytes();
+            if (roll) {
+                // a segment's first record is written whole
+                delta = null;
+            }
+            final byte[] stored = delta == null ? copy : delta;
+            final long frame = FRAME + (long) stored.length;
             final long need = frame + (roll ? HEADER : 0L);
             if (bytes + need > options.maxBytes()) {
                 return CompletableFuture.failedFuture(quotaExceeded.pastQuota(bytes, need, options.maxBytes()));
             }
-            if (roundBytes > 0L && roundBytes + frame > options.maxRoundBytes()) {
-                return CompletableFuture.failedFuture(quotaExceeded.pastRound(roundBytes, frame,
+            if (roundBytes > 0L && roundBytes + held > options.maxRoundBytes()) {
+                return CompletableFuture.failedFuture(quotaExceeded.pastRound(roundBytes, held,
                         options.maxRoundBytes()));
             }
-            final long offset = tail;
             if (roll) {
                 roll(offset);
             }
-            pending.addLast(new Pending(offset, active, active.size, copy, future));
+            pending.addLast(new Pending(offset, active, active.size, copy, stored,
+                    delta == null ? stored.length : DELTA | stored.length, future));
             active.size += frame;
             active.count++;
+            active.previous = copy;
             tail = offset + 1L;
             bytes += need;
-            roundBytes += frame;
+            roundBytes += held;
             scheduleFlush();
         }
         return future;
@@ -325,7 +360,10 @@ public final class LinkLog implements AutoCloseable {
         return bytes;
     }
 
-    /** The frame bytes of the appends not yet durable, the usage of {@link LogOptions#maxRoundBytes()}. */
+    /**
+     * The bytes the appends not yet durable hold, each counted as its record's frame written whole, the usage of
+     * {@link LogOptions#maxRoundBytes()}.
+     */
     public long roundBytes() {
         return roundBytes;
     }
@@ -425,7 +463,7 @@ public final class LinkLog implements AutoCloseable {
     private static long readCursor(final LogFiles files, final Path file) throws IOException {
         final long value = files.read(file, content -> {
             if (content.byteSize() != CURSOR_BYTES || content.get(INT, 0L) != CURSOR_MAGIC
-                    || content.get(INT, Integer.BYTES) != VERSION) {
+                    || content.get(INT, Integer.BYTES) != CURSOR_VERSION) {
                 return NO_CURSOR;
             }
             final CRC32C crc = new CRC32C();
@@ -478,12 +516,13 @@ public final class LinkLog implements AutoCloseable {
             final Scan scan = files.read(file, content -> scan(content, base));
             if (!scan.header || base != expected) {
                 LOG.log(System.Logger.Level.WARNING, "end log at segment that does not follow [file=" + file
-                        + ", base=" + base + ", expected=" + expected + ", header=" + scan.header + ']');
+                        + ", base=" + base + ", expected=" + expected + ", header=" + scan.header + ", version="
+                        + scan.version + ']');
                 files.delete(file);
                 ended = true;
                 continue;
             }
-            final Segment s = new Segment(file, base);
+            final Segment s = new Segment(file, base, scan.version);
             s.size = scan.end;
             s.count = scan.count;
             s.created = true;
@@ -503,69 +542,84 @@ public final class LinkLog implements AutoCloseable {
     // a segment's frames from its header on, up to the first frame short, past the end or failing its CRC
     private static Scan scan(final MemorySegment content, final long base) {
         final long size = content.byteSize();
-        if (size < HEADER || content.get(INT, 0L) != MAGIC || content.get(INT, Integer.BYTES) != VERSION
+        final int version = size < HEADER ? 0 : content.get(INT, Integer.BYTES);
+        if (size < HEADER || content.get(INT, 0L) != MAGIC || version != VERSION && version != VERSION_1
                 || content.get(LONG, Long.BYTES) != base) {
-            return new Scan(false, size, 0L, 0L);
+            return new Scan(false, version, size, 0L, 0L);
         }
         long at = HEADER;
         long count = 0L;
-        byte[] record = frameAt(content, at, base);
-        while (record != null) {
-            at += FRAME + record.length;
+        byte[] bytes = frameAt(content, at, base, version);
+        while (bytes != null) {
+            at += FRAME + bytes.length;
             count++;
-            record = frameAt(content, at, base + count);
+            bytes = frameAt(content, at, base + count, version);
         }
-        return new Scan(true, size, at, count);
+        return new Scan(true, version, size, at, count);
     }
 
-    // the record of the frame at position at, null when the frame is short, runs past the end or fails its CRC
-    private static byte[] frameAt(final MemorySegment content, final long at, final long offset) {
+    // the bytes of the frame at position at, a record or a delta as its length field says, null when the frame is
+    // short, runs past the end, fails its CRC or is a delta in a version 1 segment
+    private static byte[] frameAt(final MemorySegment content, final long at, final long offset, final int version) {
         final long left = content.byteSize() - at;
         if (left < FRAME) {
             return null;
         }
-        final long length = Integer.toUnsignedLong(content.get(INT, at));
+        final int field = content.get(INT, at);
+        final long length = version == VERSION_1 ? Integer.toUnsignedLong(field) : field & LENGTH;
         if (length > left - FRAME || length > Integer.MAX_VALUE - FRAME) {
             return null;
         }
-        final byte[] record = Mapped.bytes(content.asSlice(at + FRAME, length));
-        return checksum(offset, record) == content.get(INT, at + Integer.BYTES) ? record : null;
+        final byte[] bytes = Mapped.bytes(content.asSlice(at + FRAME, length));
+        return checksum(offset, field, bytes) == content.get(INT, at + Integer.BYTES) ? bytes : null;
     }
 
     // the records of s from offset from up to stop added to out, walking its frames in content from startOffset at
-    // startPosition; where the walk ended
+    // startPosition, previous the record before startOffset; where the walk ended. A delta needs the record before
+    // it, so the walk decodes from the last record written whole at or below from, or from startOffset when that is
+    // later, and only steps over the frames before
     private static long walk(
             final Segment s,
             final MemorySegment content,
             final long startOffset,
             final long startPosition,
+            final byte[] previous,
             final long from,
             final long stop,
             final List<Record> out
     ) throws IOException {
+        final long whole = s.version == VERSION_1 ? from : from - (from - s.base) % KEYFRAME_EVERY;
+        final long decodeFrom = Math.max(startOffset, whole);
         long at = startPosition;
+        byte[] before = previous;
         for (long o = startOffset; o < stop; o++) {
-            if (o < from) {
-                at += FRAME + Integer.toUnsignedLong(content.get(INT, at));
+            if (o < decodeFrom) {
+                at += FRAME + (long) (content.get(INT, at) & LENGTH);
                 continue;
             }
-            final byte[] record = frameAt(content, at, o);
+            final int field = content.get(INT, at);
+            final byte[] bytes = frameAt(content, at, o, s.version);
+            final byte[] record = bytes == null || (field & DELTA) == 0 || s.version == VERSION_1 ? bytes
+                    : before == null ? null : Deltas.decode(before, bytes);
             if (record == null) {
                 throw new IOException("cannot read durable record, its frame is corrupt [file=" + s.file
                         + ", offset=" + o + ", position=" + at + ']');
             }
-            out.add(new Record(o, record));
-            at += FRAME + record.length;
+            if (o >= from) {
+                out.add(new Record(o, record));
+            }
+            before = record;
+            at += FRAME + bytes.length;
         }
         return at;
     }
 
-    // a frame's CRC32C: the record's offset and length, then its bytes
-    private static int checksum(final long offset, final byte[] record) {
+    // a frame's CRC32C: the record's offset and the frame's length field, then the frame's bytes
+    private static int checksum(final long offset, final int field, final byte[] bytes) {
         final CRC32C crc = new CRC32C();
         crc.update(ByteBuffer.allocate(Long.BYTES + Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN).putLong(offset)
-                .putInt(record.length).flip());
-        crc.update(record);
+                .putInt(field).flip());
+        crc.update(bytes);
         return (int) crc.getValue();
     }
 
@@ -573,11 +627,11 @@ public final class LinkLog implements AutoCloseable {
     // within RUN_BYTES
     private static int runEnd(final List<Pending> round, final int from) {
         final Segment s = round.get(from).segment;
-        long run = FRAME + (long) round.get(from).record.length;
+        long run = FRAME + (long) round.get(from).stored.length;
         int end = from + 1;
         while (end < round.size() && round.get(end).segment == s
-                && run + FRAME + round.get(end).record.length <= RUN_BYTES) {
-            run += FRAME + round.get(end).record.length;
+                && run + FRAME + round.get(end).stored.length <= RUN_BYTES) {
+            run += FRAME + round.get(end).stored.length;
             end++;
         }
         return end;
@@ -587,12 +641,12 @@ public final class LinkLog implements AutoCloseable {
     private static ByteBuffer frames(final List<Pending> round, final int from, final int to) {
         int size = 0;
         for (int i = from; i < to; i++) {
-            size += FRAME + round.get(i).record.length;
+            size += FRAME + round.get(i).stored.length;
         }
         final ByteBuffer joined = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
         for (int i = from; i < to; i++) {
             final Pending p = round.get(i);
-            joined.putInt(p.record.length).putInt(checksum(p.offset, p.record)).put(p.record);
+            joined.putInt(p.field).putInt(checksum(p.offset, p.field, p.stored)).put(p.stored);
         }
         return joined.flip();
     }
@@ -654,10 +708,11 @@ public final class LinkLog implements AutoCloseable {
     // called holding the lock by the writer's thread: starts the segment whose base is offset, its bytes the header's;
     // the forcer creates its file when it writes the segment's first frame
     private void roll(final long offset) {
-        final Segment s = new Segment(dir.resolve(nameOf(offset)), offset);
+        final Segment s = new Segment(dir.resolve(nameOf(offset)), offset, VERSION);
         s.size = HEADER;
         if (active != null) {
             active.sealed = true;
+            active.previous = null;
         }
         segments.addLast(s);
         active = s;
@@ -702,11 +757,11 @@ public final class LinkLog implements AutoCloseable {
         }
     }
 
-    // the frame bytes of round's appends, as roundBytes counts them
+    // the frame bytes round's appends write to the files
     private static long frameBytes(final List<Pending> round) {
         long n = 0L;
         for (final Pending p : round) {
-            n += FRAME + p.record.length;
+            n += FRAME + p.stored.length;
         }
         return n;
     }
@@ -804,7 +859,7 @@ public final class LinkLog implements AutoCloseable {
     private void create(final Segment s) throws IOException {
         s.writer = files.create(s.file);
         s.created = true;
-        s.writer.write(ByteBuffer.allocate(HEADER).order(ByteOrder.LITTLE_ENDIAN).putInt(MAGIC).putInt(VERSION)
+        s.writer.write(ByteBuffer.allocate(HEADER).order(ByteOrder.LITTLE_ENDIAN).putInt(MAGIC).putInt(s.version)
                 .putLong(s.base).flip(), 0L);
     }
 
@@ -815,7 +870,7 @@ public final class LinkLog implements AutoCloseable {
         final List<LogFiles.Writer> spent = new ArrayList<>();
         synchronized (lock) {
             for (final Pending p : round) {
-                p.segment.forcedSize = Math.max(p.segment.forcedSize, p.position + FRAME + p.record.length);
+                p.segment.forcedSize = Math.max(p.segment.forcedSize, p.position + FRAME + p.stored.length);
             }
             for (final Segment s : segments) {
                 if (s.sealed && s.writer != null && s.forcedSize == s.size) {
@@ -874,7 +929,7 @@ public final class LinkLog implements AutoCloseable {
     // the previous cursor (its records are delivered again after a restart) and the next flush tries again
     private void saveCursor(final long value) {
         final ByteBuffer content = ByteBuffer.allocate(CURSOR_BYTES).order(ByteOrder.LITTLE_ENDIAN)
-                .putInt(CURSOR_MAGIC).putInt(VERSION).putLong(value);
+                .putInt(CURSOR_MAGIC).putInt(CURSOR_VERSION).putLong(value);
         final CRC32C crc = new CRC32C();
         crc.update(content.duplicate().flip());
         content.putInt((int) crc.getValue()).flip();
@@ -966,13 +1021,15 @@ public final class LinkLog implements AutoCloseable {
         final boolean hinted = hintSegment == s && hintOffset <= from;
         final long startOffset = hinted ? hintOffset : s.base;
         final long startPosition = hinted ? hintPosition : HEADER;
+        final byte[] previous = hinted ? hintPrevious : null;
         final LogFiles.Mapping mapping = mappingOf(s);
         final long endPosition;
         if (mapping == null) {
-            endPosition = files.read(s.file, content -> walk(s, content, startOffset, startPosition, from, stop, out));
+            endPosition = files.read(s.file, content -> walk(s, content, startOffset, startPosition, previous, from,
+                    stop, out));
         } else {
             try {
-                endPosition = walk(s, mapping.bytes(), startOffset, startPosition, from, stop, out);
+                endPosition = walk(s, mapping.bytes(), startOffset, startPosition, previous, from, stop, out);
             } catch (final IllegalStateException | InternalError e) {
                 // a close of the log or a deletion of s that raced this read from another thread, or the file cut
                 throw new IOException("cannot read mapped log segment [file=" + s.file + ", offset=" + from + ']', e);
@@ -981,6 +1038,8 @@ public final class LinkLog implements AutoCloseable {
         hintSegment = s;
         hintOffset = stop;
         hintPosition = endPosition;
+        // the record before stop, which the next delta needs; a copy, as the caller owns what it was handed
+        hintPrevious = out.getLast().bytes().clone();
         return stop;
     }
 
@@ -1023,6 +1082,8 @@ public final class LinkLog implements AutoCloseable {
 
         final Path file;
         final long base;
+        // the format its frames are written in: a segment found at open keeps its own, a new one is VERSION
+        final int version;
         // the forcer's, once the log is open: open while the segment has bytes to write or force; closed once it is
         // sealed and wholly forced
         LogFiles.Writer writer;
@@ -1040,24 +1101,36 @@ public final class LinkLog implements AutoCloseable {
         LogFiles.Mapping mapping;
         // set by the forcer when it deletes the segment: no mapping is kept for it after
         boolean deleted;
+        // the writer's thread's: the last record appended to the segment since the log opened, which the next
+        // append's delta is made against; null for a segment sealed or not appended to since the open
+        byte[] previous;
 
-        Segment(final Path file, final long base) {
+        Segment(final Path file, final long base, final int version) {
             this.file = file;
             this.base = base;
+            this.version = version;
         }
     }
 
-    /** An append waiting in the round: its offset, its segment, where its frame goes there, its record and future. */
+    /**
+     * An append waiting in the round: its offset, its segment, where its frame goes there, its record, the bytes its
+     * frame stores (the record, or its delta) with the frame's length field, and its future.
+     */
     private record Pending(
             long offset,
             Segment segment,
             long position,
             byte[] record,
+            byte[] stored,
+            int field,
             CompletableFuture<Long> future
     ) {
     }
 
-    /** What a segment's scan found: whether its header holds, its size, where its last whole frame ends, its count. */
-    private record Scan(boolean header, long size, long end, long count) {
+    /**
+     * What a segment's scan found: whether its header holds, its format version, its size, where its last whole frame
+     * ends, its count.
+     */
+    private record Scan(boolean header, int version, long size, long end, long count) {
     }
 }

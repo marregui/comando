@@ -317,6 +317,12 @@ On disk each name ends with the number of the transaction that wrote the folder,
 must rewrite a day, it writes a new folder under a new number. A reader that began earlier keeps the old folder
 until it finishes.
 
+A day is rewritten when a commit's rows land among rows it already holds. cdb then streams the old folder and the
+new rows into the new folder, column by column, a MiB at a time: the heap a rewrite needs grows with the commit,
+not with the day, so a day many times the size of the heap rewrites within it. If the rewrite fails part way,
+cdb deletes the new folder before the commit reports the failure, and the old folder stays the table's. Opening a
+table deletes any folder its `_txn` file does not name.
+
 Days are UTC days.
 
 ### 5.4 What a query touches
@@ -486,7 +492,8 @@ cdb answers questions about itself in SQL. Each of these is a statement you run 
 | `wal_apply_stats()` | how far the applier is behind: pending commits, rows, bytes, lag |
 | `EXPLAIN <query>` | the plan: the time range and the columns the query reads |
 
-A table shows `suspended` when cdb fails three times in a row to apply its log. It then refuses new commits and
+A table shows `suspended` when cdb fails three times in a row to apply its log, or once when the failure is an
+error such as running out of memory, which may leave its files half-written. It then refuses new commits and
 keeps the logged ones. `last_error` in `wal_apply_stats()` says what went wrong. To bring the table back, restart
 cdb: it reopens the table and replays the log.
 

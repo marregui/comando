@@ -43,6 +43,18 @@ public final class JsonException extends RuntimeException {
         this(what, details, line, column, null);
     }
 
+    /**
+     * A failure without a place, a cause, a stack trace or suppressed failures, so one instance can stand for every
+     * failure of a kind; it must not leave the class that made it, where nobody could add to it.
+     */
+    JsonException(final String what) {
+        super(ascii(what), null, false, false);
+        this.what = ascii(what);
+        this.details = "";
+        this.line = NO_PLACE;
+        this.column = NO_PLACE;
+    }
+
     private JsonException(
             final String what, final String details, final long line, final long column, final Throwable cause) {
         super(ascii(what), cause);

@@ -15,6 +15,8 @@ tasks.named<Test>("test") {
     System.getenv("CDB_POWERCUT_FULL")?.let { systemProperty("cdb.powercut.full", it) }
     // StoreWalTest's differential: CDB_WAL_SEED replays a printed seed
     System.getenv("CDB_WAL_SEED")?.let { systemProperty("cdb.wal.seed", it) }
+    // PartitionRewriteModelTest: CDB_REWRITE_SEED replays a printed seed
+    System.getenv("CDB_REWRITE_SEED")?.let { systemProperty("cdb.rewrite.seed", it) }
     // StoreApplyEquivalenceTest: CDB_APPLY_SEED replays a printed seed
     System.getenv("CDB_APPLY_SEED")?.let { systemProperty("cdb.apply.seed", it) }
     // ParallelEquivalenceTest: CDB_PARALLEL_SEED0/1 replay a printed seed pair, CDB_PARALLEL_QUERIES runs more queries

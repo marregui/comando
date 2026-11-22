@@ -172,8 +172,8 @@ What the store is for: [frontear §2.4](../frontear.md#24-the-store-link-logs).
 
 | Piece | Format |
 |---|---|
-| Segment header | magic `FTLG`, version 1, the base offset |
-| Frame | length, a CRC32C over offset, length and bytes, then the PUBLISH as MQTT 5 writes it |
+| Segment header | magic `FTLG`, version 2 (version 1 still read), the base offset |
+| Frame | length (top bit set: a delta frame), a CRC32C over offset, length and bytes, then the record: whole, the PUBLISH as MQTT 5 writes it, or the bytes it differs by from the record before ([record 191](../adr/0191-frontear-compact-link-log-records.md)); a segment's first record, every 64th and the first after an open are whole |
 | `cursor` | magic `FTCR`, version, the cursor, a CRC32C; replaced by a rename |
 | Byte order | little-endian |
 | Size | 64 MiB per segment and 1 GiB per link in a node (`Frontear.LOG_OPTIONS`) |

@@ -12,7 +12,6 @@ import java.util.List;
 
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
-import dev.marregui.comando.cdb.exec.Vector;
 import dev.marregui.comando.cdb.json.Json;
 
 /**
@@ -24,16 +23,15 @@ import dev.marregui.comando.cdb.json.Json;
  * {@link Checkpoint}, as every commit was before the log. Writing a batch (the applier's writer, in replay mode, also
  * the recovery's) orders and deduplicates the rows of each partition they fall in, then appends them in place to the
  * partition's column files when they all come after its committed rows, else rewrites the partition as a new version
- * folder (its committed rows merged with the new), all unforced, its symbols interned in memory. A crash leaves the
- * last checkpoint and the log: the store's next open cuts the bytes appended past the committed ends, deletes the
- * orphan folders and replays the log.
+ * folder (its committed rows merged with the new, streamed by {@link PartitionRewrite} in memory bounded whatever the
+ * partition's size), all unforced, its symbols interned in memory. A failed commit deletes the folders it wrote. A
+ * crash leaves the last checkpoint and the log: the store's next open cuts the bytes appended past the committed ends,
+ * deletes the orphan folders and replays the log.
  */
 final class DefaultWriter implements TableWriter {
 
     private static final System.Logger LOG = System.getLogger(DefaultWriter.class.getName());
     private static final int INITIAL_ROWS = 1024;
-    // rows a merge reads of a committed partition at a time
-    private static final int MERGE_CHUNK_ROWS = 1024;
 
     private final Store store;
     private final TableState state;
@@ -841,7 +839,8 @@ final class DefaultWriter implements TableWriter {
 
     /**
      * Writes every partition the pending rows fall in, replacing it in {@code next}: appended in place when the rows
-     * come after its committed ones, else rewritten as version {@code txn}.
+     * come after its committed ones, else rewritten as version {@code txn}. A rewrite that fails deletes its folder
+     * before the failure leaves.
      */
     private void writePartitions(final long txn, final List<Version> next, final List<Version> written,
             final List<Version> appended) throws IOException {
@@ -877,17 +876,18 @@ final class DefaultWriter implements TableWriter {
                     appended.add(v);
                 } else {
                     final Path dir = state.dir.resolve(TableFiles.folder(floor, partitionBy, txn));
-                    if (old == null) {
-                        writeVersion(dir, rows, order);
-                        v = Version.open(dir, def, order.length, state.symbols(), state.mappings);
-                    } else {
-                        final int mergedRows;
-                        try (final RowBlock merged = merge(old, rows, order)) {
-                            final int[] mergedOrder = Dedup.mergeOrder(merged, ts, keys, (int) old.rowCount());
-                            writeVersion(dir, merged, mergedOrder);
-                            mergedRows = mergedOrder.length;
+                    try {
+                        final int merged = PartitionRewrite.write(dir, def, state.symbols(), old, rows, order, keys);
+                        v = Version.open(dir, def, merged, state.symbols(), state.mappings);
+                    } catch (final IOException | RuntimeException | Error e) {
+                        // the folder is not yet in written, whose folders drop deletes, and no later commit reuses
+                        // its name: left here, it would stay on the disk until the store reopens
+                        try {
+                            StoreFiles.deleteFolder(dir);
+                        } catch (final IOException | RuntimeException cleanup) {
+                            e.addSuppressed(cleanup);
                         }
-                        v = Version.open(dir, def, mergedRows, state.symbols(), state.mappings);
+                        throw e;
                     }
                     written.add(v);
                 }
@@ -995,67 +995,6 @@ final class DefaultWriter implements TableWriter {
                 StoreFiles.writeAt(indexFile, committed * Long.BYTES, text.ends(), false);
             } else {
                 StoreFiles.writeAt(data, committed * TableFiles.width(rows.types[c]), fixed(rows, c, order), false);
-            }
-        }
-    }
-
-    /** The committed rows of {@code old}, then the rows {@code order} of {@code rows}. */
-    private RowBlock merge(final Version old, final RowBlock rows, final int[] order) {
-        final long oldRows = old.rowCount();
-        final int k = order.length;
-        if (oldRows > Integer.MAX_VALUE - k) {
-            throw new CdbException("refuse partition over capacity [table=" + def.name() + ", rows=" + (oldRows + k)
-                    + ']', -1);
-        }
-        final int base = (int) oldRows;
-        final RowBlock merged = new RowBlock(def.name(), def.columns(), base + k);
-        try {
-            for (int c = 0; c < merged.types.length; c++) {
-                readCommitted(old, c, base, merged);
-            }
-            for (int i = 0; i < k; i++) {
-                merged.copyRow(rows, order[i], base + i);
-            }
-        } catch (final RuntimeException | Error e) {
-            merged.close();
-            throw e;
-        }
-        merged.size = base + k;
-        return merged;
-    }
-
-    // the first n committed rows of column c of old into rows [0, n) of block, a chunk at a time
-    private static void readCommitted(final Version old, final int c, final int n, final RowBlock block) {
-        final CdbType type = block.types[c];
-        final Vector chunk = Vector.of(type, Math.min(n, MERGE_CHUNK_ROWS));
-        for (int at = 0; at < n; at += MERGE_CHUNK_ROWS) {
-            final int m = Math.min(MERGE_CHUNK_ROWS, n - at);
-            old.read(c, at, m, chunk, 0);
-            for (int i = 0; i < m; i++) {
-                switch (type) {
-                    case LONG, TIMESTAMP -> block.setLong(c, at + i, chunk.getLong(i));
-                    case DOUBLE -> block.setDouble(c, at + i, chunk.getDouble(i));
-                    case BOOLEAN -> block.setBoolean(c, at + i, chunk.getBoolean(i));
-                    case SYMBOL, VARCHAR, JSON -> block.setText(c, at + i, chunk.textAt(i));
-                }
-            }
-        }
-    }
-
-    /** Writes the rows {@code order} of {@code block} as the version folder {@code dir}, unforced, as {@link #append}. */
-    private void writeVersion(final Path dir, final RowBlock block, final int[] order) throws IOException {
-        // a folder of this name is an orphan of a commit that crashed before naming it in _txn
-        StoreFiles.deleteFolder(dir);
-        StoreFiles.createFolder(dir);
-        final List<ColumnDef> columns = def.columns();
-        for (int c = 0; c < columns.size(); c++) {
-            final Path data = dir.resolve(columns.get(c).name() + ".d");
-            if (block.types[c].isVarchar()) {
-                final Text text = varchar(data, block, c, order, 0L);
-                StoreFiles.writeNew(dir.resolve(columns.get(c).name() + ".i"), text.ends(), false);
-                StoreFiles.writeNew(data, text.bytes(), false);
-            } else {
-                StoreFiles.writeNew(data, fixed(block, c, order), false);
             }
         }
     }
