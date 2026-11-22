@@ -36,6 +36,7 @@ import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.dialogs.folders.FoldersDialog;
+import dev.marregui.comando.ui.dialogs.machines.MachinesDialog;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.action.CommandPalette;
@@ -276,6 +277,7 @@ final class Commands {
                     () -> !deps.fabric().isRunning() && !deps.fabric().busy());
             cmd("frontear.stop", "Stop frontear", null, () -> deps.fabric().toggle(),
                     () -> deps.fabric().isRunning() && !deps.fabric().busy());
+            cmd("frontear.machines", MachinesDialog.TITLE + "…", null, () -> ui.openMachines(""));
         }
         // panel: its results
         cmd("run.insertResult", "Attach to the editor", key(KeyEvent.VK_I, shortcut | SHIFT), this::insertLastResult, this::hasRun);

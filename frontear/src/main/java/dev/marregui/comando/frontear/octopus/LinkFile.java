@@ -14,14 +14,17 @@ import dev.marregui.comando.core.json.ObjectNode;
 /**
  * A link's spec as it is kept in its folder, {@value #NAME}: the {@code PutLink} body plus a {@code version}, so a
  * restarted node starts the links it had. Version 1 is the only one; a file of another version, with a property this
- * version does not know or missing one, is refused whole rather than read in part.
+ * version does not know or missing one, is refused whole rather than read in part. {@code tls} is optional, absent
+ * meaning false, and written only when true: a plain link's file reads on a node from before TLS links, and a TLS
+ * link's file is refused there rather than read as a plain link.
  */
 final class LinkFile {
 
     /** The file's name in the link's folder, beside its log. */
     static final String NAME = "link.json";
     static final int VERSION = 1;
-    private static final Set<String> PROPERTIES = Set.of("version", "id", "host", "port", "out", "in", "hopLimit");
+    private static final Set<String> PROPERTIES = Set.of("version", "id", "host", "port", "out", "in", "hopLimit",
+            "tls");
 
     private LinkFile() {
     }
@@ -36,6 +39,9 @@ final class LinkFile {
         filters(root.putArray("out"), spec.out());
         filters(root.putArray("in"), spec.in());
         root.put("hopLimit", spec.hopLimit());
+        if (spec.tls()) {
+            root.put("tls", true);
+        }
         return Json.writeBytes(root);
     }
 
@@ -66,7 +72,7 @@ final class LinkFile {
                     + VERSION + ']');
         }
         return new LinkSpec(text(root, "id"), text(root, "host"), integer(root, "port"), filters(root, "out"),
-                filters(root, "in"), integer(root, "hopLimit"));
+                filters(root, "in"), integer(root, "hopLimit"), tls(root));
     }
 
     private static void filters(final ArrayNode array, final Set<String> filters) {
@@ -89,6 +95,17 @@ final class LinkFile {
             throw new IllegalArgumentException("link file property is not an int [name=" + name + ']');
         }
         return value.intValue();
+    }
+
+    private static boolean tls(final JsonNode root) {
+        final JsonNode value = root.path("tls");
+        if (value.isMissingNode()) {
+            return false;
+        }
+        if (!value.isBoolean()) {
+            throw new IllegalArgumentException("link file property is not a boolean [name=tls]");
+        }
+        return value.booleanValue();
     }
 
     private static Set<String> filters(final JsonNode root, final String name) {

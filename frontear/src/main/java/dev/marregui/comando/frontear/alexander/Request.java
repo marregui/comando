@@ -24,7 +24,9 @@ sealed interface Request {
     static Request parse(final String method, final JsonNode body) throws Invalid {
         return switch (method) {
             case "PutLink" -> {
-                allowed(body, Set.of("id", "host", "port", "out", "in", "hopLimit"));
+                // tls is optional, absent meaning false: a node from before it refuses a body that carries it, so a
+                // TLS link is never put as a plain one
+                allowed(body, Set.of("id", "host", "port", "out", "in", "hopLimit", "tls"));
                 final int port = integer(body, "port");
                 final int hopLimit = integer(body, "hopLimit");
                 if (port < 1 || port > 65_535) {
@@ -34,7 +36,7 @@ sealed interface Request {
                     throw new Invalid(Refusal.BAD_REQUEST, "hop limit must be positive [hopLimit=" + hopLimit + ']');
                 }
                 yield new PutLink(new LinkSpec(text(body, "id"), text(body, "host"), port, filters(body, "out"),
-                        filters(body, "in"), hopLimit));
+                        filters(body, "in"), hopLimit, flag(body, "tls")));
             }
             case "RemoveLink" -> {
                 allowed(body, Set.of("id"));
@@ -77,6 +79,18 @@ sealed interface Request {
             throw new Invalid(Refusal.BAD_REQUEST, "property is not an int [name=" + name + ']');
         }
         return value.intValue();
+    }
+
+    /** The boolean {@code name}, false when the body does not carry it. */
+    private static boolean flag(final JsonNode body, final String name) throws Invalid {
+        final JsonNode value = body.path(name);
+        if (value.isMissingNode()) {
+            return false;
+        }
+        if (!value.isBoolean()) {
+            throw new Invalid(Refusal.BAD_REQUEST, "property is not a boolean [name=" + name + ']');
+        }
+        return value.booleanValue();
     }
 
     private static Direction direction(final JsonNode body) throws Invalid {

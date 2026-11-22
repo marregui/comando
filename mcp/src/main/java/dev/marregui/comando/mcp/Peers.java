@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -26,9 +27,13 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
+
+import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
@@ -46,6 +51,7 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.InstancesState;
@@ -74,15 +80,18 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
  * The instances, this one's connection and the questions asked and answered reach the window as
  * {@link Intent.InstancesChanged} after each change (record 124), and the user asks and refuses from the Instances tab
  * through {@link InstancesPort}.
+ * <p>
+ * With this machine's id set ({@link #machine}), the instances of the machines paired with it are reached too (record
+ * 189), as {@code <slug>@<machine>}, under {@code comando/v1/<machine>/instance/}. This instance sends them a cut
+ * presence, its name, slug, version, role, busy and its sessions' names, retained with a 30 s expiry; one of theirs
+ * shows its instance present for 30 s from its arrival. A question from another machine, as the broker stamped its
+ * origin, is taken only from a paired machine, with its payload's {@code from} and its response topic of that machine;
+ * it is headed {@code · peer} and answered by a session in plan mode, unless the machine is granted the overseer's
+ * authority and the asker is its {@code main}.
  */
 public final class Peers implements AutoCloseable, InstancesPort {
 
     private static final System.Logger LOG = System.getLogger(Peers.class.getName());
-    /**
-     * Every instance's topics are under this, then its id: {@code …/<id>/presence}, {@code …/<id>/inbox},
-     * {@code …/<id>/reply}.
-     */
-    static final String TOPICS = "comando/v1/local/instance/";
     static final Duration PRESENCE_EVERY = Duration.ofSeconds(2);
     /** How long an instance waits for its consult session's turn before it replies {@code timeout}. */
     static final Duration ANSWER_WITHIN = Duration.ofSeconds(McpTools.MAX_WAIT_SECONDS);
@@ -94,6 +103,40 @@ public final class Peers implements AutoCloseable, InstancesPort {
     static final String MAIN = "main";
     /** The header's mark after the asker's name when the asker is {@link #MAIN}. */
     static final String OVERSEER = " · overseer";
+    /** The header's mark after a remote asker's id when its machine does not grant it the overseer's (record 189). */
+    static final String PEER_MARK = " · peer";
+    /** The topics between machines are under this, then the machine's id, then {@code /instance/<slug>/…}. */
+    static final String MACHINES = "comando/v1/";
+    /** The machine id of the topics of one machine's own traffic. */
+    static final String LOCAL = "local";
+    /**
+     * Every instance's topics are under this, then its id: {@code …/<id>/presence}, {@code …/<id>/inbox},
+     * {@code …/<id>/reply}.
+     */
+    static final String TOPICS = MACHINES + LOCAL + "/instance/";
+    /** The mode a session reports while it only plans, as Claude Code names it. */
+    private static final String PLAN_MODE = "plan";
+    /**
+     * How long a presence sent to other machines lives, and how long one received shows its instance present, from its
+     * arrival (record 189 §2.2).
+     */
+    static final Duration REMOTE_EXPIRY = Duration.ofSeconds(30);
+    /**
+     * At most this long between two presences sent to other machines, changed or not, so one lives on there while this
+     * instance does: a third of {@link #REMOTE_EXPIRY}, so two may be lost before it expires (record 189 §2.2).
+     */
+    static final Duration REMOTE_EVERY = REMOTE_EXPIRY.dividedBy(3);
+    /**
+     * The instances of one other machine kept at once: the instances one machine runs, with room, the bound the
+     * gateway puts on the presences it retains for one machine (record 189 §2.1). A presence of a new instance past it
+     * is dropped and counted once the machine's instances no longer present are gone to make room.
+     */
+    static final int MAX_REMOTES = 64;
+    /**
+     * The consult sessions an instance makes for the instances of one other machine: the instances one user runs on a
+     * laptop, with room (record 189 §2.1). A question that would make one more is refused, with a reply that says so.
+     */
+    static final int MAX_CONSULTS = 8;
     static final String OK = "ok";
     static final String REFUSED = "refused";
     static final String TIMEOUT = "timeout";
@@ -164,6 +207,28 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /** An instance as this one last saw it: its presence, and when it was last seen present (0 while it is). */
     private record Seen(Peer peer, long lastSeen) {
+    }
+
+    /**
+     * An instance of another machine, as its last presence said: its slug in {@code peer} is its id,
+     * {@code <slug>@<machine>}; it came at {@code arrivedNanos} ({@link System#nanoTime}) and {@code arrivedMillis}.
+     */
+    private record Remote(Peer peer, String machine, long arrivedNanos, long arrivedMillis) {
+    }
+
+    /**
+     * Who asks a question, as its header names it: its id, its name, its session or empty, the header's mark after the
+     * name, and whether the session that answers it runs in plan mode.
+     */
+    private record Asker(String id, String name, String session, String mark, boolean plans) {
+    }
+
+    /** The instance a question goes to and its machine, empty for this one; or none, and {@code why}. */
+    private record Target(Peer peer, String machine, String why) {
+
+        static Target none(final String why) {
+            return new Target(null, "", why);
+        }
     }
 
     /** How much of a prompt's or a reply's first line a presence carries. */
@@ -272,6 +337,38 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private final Object consultLock = new Object();
     private String lastPresence;
     private volatile boolean closed;
+    /** How long a presence from another machine shows its instance present after it came: {@link #REMOTE_EXPIRY}. */
+    private final Duration presentFor;
+    /** At most this long between two cut presences, changed or not: {@link #REMOTE_EVERY}. */
+    private final Duration resendEvery;
+    /**
+     * This machine's id, empty while none is set: written by the application thread through {@link #machine}, read by
+     * the ticks' strand, the broker's delivery threads and the callers of the tools.
+     */
+    private volatile String machine = "";
+    /**
+     * The grant of each paired machine, null for one not paired: written by the application thread through
+     * {@link #grants}, read by the broker's delivery threads for each question from another machine.
+     */
+    private volatile Function<String, MachinesPort.Grant> grants = _ -> null;
+    /** Whether {@link #start} ran, and the machines whose topics are subscribed; guarded by {@link #machineLock}. */
+    private final Object machineLock = new Object();
+    private boolean running;
+    private final Set<String> subscribed = new HashSet<>();
+    /** The instances of other machines, by {@code <slug>@<machine>}, as their last presence said and when it came. */
+    private final Map<String, Remote> remotes = new ConcurrentHashMap<>();
+    /** Makes a new entry of {@link #remotes} and its machine's count one step, so no machine passes its bound. */
+    private final Object remoteLock = new Object();
+    /** The machines a presence was dropped of since they last had room, each logged once; guarded by remoteLock. */
+    private final Set<String> fullMachines = new HashSet<>();
+    /** The presences of new instances of other machines dropped since start, past their machine's bound. */
+    private final AtomicLong droppedPresences = new AtomicLong();
+    /** The questions from other machines dropped since start: not paired, or naming an asker the origin is not. */
+    private final AtomicLong dropped = new AtomicLong();
+    /** The cut presence last sent, its topic and when it was sent; guarded by {@link #presenceLock}. */
+    private String lastCut;
+    private String cutTopic = "";
+    private long cutSentNanos;
 
     /**
      * Peers through {@code broker} for instance {@code me}; consult sessions are made in {@code workDir}, and
@@ -291,6 +388,28 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /** As above, with how long a question asked waits for its reply given too; for tests. */
     Peers(final PeerBroker broker, final Me me, final IntentSink sink, final Supplier<AppState> state, final TranscriptRegistry transcripts, final String workDir, final Path agentsFile,
           final Duration answerWithin, final Duration expireWithin) {
+        this(broker, me, sink, state, transcripts, workDir, agentsFile, answerWithin, expireWithin, REMOTE_EXPIRY,
+                REMOTE_EVERY);
+    }
+
+    /**
+     * As above, with how long a presence from another machine shows its instance present, and how long at most
+     * between two cut presences, given too.
+     */
+    @TestOnly
+    Peers(
+            final PeerBroker broker,
+            final Me me,
+            final IntentSink sink,
+            final Supplier<AppState> state,
+            final TranscriptRegistry transcripts,
+            final String workDir,
+            final Path agentsFile,
+            final Duration answerWithin,
+            final Duration expireWithin,
+            final Duration presentFor,
+            final Duration resendEvery
+    ) {
         this.broker = broker;
         this.me = me;
         this.sink = sink;
@@ -300,7 +419,71 @@ public final class Peers implements AutoCloseable, InstancesPort {
         this.agentsFile = agentsFile;
         this.answerWithin = answerWithin;
         this.expireWithin = expireWithin;
+        this.presentFor = presentFor;
+        this.resendEvery = resendEvery;
         this.role = me.role();
+    }
+
+    /**
+     * This machine's id (record 189), empty for none: with one, this instance's topics between machines are subscribed
+     * and its cut presence is sent from the next tick. Refused with an {@link IllegalArgumentException} when it is not
+     * a machine id or is {@code local}.
+     */
+    public void machine(final String id) {
+        final String m = id == null ? "" : id.strip();
+        if (!m.isEmpty() && (!MachinesPort.MACHINE_ID.matcher(m).matches() || LOCAL.equals(m))) {
+            throw new IllegalArgumentException("refused: not a machine id [machine=" + m + ", pattern="
+                    + MachinesPort.MACHINE_ID.pattern() + ']');
+        }
+        machine = m;
+        final boolean now;
+        synchronized (machineLock) {
+            now = running;
+        }
+        if (now) {
+            subscribeMachine(m);
+        }
+        onTicks();
+    }
+
+    /**
+     * What each paired machine may do here, by its id: null for a machine not paired, whose questions are dropped
+     * (record 189); asked for each question from another machine, on the broker's thread, so it must not block.
+     */
+    public void grants(final Function<String, MachinesPort.Grant> grantOf) {
+        grants = grantOf == null ? _ -> null : grantOf;
+    }
+
+    /**
+     * Subscribes machine {@code m}'s topics of this instance once, and the presences of every machine with the first;
+     * the broker is called outside the lock, as it may deliver retained messages on this thread. Each is delivered at
+     * least once (QoS 1), with the consumers of {@link #start} making a repeat harmless; a message whose expiry passed
+     * on a link is dropped, so a question or a reply may not arrive at all and its asker's wait ends it.
+     */
+    private void subscribeMachine(final String m) {
+        final boolean first;
+        synchronized (machineLock) {
+            if (m.isEmpty() || !subscribed.add(m)) {
+                return;
+            }
+            first = subscribed.size() == 1;
+        }
+        if (first) {
+            broker.subscribe(MACHINES + "+/instance/+/presence", this::remotePresence);
+        }
+        broker.subscribe(inboxTopic(m, me.slug()), this::inbox);
+        broker.subscribe(replyTopic(m, me.slug()), this::reply);
+    }
+
+    /** The questions from other machines dropped since start; the {@code machines} tool shows them. */
+    long dropped() {
+        return dropped.get();
+    }
+
+    /** The presences of new instances of other machines dropped since start, past {@link #MAX_REMOTES}. */
+    @TestOnly
+    long droppedPresences() {
+        return droppedPresences.get();
     }
 
     /**
@@ -366,6 +549,17 @@ public final class Peers implements AutoCloseable, InstancesPort {
         return InstanceName.slug(instanceName);
     }
 
+    /**
+     * An instance's id as the deny list and the Instances tab hold it: {@code <slug>@<machine>} for one of another
+     * machine (record 189), its {@link #slug} otherwise; a part after {@code @} that is no machine id is a slug's.
+     */
+    static String id(final String instance) {
+        final String x = instance == null ? "" : instance.strip();
+        final String m = InstanceName.machineOf(x).toLowerCase(Locale.ROOT);
+        return MachinesPort.MACHINE_ID.matcher(m).matches() && !LOCAL.equals(m)
+                ? InstanceName.onMachine(slug(InstanceName.slugOf(x)), m) : slug(x);
+    }
+
     /** The topic of instance {@code slug}'s presence, retained. */
     public static String presenceTopic(final String slug) {
         return TOPICS + slug + "/presence";
@@ -381,9 +575,26 @@ public final class Peers implements AutoCloseable, InstancesPort {
         return TOPICS + slug + "/reply";
     }
 
+    /** The topic of instance {@code slug}'s presence for other machines, of machine {@code machine} (record 189). */
+    public static String presenceTopic(final String machine, final String slug) {
+        return MACHINES + machine + "/instance/" + slug + "/presence";
+    }
+
+    /** The topic instance {@code slug} of machine {@code machine} takes questions from other machines on. */
+    public static String inboxTopic(final String machine, final String slug) {
+        return MACHINES + machine + "/instance/" + slug + "/inbox";
+    }
+
+    /** The topic instance {@code slug} of machine {@code machine} takes replies from other machines on. */
+    public static String replyTopic(final String machine, final String slug) {
+        return MACHINES + machine + "/instance/" + slug + "/reply";
+    }
+
     /**
      * Sets the last will, subscribes, and publishes presence on every connect and every change; call it before the
-     * broker connects.
+     * broker connects. Every subscription is at least once (QoS 1), each consumer idempotent: a question delivered
+     * again (its asker and correlation data) is answered once, a reply completes its waiting ask once and a later one
+     * changes nothing, and a presence is retained state that the next one replaces.
      */
     public void start() {
         broker.will(presenceTopic(me.slug()), new byte[0], true);
@@ -391,6 +602,10 @@ public final class Peers implements AutoCloseable, InstancesPort {
         broker.subscribe(TOPICS + "+/presence", this::presence);
         broker.subscribe(inboxTopic(me.slug()), this::inbox);
         broker.subscribe(replyTopic(me.slug()), this::reply);
+        synchronized (machineLock) {
+            running = true;
+        }
+        subscribeMachine(machine);
         ticks.scheduleWithFixedDelay(this::tick, PRESENCE_EVERY.toMillis(), PRESENCE_EVERY.toMillis(), TimeUnit.MILLISECONDS);
     }
 
@@ -410,6 +625,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     public void resendPresence() {
         synchronized (presenceLock) {
             lastPresence = null;
+            lastCut = null;
         }
         onTicks();
     }
@@ -464,20 +680,74 @@ public final class Peers implements AutoCloseable, InstancesPort {
             // threads (a test's, the strand's) cannot hand the broker an older presence after the newer one it keeps
             synchronized (presenceLock) {
                 final String now = presenceJson();
-                if (now.equals(lastPresence)) {
-                    return;
+                if (!now.equals(lastPresence)) {
+                    lastPresence = now;
+                    sent(broker.publish(presenceTopic(me.slug()), now.getBytes(StandardCharsets.UTF_8), true, null,
+                            null));
                 }
-                lastPresence = now;
-                broker.publish(presenceTopic(me.slug()), now.getBytes(StandardCharsets.UTF_8), true, null, null)
-                        .whenComplete((v, e) -> {
-                            if (e != null) {
-                                LOG.log(System.Logger.Level.DEBUG, "presence not sent [cause=" + e.getMessage() + ']');
-                            }
-                        });
+                cutTick();
             }
         } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot send presence", e);
         }
+    }
+
+    /**
+     * Sends the cut presence for other machines, under {@link #presenceLock}, when this machine has an id: when it
+     * changed, and unchanged once {@link #resendEvery} less a tick has passed, so no two are further apart than
+     * {@link #resendEvery}; each expires {@link #REMOTE_EXPIRY} after it was sent. The one sent under an id this
+     * machine no longer has is cleared.
+     */
+    private void cutTick() {
+        final String m = machine;
+        final String topic = m.isEmpty() ? "" : presenceTopic(m, me.slug());
+        if (!cutTopic.isEmpty() && !cutTopic.equals(topic)) {
+            sent(broker.publish(cutTopic, new byte[0], true, null, null));
+            cutTopic = "";
+            lastCut = null;
+        }
+        if (topic.isEmpty()) {
+            return;
+        }
+        final String now = cutPresenceJson();
+        final long at = System.nanoTime();
+        if (now.equals(lastCut) && at - cutSentNanos < resendEvery.minus(PRESENCE_EVERY).toNanos()) {
+            return;
+        }
+        lastCut = now;
+        cutTopic = topic;
+        cutSentNanos = at;
+        sent(broker.publish(topic, now.getBytes(StandardCharsets.UTF_8), true, null, null,
+                REMOTE_EXPIRY.toSeconds()));
+    }
+
+    /** Logs a presence the broker did not take. */
+    private static void sent(final CompletableFuture<Void> publish) {
+        publish.whenComplete((v, e) -> {
+            if (e != null) {
+                LOG.log(System.Logger.Level.DEBUG, "presence not sent [cause=" + e.getMessage() + ']');
+            }
+        });
+    }
+
+    /**
+     * The presence other machines see (record 189 §2.1): name, slug, version, role, whether it is busy and its
+     * sessions' names; no folder, branch, prompt, reply or task leaves this machine.
+     */
+    String cutPresenceJson() {
+        final ObjectNode p = Json.object();
+        p.put("schema", PEER_SCHEMA);
+        p.put("name", me.name());
+        p.put("slug", me.slug());
+        p.put("version", me.version());
+        p.put("role", role);
+        final AppState s = state.get();
+        p.put("busy", s.sessions().stream().anyMatch(SessionState::isBusy));
+        final ArrayNode sessions = p.putArray("sessions");
+        for (final SessionState x : s.sessions()) {
+            sessions.addObject().put("name", x.name());
+        }
+        return p.toString();
     }
 
     /**
@@ -615,6 +885,89 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
     }
 
+    /**
+     * A presence of an instance of another machine, {@code comando/v1/<machine>/instance/<slug>/presence}: kept with
+     * when it came, as {@link #keepRemote} bounds it, or dropped with an empty payload, the questions asked of it
+     * failed. This machine's and {@code local}'s are not another machine's; one whose origin, as the broker stamped
+     * it, is not its topic's machine is dropped. It is neither remembered nor linked to: the gateway's link to its
+     * machine carries it.
+     */
+    private void remotePresence(final PeerBroker.Message m) {
+        final String[] t = m.topic().split("/", -1);
+        if (t.length != 6 || !"instance".equals(t[3]) || !"presence".equals(t[5])) {
+            return;
+        }
+        final String from = t[2];
+        final String slug = t[4];
+        if (LOCAL.equals(from) || from.equals(machine) || !MachinesPort.MACHINE_ID.matcher(from).matches()
+                || !slug.equals(slug(slug))) {
+            return;
+        }
+        if (!InstanceName.origin(from).equals(m.origin())) {
+            LOG.log(System.Logger.Level.DEBUG, "a presence from another machine than its topic's, dropped [topic="
+                    + m.topic() + ", origin=" + m.origin() + ']');
+            return;
+        }
+        final String id = InstanceName.onMachine(slug, from);
+        if (m.payload() == null || m.payload().length == 0) {
+            remotes.remove(id);
+            asked.forEach((_, a) -> {
+                if (a.peer().equals(id)) {
+                    a.reply().complete(new Reply(ERROR, id + " left frontear before it replied", id, ""));
+                }
+            });
+            show();
+            return;
+        }
+        try {
+            final Peer p = peer(id, Json.readTree(m.payload()));
+            final Peer remote = new Peer(id, p.name(), p.version(), p.role(), "", p.busy(), "", p.sessions(), false);
+            if (keepRemote(id, new Remote(remote, from, System.nanoTime(), System.currentTimeMillis()))) {
+                show();
+            }
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + id + ", cause=" + e.getMessage()
+                    + ']');
+        }
+    }
+
+    /**
+     * Keeps {@code r} as instance {@code id}, or drops it and counts it when it is a new instance of a machine that has
+     * {@link #MAX_REMOTES} kept: that machine's instances no longer present are forgotten first to make room.
+     */
+    private boolean keepRemote(final String id, final Remote r) {
+        final String of = r.machine();
+        final boolean logged;
+        synchronized (remoteLock) {
+            if (!remotes.containsKey(id) && remotesOf(of) >= MAX_REMOTES) {
+                remotes.values().removeIf(x -> x.machine().equals(of) && !present(x));
+            }
+            if (remotes.containsKey(id) || remotesOf(of) < MAX_REMOTES) {
+                remotes.put(id, r);
+                fullMachines.remove(of);
+                return true;
+            }
+            droppedPresences.incrementAndGet();
+            logged = fullMachines.add(of);
+        }
+        if (logged) {
+            LOG.log(System.Logger.Level.WARNING, "a presence of another machine's instance dropped, the machine has "
+                    + "its most instances kept, the next not logged until it has room [machine=" + of + ", instance="
+                    + id + ", maxRemotes=" + MAX_REMOTES + ']');
+        }
+        return false;
+    }
+
+    /** How many instances of machine {@code m} {@link #remotes} holds, present or not. */
+    private long remotesOf(final String m) {
+        return remotes.values().stream().filter(x -> x.machine().equals(m)).count();
+    }
+
+    /** Whether {@code r}'s last presence came less than {@link #presentFor} ago. */
+    private boolean present(final Remote r) {
+        return System.nanoTime() - r.arrivedNanos() < presentFor.toNanos();
+    }
+
     /** {@link #linkTo}'s listener for instance {@code slug}, on the caller's thread; a failure is logged. */
     private void link(final String slug) {
         try {
@@ -640,8 +993,12 @@ public final class Peers implements AutoCloseable, InstancesPort {
             LOG.log(System.Logger.Level.DEBUG, "a question that names no asker, dropped");
             return;
         }
-        final String from = slug(q.path("from").asString(""));
-        final String fromName = q.path("name").asString(from);
+        final Asker asker = m.origin() == null ? localAsker(q) : remoteAsker(m, q);
+        if (asker == null) {
+            return;
+        }
+        final String from = asker.id();
+        final String fromName = asker.name();
         // the asker's correlation data keys the question's log lines here and in the asker's
         final String correlation = new String(m.correlation(), StandardCharsets.UTF_8);
         // delivered at least once: the same question again (its asker and correlation data) is answered once
@@ -661,9 +1018,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return;
         }
         final String id = UUID.randomUUID().toString();
-        // the session the question names answers it; none named, this instance's consult session for the asker
+        // the session the question names answers it; none named, this instance's consult session for the asker. One
+        // from another machine always goes to its consult session: a name would reach another asker's (record 189)
         final String named = q.path(TO).asString("").strip();
-        final String session = named.isEmpty() ? CONSULT + from : named;
+        if (m.origin() != null && !named.isEmpty()) {
+            LOG.log(System.Logger.Level.DEBUG, "the session a question from another machine names, ignored [id="
+                    + correlation + ", instance=" + from + ", named=" + named + ']');
+        }
+        final String session = named.isEmpty() || m.origin() != null ? CONSULT + from : named;
         LOG.log(System.Logger.Level.INFO, "question received [id=" + correlation + ", instance=" + from + ", session="
                 + session + ']');
         record(new InstancesState.Consult(id, InstancesState.Direction.ANSWERED, from, fromName, session,
@@ -671,8 +1033,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         errands.start("peer-answer", () -> {
             Reply r;
             try {
-                r = answer(correlation, from, fromName, q.path("session").asString(""), session,
-                        q.path("text").asString(""));
+                r = answer(correlation, asker, session, q.path("text").asString(""));
             } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "a question failed [id=" + correlation + ", instance=" + from
                         + ']', e);
@@ -685,19 +1046,88 @@ public final class Peers implements AutoCloseable, InstancesPort {
         });
     }
 
+    /** The asker of a question of this machine, as its payload names it; its main is the overseer (record 186). */
+    private static Asker localAsker(final JsonNode q) {
+        final String from = slug(q.path("from").asString(""));
+        return new Asker(from, q.path("name").asString(from), q.path("session").asString(""),
+                MAIN.equals(from) ? OVERSEER : "", false);
+    }
+
+    /**
+     * The asker of a question from machine {@code m.origin()} (record 189), or null when the question is dropped,
+     * logged and counted: this machine has an id and the question came on its inbox here, the machine is paired, the
+     * payload's {@code from} is {@code <slug>@<that machine>} and the response topic is that instance's reply topic
+     * there. It is named by its id, as its payload's name is not checked; its main is the overseer only when its
+     * machine is granted the overseer's authority, and every other asker's question is answered in plan mode.
+     */
+    private Asker remoteAsker(final PeerBroker.Message m, final JsonNode q) {
+        final String here = machine;
+        final String origin = m.origin();
+        final String there = InstanceName.machineOfOrigin(origin);
+        final String from = q.path("from").asString("").strip();
+        final String fromMachine = InstanceName.machineOf(from);
+        final String slug = fromMachine.isEmpty() ? "" : InstanceName.slugOf(from);
+        MachinesPort.Grant grant = null;
+        final String why;
+        if (here.isEmpty() || !m.topic().equals(inboxTopic(here, me.slug()))) {
+            why = "not on this machine's inbox of this instance";
+        } else if (!MachinesPort.MACHINE_ID.matcher(there).matches() || LOCAL.equals(there) || there.equals(here)) {
+            why = "its origin names no other machine";
+        } else if ((grant = grantOf(there)) == null) {
+            why = "its machine is not paired";
+        } else if (slug.isEmpty() || !slug.equals(slug(slug)) || !fromMachine.equals(there)) {
+            why = "its asker is not an instance of its machine";
+        } else if (!replyTopic(there, slug).equals(m.responseTopic())) {
+            why = "its response topic is not its asker's";
+        } else {
+            why = "";
+        }
+        if (!why.isEmpty()) {
+            dropped.incrementAndGet();
+            LOG.log(System.Logger.Level.DEBUG, "a question from another machine, dropped: " + why + " [origin="
+                    + origin + ", from=" + from + ", topic=" + m.topic() + ", responseTopic=" + m.responseTopic()
+                    + ']');
+            return null;
+        }
+        final boolean overseer = grant == MachinesPort.Grant.OVERSEER && MAIN.equals(slug);
+        final String id = InstanceName.onMachine(slug, there);
+        return new Asker(id, id, headerSafe(q.path("session").asString("")), overseer ? OVERSEER : PEER_MARK,
+                !overseer);
+    }
+
+    /** How many consult sessions for the instances of machine {@code m}, {@code consult-<slug>@<m>}, {@code s} has. */
+    private static long consultsOf(final AppState s, final String m) {
+        return s.sessions().stream().map(SessionState::name)
+                .filter(n -> n.startsWith(CONSULT) && m.equals(InstanceName.machineOf(n))).count();
+    }
+
+    /** {@link #grants}'s answer for machine {@code m}; a failure of it is no grant. */
+    private MachinesPort.Grant grantOf(final String m) {
+        try {
+            return grants.apply(m);
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read a machine's grant; taken as not paired [machine=" + m
+                    + ']', e);
+            return null;
+        }
+    }
+
+    /** {@code text} when a header may name it, empty when it holds a header's marks or a line break. */
+    private static String headerSafe(final String text) {
+        return text.chars().anyMatch(c -> c == '[' || c == ']' || c == '·' || c == '\n' || c == '\r') ? ""
+                : text.strip();
+    }
+
     /**
      * Prompts this instance's {@code session}, the one the question names or {@code consult-<from>}, with the
-     * question, headed with who asks, in its panel; created by {@code peer:<from>} in the default folder when missing.
-     * Waits for the turn that answers it. A session blocked in a wait of its own for a reply is refused at once.
+     * question, headed with who asks, in its panel; created by {@code peer:<from>} in the default folder when missing,
+     * in plan mode when the asker's questions are answered so. Waits for the turn that answers it. A session blocked in
+     * a wait of its own for a reply is refused at once, and so is one that does not plan for an asker whose questions
+     * are answered in plan mode, and one that would be made past its machine's {@link #MAX_CONSULTS}.
      */
-    private Reply answer(
-            final String correlation,
-            final String from,
-            final String fromName,
-            final String fromSession,
-            final String session,
-            final String text
-    ) {
+    private Reply answer(final String correlation, final Asker asker, final String session, final String text) {
+        final String from = asker.id();
+        final String fromName = asker.name();
         final Optional<String> refused = refused(from);
         if (refused.isPresent()) {
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, "Refused a question from instance " + fromName + ": " + refused.get(), false));
@@ -712,7 +1142,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                     + "(instance_ask), so it cannot take this question now: put the question in your reply to it, ask "
                     + "again once its wait ended, or name another session", me.name(), session);
         }
-        final String prompt = header(from, fromName, fromSession) + '\n' + text.strip();
+        final String prompt = header(asker) + '\n' + text.strip();
         final long deadline = System.nanoTime() + answerWithin.toNanos();
         int cursor;
         // two questions arriving together make the session once, and reach it in the order they came
@@ -720,11 +1150,21 @@ public final class Peers implements AutoCloseable, InstancesPort {
             final AppState s = state.get();
             final Optional<SessionState> existing = s.session(session);
             cursor = existing.isPresent() ? transcripts.of(session).size() : 0;
+            final String there = InstanceName.machineOf(from);
+            if (existing.isEmpty() && !there.isEmpty() && consultsOf(s, there) >= MAX_CONSULTS) {
+                LOG.log(System.Logger.Level.INFO, "question refused, its machine has its most consult sessions "
+                        + "here [id=" + correlation + ", session=" + session + ", machine=" + there + ", maxConsults="
+                        + MAX_CONSULTS + ']');
+                return new Reply(REFUSED, me.name() + " has " + MAX_CONSULTS + " consult sessions for the instances of "
+                        + "machine " + there + ", its most, so it makes no session " + session + ": ask from an "
+                        + "instance that has one, or have its user delete one", me.name(), session);
+            }
             if (existing.isEmpty()) {
                 // a session comes with its own panel (record 88), where the question shows; a name the reducer
                 // refuses (a panel of another session's has that title) is refused here, with the reducer's reason
                 final Intent.SaveSession save =
-                        new Intent.SaveSession("", SessionSpec.fresh(session, workDir).withCreatedBy(PEER + from));
+                        new Intent.SaveSession("", SessionSpec.fresh(session, workDir).withCreatedBy(PEER + from)
+                                .withPlanMode(asker.plans()));
                 final Optional<String> why = Reducer.refusal(s, save);
                 if (why.isPresent()) {
                     return new Reply(ERROR, "session " + session + " cannot be made in " + me.name() + ": " + why.get(),
@@ -735,6 +1175,18 @@ public final class Peers implements AutoCloseable, InstancesPort {
                     return Thread.currentThread().isInterrupted() ? closing(session)
                             : new Reply(ERROR, "session " + session + " could not be made in " + me.name(), me.name(), session);
                 }
+            } else if (asker.plans() && !existing.get().spec().planMode()) {
+                // a session that may act would act for an asker whose questions only plan (record 189)
+                return new Reply(REFUSED, "session " + session + " of " + me.name() + " does not run in plan mode, "
+                        + "and a question from another machine is answered only in plan mode", me.name(), session);
+            } else if (existing.get().spec().planMode() && leftPlanMode(existing.get())) {
+                // its spec plans, so its process must too: one that reports another mode takes no question
+                final String mode = existing.get().info().permissionMode();
+                LOG.log(System.Logger.Level.INFO, "question refused, the session left plan mode [id=" + correlation
+                        + ", session=" + session + ", mode=" + mode + ']');
+                return new Reply(REFUSED, "session " + session + " of " + me.name() + " was made to only plan but "
+                        + "reports mode " + mode + ", so it takes no question until it is started again in plan mode",
+                        me.name(), session);
             } else if (s.homePanel(session).isEmpty()) {
                 sink.dispatch(new Intent.OpenSession(session, s.focused(), PanelId.random()));
             }
@@ -782,6 +1234,12 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
     }
 
+    /** Whether {@code s}, made to only plan, reported a mode other than plan; one that reported none yet has not. */
+    private static boolean leftPlanMode(final SessionState s) {
+        final String mode = s.info().permissionMode();
+        return !mode.isEmpty() && !PLAN_MODE.equals(mode);
+    }
+
     /**
      * Waits for the reducer to have made {@code session}, at most {@link #MAKE_WITHIN} and never past {@code deadline}.
      */
@@ -820,12 +1278,13 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     /**
-     * The question's first line: {@code [from instance <name>[ · overseer][ · session <s>]]}, the mark when the asker
-     * is {@link #MAIN}; transcripts draw it as a label, so its shape stays.
+     * The question's first line: {@code [from instance <name>[ · overseer| · peer][ · session <s>]]}, the overseer's
+     * mark when the asker is {@link #MAIN} of this machine or of one granted its authority, the peer's for any other
+     * asker of another machine; transcripts draw it as a label, so its shape stays.
      */
-    private static String header(final String from, final String fromName, final String fromSession) {
-        return "[from instance " + fromName + (MAIN.equals(from) ? OVERSEER : "")
-                + (fromSession.isBlank() ? "" : " · session " + fromSession) + ']';
+    private static String header(final Asker asker) {
+        return "[from instance " + asker.name() + asker.mark()
+                + (asker.session().isBlank() ? "" : " · session " + asker.session()) + ']';
     }
 
     private Reply timeout(final String session) {
@@ -869,7 +1328,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 return Optional.of(file + " is of a later version, so its deny list cannot be checked");
             }
             for (final JsonNode d : root.path("peers").path("deny")) {
-                if (from.equals(slug(d.asString("")))) {
+                if (from.equals(id(d.asString("")))) {
                     return Optional.of("its user listed " + from + " in agents.json peers.deny");
                 }
             }
@@ -887,6 +1346,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (a == null) {
             return;
         }
+        // a reply comes from the machine asked, as the broker stamped it: none for this machine's (record 189)
+        final String asked = InstanceName.machineOf(a.peer());
+        final String from = asked.isEmpty() ? null : InstanceName.origin(asked);
+        if (from == null ? m.origin() != null : !from.equals(m.origin())) {
+            LOG.log(System.Logger.Level.DEBUG, "a reply from another machine than the one asked, dropped [instance="
+                    + a.peer() + ", origin=" + m.origin() + ']');
+            return;
+        }
         try {
             final JsonNode r = Json.readTree(m.payload());
             a.reply().complete(new Reply(r.path("status").asString(ERROR), r.path("text").asString(""), r.path("instance").asString(a.peerName()),
@@ -896,12 +1363,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
     }
 
-    /** {@code instances_list}: the other instances present on frontear. */
+    /** {@code instances_list}: the other instances present on frontear, of this machine and of the paired ones. */
     McpTools.Outcome list() {
         if (!broker.connected()) {
             return McpTools.Outcome.fail(FABRIC_DOWN);
         }
-        final List<Peer> others = others();
+        final List<Peer> others = new ArrayList<>(others());
+        final List<Peer> away = remotesPresent();
+        others.addAll(away);
         if (others.isEmpty()) {
             return McpTools.Outcome.ok("no other instance is connected to frontear; this one is " + me.name()
                     + " (instance " + me.slug() + ')');
@@ -915,7 +1384,54 @@ public final class Peers implements AutoCloseable, InstancesPort {
                                     + (x.prompt().isEmpty() ? "" : " last asked: " + x.prompt())).toList())).append('\n');
         }
         return McpTools.Outcome.ok(out.append("this one is ").append(me.name()).append(" (instance ").append(me.slug())
-                .append("); ask one with instance_ask {\"instance\": \"<instance>\", \"text\": \"…\"}").toString());
+                .append("); ask one with instance_ask {\"instance\": \"<instance>\", \"text\": \"…\"}")
+                .append(away.isEmpty() ? "" : "; one of another machine (<slug>@<machine>) answers as a peer, planning"
+                        + " only, unless its machine granted this one the overseer's authority")
+                .toString());
+    }
+
+    /** The instances of other machines whose presence is current, by id. */
+    private List<Peer> remotesPresent() {
+        return remotes.values().stream().filter(this::present).map(Remote::peer)
+                .sorted(Comparator.comparing(Peer::slug)).toList();
+    }
+
+    /**
+     * The instance {@code to} names, and its machine (empty for this one), or why none: {@code <slug>@<machine>} names
+     * one of that machine, or of this one; a bare slug or name names this machine's first, else the one instance of
+     * another machine with that slug or name, and is refused when several are.
+     */
+    private Target target(final String to) {
+        final String name = InstanceName.slugOf(to).strip();
+        final String m = InstanceName.machineOf(to).strip().toLowerCase(Locale.ROOT);
+        final String here = machine;
+        if (!m.isEmpty() && (here.isEmpty() || !m.equals(here))) {
+            final Remote r = remotes.get(InstanceName.onMachine(slug(name), m));
+            return r == null || !present(r)
+                    ? Target.none("no instance '" + to + "' is present on frontear; instances: " + names())
+                    : new Target(r.peer(), r.machine(), "");
+        }
+        if (name.equalsIgnoreCase(me.slug()) || name.equalsIgnoreCase(me.name())) {
+            return Target.none(to + " is this instance; instance_ask asks another one");
+        }
+        final Optional<Peer> local = others().stream()
+                .filter(p -> p.slug().equalsIgnoreCase(name) || p.name().equalsIgnoreCase(name)).findFirst();
+        final String none = "no instance '" + to + "' is connected to frontear; instances: " + names();
+        if (local.isPresent() || !m.isEmpty()) {
+            return local.map(p -> new Target(p, "", "")).orElseGet(() -> Target.none(none));
+        }
+        final String s = slug(name);
+        final List<Remote> matches = remotes.values().stream().filter(this::present)
+                .filter(r -> r.peer().slug().equals(InstanceName.onMachine(s, r.machine()))
+                        || r.peer().name().equalsIgnoreCase(name))
+                .sorted(Comparator.comparing((final Remote r) -> r.peer().slug())).toList();
+        if (matches.size() > 1) {
+            return Target.none("'" + to + "' names instances on several machines: "
+                    + String.join(", ", matches.stream().map(r -> r.peer().slug()).toList())
+                    + "; name one as <slug>@<machine>");
+        }
+        return matches.isEmpty() ? Target.none(none)
+                : new Target(matches.getFirst().peer(), matches.getFirst().machine(), "");
     }
 
     /**
@@ -930,16 +1446,21 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (!broker.connected()) {
             return McpTools.Outcome.fail(FABRIC_DOWN);
         }
-        if (to.equalsIgnoreCase(me.slug()) || to.equalsIgnoreCase(me.name())) {
-            return McpTools.Outcome.fail(to + " is this instance; instance_ask asks another one");
+        final Target found = target(to);
+        if (found.peer() == null) {
+            return McpTools.Outcome.fail(found.why());
         }
-        final Optional<Peer> peer = others().stream().filter(p -> p.slug().equalsIgnoreCase(to) || p.name().equalsIgnoreCase(to)).findFirst();
-        if (peer.isEmpty()) {
-            return McpTools.Outcome.fail("no instance '" + to + "' is connected to frontear; instances: " + names());
+        final Peer p = found.peer();
+        final String away = found.machine();
+        final String here = machine;
+        if (!away.isEmpty() && here.isEmpty()) {
+            return McpTools.Outcome.fail("this machine has no id, so " + p.slug() + " cannot reply to it: set one "
+                    + "with the machines tool");
         }
-        final Peer p = peer.get();
-        // the link to it subscribes its inbox here: put now when the presence's errand has not put it yet
-        link(p.slug());
+        if (away.isEmpty()) {
+            // the link to it subscribes its inbox here: put now when the presence's errand has not put it yet
+            link(p.slug());
+        }
         final String id = UUID.randomUUID().toString();
         final String target = args.path("session").asString("").strip();
         final Asked a = new Asked(p.slug(), p.name(), target, new CompletableFuture<>(), System.nanoTime());
@@ -958,16 +1479,21 @@ public final class Peers implements AutoCloseable, InstancesPort {
         try {
             final ObjectNode q = Json.object();
             q.put("schema", PEER_SCHEMA);
-            q.put("from", me.slug());
+            q.put("from", away.isEmpty() ? me.slug() : InstanceName.onMachine(me.slug(), here));
             q.put("name", me.name());
             q.put("session", caller);
             if (!target.isEmpty()) {
                 q.put(TO, target);
             }
             q.put("text", text);
+            final String inbox = away.isEmpty() ? inboxTopic(p.slug())
+                    : inboxTopic(away, InstanceName.slugOf(p.slug()));
+            final String replyTo = away.isEmpty() ? replyTopic(me.slug()) : replyTopic(here, me.slug());
+            // the question lives as long as this instance waits for its reply, so none is answered after it gave up
+            final long expirySeconds = Math.max(1L, (expireWithin.toMillis() + 999L) / 1000L);
             try {
-                broker.publish(inboxTopic(p.slug()), q.toString().getBytes(StandardCharsets.UTF_8), false,
-                        replyTopic(me.slug()), id.getBytes(StandardCharsets.UTF_8))
+                broker.publish(inbox, q.toString().getBytes(StandardCharsets.UTF_8), false, replyTo,
+                        id.getBytes(StandardCharsets.UTF_8), expirySeconds)
                         .get(SEND_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
                 LOG.log(System.Logger.Level.INFO, "question sent [id=" + id + ", instance=" + p.slug() + ", session="
                         + caller + ", to=" + target + ']');
@@ -1032,8 +1558,12 @@ public final class Peers implements AutoCloseable, InstancesPort {
         } catch (final TimeoutException _) {
             LOG.log(System.Logger.Level.INFO, "question still waiting [id=" + id + ", instance=" + a.peer()
                     + ", waitSeconds=" + seconds + ']');
+            // another machine answers in its consult session for this instance, whatever session was named
+            final boolean away = !InstanceName.machineOf(a.peer()).isEmpty();
             return McpTools.Outcome.ok("no reply from " + a.peerName() + " yet after " + seconds + " s; its session "
-                    + (a.target().isEmpty() ? CONSULT + me.slug() : a.target()) + " is on it. Read the reply with "
+                    + (away ? CONSULT + InstanceName.onMachine(me.slug(), machine)
+                            : !a.target().isEmpty() ? a.target() : CONSULT + me.slug())
+                    + " is on it. Read the reply with "
                     + "instance_reply {\"id\": \"" + id + "\", \"wait_seconds\": " + DEFAULT_WAIT_SECONDS + "}");
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -1081,7 +1611,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /** Refuses, or stops refusing, {@code instance}: rewrites {@code agents.json}'s {@code peers.deny}, keeping the rest. */
     @Override
     public void deny(final String instance, final boolean denied) {
-        final String who = slug(instance);
+        final String who = id(instance);
         try {
             setDenied(who, denied);
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, denied ? "Questions from " + who + " are refused now"
@@ -1093,10 +1623,23 @@ public final class Peers implements AutoCloseable, InstancesPort {
         show();
     }
 
-    /** Forgets {@code instance}, seen before and not present now: it is listed no more, here or after a restart. */
+    /**
+     * Forgets {@code instance}, seen before and not present now: it is listed no more, here or after a restart. One of
+     * another machine is listed until its presence comes again, or until a restart.
+     */
     @Override
     public void forget(final String instance) {
-        final String who = slug(instance);
+        final String who = id(instance);
+        final Remote remote = remotes.get(who);
+        if (remote != null) {
+            if (present(remote)) {
+                sink.dispatch(new Intent.Notify(Notice.Level.INFO, who + " is present; only an instance that left can "
+                        + "be forgotten", false));
+            } else if (remotes.remove(who, remote)) {
+                show();
+            }
+            return;
+        }
         if (peers.containsKey(who)) {
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, who + " is present; only an instance that left can be forgotten", false));
             return;
@@ -1191,7 +1734,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         final ObjectNode peersNode = root.path("peers") instanceof ObjectNode o ? o : root.putObject("peers");
         final List<String> list = new ArrayList<>();
         peersNode.path("deny").forEach(d -> {
-            final String s = slug(d.asString(""));
+            final String s = id(d.asString(""));
             if (!s.equals(who) && !list.contains(s)) {
                 list.add(s);
             }
@@ -1212,7 +1755,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         try {
             final List<String> out = new ArrayList<>();
             Json.readTree(Mapped.text(agentsFile)).path("peers").path("deny").forEach(d
-                    -> out.add(slug(d.asString(""))));
+                    -> out.add(id(d.asString(""))));
             return out;
         } catch (final IOException | RuntimeException e) {
             return List.of();
@@ -1260,6 +1803,13 @@ public final class Peers implements AutoCloseable, InstancesPort {
                     .forEach(x -> others.add(new InstancesState.Instance(x.peer().slug(), x.peer().name(), x.peer().version(), x.peer().role(),
                             x.peer().kit(), false, x.peer().started(), List.of(), false, false, x.lastSeen())));
         }
+        // another machine's instance, by <slug>@<machine>, is present while its last presence is current
+        remotes.values().stream().sorted(Comparator.comparing((final Remote r) -> r.peer().slug())).forEach(r -> {
+            final Peer p = r.peer();
+            final boolean now = connected && present(r);
+            others.add(new InstancesState.Instance(p.slug(), p.name(), p.version(), p.role(), "", now && p.busy(), "",
+                    now ? p.sessions() : List.of(), false, now, now ? 0L : r.arrivedMillis()));
+        });
         final AppState s = state.get();
         final InstancesState.Instance self = new InstancesState.Instance(me.slug(), me.name(), me.version(), role, kit,
                 s.sessions().stream().anyMatch(SessionState::isBusy), started, members(s), host.getAsBoolean(),
@@ -1291,7 +1841,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     private String names() {
-        final List<Peer> others = others();
+        final List<Peer> others = new ArrayList<>(others());
+        others.addAll(remotesPresent());
         return others.isEmpty() ? "none" : String.join(", ", others.stream().map(p -> p.name() + " (" + p.slug() + ')').toList());
     }
 
@@ -1322,7 +1873,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
             }
         }
         if (broker.connected()) {
+            final String cut;
+            synchronized (presenceLock) {
+                cut = cutTopic;
+            }
             try {
+                if (!cut.isEmpty()) {
+                    broker.publish(cut, new byte[0], true, null, null)
+                            .get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
+                }
                 broker.publish(presenceTopic(me.slug()), new byte[0], true, null, null).get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
             } catch (final ExecutionException | TimeoutException e) {
                 LOG.log(System.Logger.Level.WARNING, "presence not cleared at close", e);

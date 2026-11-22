@@ -17,11 +17,15 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import javax.net.ssl.SSLContext;
 
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.frontear.alexander.ControlPlane;
+import dev.marregui.comando.frontear.alexander.RemoteGate;
 import dev.marregui.comando.frontear.gateway.Broker;
 import dev.marregui.comando.frontear.gateway.BrokerOptions;
+import dev.marregui.comando.frontear.gateway.RemoteListen;
 import dev.marregui.comando.frontear.octopus.Links;
 import dev.marregui.comando.frontear.store.LogOptions;
 import dev.marregui.comando.frontear.watch.NodeSnapshot;
@@ -177,6 +181,40 @@ public final class Frontear implements AutoCloseable {
     /** Lets the peers' links in, on a node started with its links held; nothing otherwise or when called again. */
     public void openLinks() {
         broker.openLinks();
+    }
+
+    /**
+     * Opens the broker's remote listener {@code r} (ADR 0189 §2.1), behind a {@link RemoteGate} around the control
+     * plane's gate, and returns its port; {@link Broker#listenRemote} says what it takes.
+     *
+     * @throws IllegalStateException when the remote listener is open, or the node closed
+     */
+    public int listenRemote(final RemoteListen r) throws IOException {
+        broker.gate(new RemoteGate(control.gate(), r.machine()));
+        return broker.listenRemote(r);
+    }
+
+    /** Closes the broker's remote listener and ends its connections; nothing when it is not open. */
+    public void closeRemote() {
+        broker.closeRemote();
+    }
+
+    /**
+     * Ends each remote connection whose key the pairings no longer hold; {@link Broker#recheckRemote} says how. For the
+     * host to call once it changed the pins its listener reads.
+     */
+    public void recheckRemote() {
+        broker.recheckRemote();
+    }
+
+    /**
+     * Takes {@code contextOf} as the TLS context of each of the node's links over TLS, by link id; {@link Links#tls}
+     * says when it is asked and what a null context does.
+     *
+     * @throws IllegalStateException when the node is closed
+     */
+    public void tls(final Function<String, SSLContext> contextOf) {
+        links.tls(contextOf);
     }
 
     /** The node's watch, of {@link #WATCH_CAPACITY} events; off until its owner turns it on. */

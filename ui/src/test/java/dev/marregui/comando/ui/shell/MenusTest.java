@@ -108,6 +108,16 @@ class MenusTest {
                 .containsEntry("frontear.stop", "Connection");
     }
 
+    /// [Menus#instancesTab]: the Instances tab's menu gains the Machines window (record 189) when comando has frontear,
+    /// nothing without; in the palette it is a Connection command, with an icon.
+    @Test
+    void theInstancesTabGainsTheMachinesWindowOnlyWithFrontear() {
+        assertThat(Menus.instancesTab(true)).containsExactly("frontear.machines");
+        assertThat(Menus.instancesTab(false)).isEmpty();
+        assertThat(Menus.areas()).containsEntry("frontear.machines", "Connection");
+        assertThat(Menus.icon("frontear.machines")).isEqualTo("connection");
+    }
+
     /// Every placed id has an icon whose SVG is a resource and a non-blank tooltip of at most 80 characters, the bar's
     /// titles have no icon, [Menus#TIPS] holds exactly the placed ids, and each named theme's icon is its swatch.
     @Test

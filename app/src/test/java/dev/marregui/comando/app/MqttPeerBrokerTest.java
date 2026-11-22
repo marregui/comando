@@ -78,6 +78,40 @@ class MqttPeerBrokerTest {
         assertThat(presence.correlation()).isNull();
     }
 
+    /// The machine a message came from is the `frontear-origin` user property the broker stamped, the last one when a
+    /// client sent its own before it; a message without one is of this machine, its origin null, and the other user
+    /// properties do not count.
+    @Test
+    void theOriginIsTheLastFrontearOriginUserPropertyAndNullWithoutOne() {
+        final Packet.Publish stamped = MqttPeerBroker.publishOf(INBOX, bytes("{}"), false, REPLY, bytes("id-1"))
+                .withMeta(new Packet.Meta(-1, -1, null, List.of(new Packet.UserProperty("frontear-origin", "@x"),
+                        new Packet.UserProperty("other", "@y"), new Packet.UserProperty("frontear-origin", "@b"))));
+        assertThat(MqttPeerBroker.message(stamped).origin()).isEqualTo("@b");
+        final Packet.Publish local = MqttPeerBroker.publishOf(INBOX, bytes("{}"), false, REPLY, bytes("id-1"))
+                .withMeta(new Packet.Meta(-1, -1, null, List.of(new Packet.UserProperty("other", "@y"))));
+        assertThat(MqttPeerBroker.message(local).origin()).isNull();
+        assertThat(MqttPeerBroker.message(MqttPeerBroker.publishOf(INBOX, bytes("{}"), false, null, null)).origin())
+                .isNull();
+    }
+
+    /// A publish with an expiry reaches the broker with that MQTT 5 message expiry, and the five-argument publish with
+    /// none.
+    @Test
+    void aPublishWithAnExpirySendsItAndOneWithoutSendsNone() throws Exception {
+        try (MqttPeerBroker broker = new MqttPeerBroker("comando-a", fake::port, () -> true, () -> 1L)) {
+            broker.follow();
+            await().atMost(WAIT).until(broker::connected);
+            broker.publish(OTHER_INBOX, bytes("q"), false, REPLY, bytes("id-1"), 30L).get(WAIT.toMillis(),
+                    TimeUnit.MILLISECONDS);
+            broker.publish(OTHER_INBOX, bytes("r"), false, REPLY, bytes("id-2")).get(WAIT.toMillis(),
+                    TimeUnit.MILLISECONDS);
+            await().atMost(WAIT).until(() -> fake.received(Packet.Publish.class).size() == 2);
+            final List<Packet.Publish> out = fake.received(Packet.Publish.class);
+            assertThat(out.getFirst().meta().messageExpirySeconds()).isEqualTo(30L);
+            assertThat(out.getLast().meta().messageExpirySeconds()).isEqualTo(-1L);
+        }
+    }
+
     /// A delivered message goes to the handlers whose topic filter matches it, wildcard or exact, and to no other:
     /// presence reaches the presence handler, the inbox message the inbox handler, and a third instance's inbox
     /// neither.

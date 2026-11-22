@@ -7,14 +7,17 @@ import java.nio.file.Path;
 import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import javax.net.ssl.SSLContext;
 
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.frontear.gateway.Broker;
@@ -34,14 +37,18 @@ import dev.marregui.comando.frontear.watch.Watch;
  * same {@code dataDir} start every link whose spec they find, and drain its log. A spec that cannot be read is
  * logged and left where it is; its link stays down until a put replaces it. The writes and forces run on the
  * caller's thread, which for a node is its control plane's, at the rate control requests come.</p>
+ *
+ * <p>A link whose spec asks for TLS connects over the context {@link #tls} gives for its id; until one is given, or
+ * while it gives none for that id, the link stays down, its state saying why.</p>
  */
 public final class Links implements Mesh, AutoCloseable {
 
     /**
-     * A link id names a folder: letters, digits, dot, dash and underscore, and never a dot alone or two; 64 of them
-     * fit every file system's name limit with room to spare.
+     * A link id names a folder: letters, digits, dot, dash, underscore and {@code @} (a link to another machine's
+     * node is {@code <node>@<machine>}), and never a dot alone or two; 64 of them fit every file system's name limit
+     * with room to spare.
      */
-    private static final Pattern ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
+    private static final Pattern ID = Pattern.compile("[A-Za-z0-9._@-]{1,64}");
     private static final System.Logger LOG = System.getLogger(Links.class.getName());
     private static final int MAX_PORT = 65_535;
 
@@ -57,6 +64,11 @@ public final class Links implements Mesh, AutoCloseable {
     private final Map<String, Link> links = new ConcurrentHashMap<>();
     /** Told each client the broker accepts: a peer's link to this node wakes this node's link to that peer. */
     private final Consumer<String> connectListener = this::peerConnected;
+    /**
+     * Each link's TLS context by its id, null until {@link #tls} gives one: written by the caller of {@link #tls}
+     * under {@link #lock}, read by the caller of {@link #put} before it takes the lock, to ask it outside the lock.
+     */
+    private volatile Function<String, SSLContext> tls;
     /** Guarded by {@link #lock}. */
     private boolean closed;
 
@@ -124,23 +136,35 @@ public final class Links implements Mesh, AutoCloseable {
     @Override
     public void put(final LinkSpec spec) {
         check(spec);
-        synchronized (lock) {
-            if (closed) {
-                throw new IllegalStateException("links closed [link=" + spec.id() + ']');
+        while (true) {
+            final Function<String, SSLContext> contextOf = tls;
+            final SSLContext context = contextOf == null ? null : contextOf.apply(spec.id());
+            synchronized (lock) {
+                if (closed) {
+                    throw new IllegalStateException("links closed [link=" + spec.id() + ']');
+                }
+                if (contextOf == tls) {
+                    put(spec, context);
+                    return;
+                }
             }
-            final Link link = links.get(spec.id());
-            final byte[] before = kept(spec.id());
-            keep(spec);
-            if (link != null) {
-                link.update(spec);
-                return;
-            }
-            try {
-                start(spec);
-            } catch (final RuntimeException e) {
-                putBack(spec.id(), before, e);
-                throw e;
-            }
+        }
+    }
+
+    /** {@link #put} with the context the links' function gives the spec's id now; the caller holds {@link #lock}. */
+    private void put(final LinkSpec spec, final SSLContext context) {
+        final Link link = links.get(spec.id());
+        final byte[] before = kept(spec.id());
+        keep(spec);
+        if (link != null) {
+            link.update(spec);
+            return;
+        }
+        try {
+            start(spec, context);
+        } catch (final RuntimeException e) {
+            putBack(spec.id(), before, e);
+            throw e;
         }
     }
 
@@ -186,15 +210,53 @@ public final class Links implements Mesh, AutoCloseable {
             final LinkSpec s = link.spec();
             switch (direction) {
                 case OUT -> {
-                    keep(new LinkSpec(s.id(), s.host(), s.port(), copy, s.in(), s.hopLimit()));
+                    keep(new LinkSpec(s.id(), s.host(), s.port(), copy, s.in(), s.hopLimit(), s.tls()));
                     link.out(copy);
                 }
                 case IN -> {
-                    keep(new LinkSpec(s.id(), s.host(), s.port(), s.out(), copy, s.hopLimit()));
+                    keep(new LinkSpec(s.id(), s.host(), s.port(), s.out(), copy, s.hopLimit(), s.tls()));
                     link.in(copy);
                 }
             }
         }
+    }
+
+    /**
+     * Takes {@code contextOf} as the TLS context of each link by its id, for the links whose spec asks for TLS, those
+     * running now and those put later: a TLS link waiting for one connects, one connected over another context
+     * connects again over its new one, and one {@code contextOf} gives null for stays down, its state saying why.
+     * {@code contextOf} is asked on the caller's thread, of this call or of a {@link #put}, never under the links'
+     * lock; of two calls at once, the later one's function holds.
+     *
+     * @throws IllegalStateException when the links are closed
+     */
+    public void tls(final Function<String, SSLContext> contextOf) {
+        Objects.requireNonNull(contextOf, "contextOf");
+        final List<String> ids;
+        synchronized (lock) {
+            if (closed) {
+                throw new IllegalStateException("links closed");
+            }
+            tls = contextOf;
+            ids = List.copyOf(links.keySet());
+        }
+        // a null context is a value here: the link stays down
+        final Map<String, SSLContext> contexts = new HashMap<>();
+        for (final String id : ids) {
+            contexts.put(id, contextOf.apply(id));
+        }
+        synchronized (lock) {
+            // a link put since asked the function itself; a later call's function replaces this one's
+            if (closed || contextOf != tls) {
+                return;
+            }
+            for (final Link link : links.values()) {
+                if (contexts.containsKey(link.id())) {
+                    link.tls(contexts.get(link.id()));
+                }
+            }
+        }
+        LOG.log(System.Logger.Level.INFO, "links TLS contexts set [links=" + ids.size() + ']');
     }
 
     @Override
@@ -326,7 +388,8 @@ public final class Links implements Mesh, AutoCloseable {
                 }
                 check(spec);
                 synchronized (lock) {
-                    start(spec);
+                    // at construction: no TLS context yet
+                    start(spec, null);
                 }
                 LOG.log(System.Logger.Level.INFO, "link restored [link=" + spec.id() + ", host=" + spec.host()
                         + ", port=" + spec.port() + ", file=" + file + ']');
@@ -337,8 +400,8 @@ public final class Links implements Mesh, AutoCloseable {
         }
     }
 
-    /** Opens and starts the link {@code spec} names; the caller holds {@link #lock}. */
-    private void start(final LinkSpec spec) {
+    /** Opens and starts the link {@code spec} names, over {@code context} if it asks for TLS; under {@link #lock}. */
+    private void start(final LinkSpec spec, final SSLContext context) {
         final Link added;
         try {
             added = Link.open(spec.id(), localId, broker, dataDir.resolve(spec.id()), log, options, clock, watch);
@@ -347,6 +410,7 @@ public final class Links implements Mesh, AutoCloseable {
                     + dataDir.resolve(spec.id()) + ']', e);
         }
         try {
+            added.tls(context);
             added.start(spec);
         } catch (final RuntimeException e) {
             try {

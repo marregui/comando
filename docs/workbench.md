@@ -217,7 +217,7 @@ buttons: each row's menu holds its actions.
 | Connections | every connection | New connection…; start and stop the machine's cdb and frontear |
 | Kit, Brain, Scratchpad | folder trees ([§6](#6-the-kit-brain-and-scratchpad-tabs)) | the folders window; **Configure kit jobs** on Kit |
 | Logbook | the scratchpad's open tasks | none; each task has a menu |
-| Instances | the comando instances on this machine ([§4.3](#43-the-instances-tab)) | none; each instance has a menu |
+| Instances | the comando instances on this machine and the paired ones ([§4.3](#43-the-instances-tab)) | **Machines…** while comando has frontear; each instance and machine has a menu |
 
 **A session row** is one line: a state icon and the name.
 
@@ -521,7 +521,7 @@ Commands without a key, reached from the palette or a menu:
 | Panels | Rename panel… |
 | Run | Start the shell, Stop the shell, Restart the shell |
 | Session | Start or stop the session; Clear the Session tab; Reflect; Compact the conversation; Clear the conversation; Start a new conversation; Rewrite the panel as a document; Copy the session's details; Clone the session…; Remove the session…; Checkpoint threshold…; Open a session…; Import conversations…; Model (`fable`, `opus`, `sonnet`, `haiku`); Effort (`low`, `medium`, `high`, `xhigh`, `max`) |
-| Connection | Connect or disconnect; Bind a connection…; Test the connection; Copy the connection's details; Clone…; Remove…; Start and Stop the machine's cdb; Start and Stop frontear |
+| Connection | Connect or disconnect; Bind a connection…; Test the connection; Copy the connection's details; Clone…; Remove…; Start and Stop the machine's cdb; Start and Stop frontear; Machines… |
 | Results | Stop refreshing plots |
 | Files | Configure Sidebar folders (the folders window); Configure kit jobs |
 | Kit | Upgrade the kit…; Back up the brain; Back up the kit; Repair comando-kit.json… |
@@ -708,6 +708,10 @@ The Instances tab shows what the other instances do, from their presence alone. 
 - **An instance row** has a dot (green idle, orange while a session runs a turn, red when its questions are refused
   here), its role, its version when it differs, and the antenna while its frontear node runs.
 - **Its sessions** sit under it, each with a dot and what its turn does.
+- **Another machine's instances**, named `<slug>@<machine>`, sit under their machine's node, after this machine's
+  instances; every paired machine has a node, with or without instances. The node says connected, or not connected and
+  when it last was, as the paired machines read every 5 s while the tab shows, the connection as the gateway last saw
+  it; green when connected, greyed when not. Its card says its address, grant and fingerprint; its menu opens **Machines…** on it or copies its id.
 - **A click** shows a row's card: an instance's state, role, version, kit, uptime and id; a session's state, turn,
   model, effort, context, folder and branch.
 - **An instance's menu** asks it a question, refuses its questions or copies its id. This instance's menu sets its
@@ -716,6 +720,21 @@ The Instances tab shows what the other instances do, from their presence alone. 
   and its reply, or opens the session here that answered it.
 
 A header shows only while this instance is not connected, with **Start frontear** while frontear is down.
+
+**The Machines window** (record 189) opens from the tab's menu, a machine's menu and the palette. Its list holds the
+paired machines; beside it:
+
+- **This machine**: its id, the address its gateway listens on (✓ sets it, empty stops listening; frontear reads it
+  within 5 s), the port, its fingerprint and its pairing token, with a button to copy it to the other machine.
+- **The selected machine**: its address, grant, connection and fingerprint. The unplug button under the list unpairs
+  it, after a question.
+- **Pair with**: the other machine's token. The window shows the machine, address and fingerprint the token holds;
+  compare the fingerprint with the one the other machine's window shows. **Grant it** is `peer` (its questions run
+  in a session in plan mode) unless `overseer` is chosen (its instance main asks as this machine's overseer).
+  **Pair** asks once more, naming the fingerprint. Pairing takes both machines: each pairs with the other's token.
+
+Each change is saved at once and reaches frontear within 5 s; Close drops only a token typed and not paired. What frontear refuses shows in
+red at the bottom.
 
 ### 4.4 The frontear tab
 

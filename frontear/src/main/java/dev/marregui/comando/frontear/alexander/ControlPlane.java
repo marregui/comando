@@ -25,6 +25,7 @@ import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.frontear.gateway.Broker;
+import dev.marregui.comando.frontear.gateway.Gate;
 import dev.marregui.comando.frontear.octopus.Direction;
 import dev.marregui.comando.frontear.octopus.LinkSpec;
 import dev.marregui.comando.frontear.octopus.Mesh;
@@ -107,6 +108,7 @@ public final class ControlPlane implements AutoCloseable {
     private final AtomicLong accepted = new AtomicLong();
     /** Refusals by {@link Refusal#ordinal()}; in memory only. */
     private final AtomicLongArray refusals = new AtomicLongArray(Refusal.values().length);
+    private final Gate gate = new ControlGate();
     /** When a refusal was last logged at warning level; touched by the strand only. */
     private long refusalLoggedMillis;
     private boolean refusalLogged;
@@ -134,7 +136,7 @@ public final class ControlPlane implements AutoCloseable {
         this.state = new StateTopic(mesh, node, clock, message -> publish(message, "state"));
         this.strand = Threads.timedStrand("frontear-control-" + node);
         try {
-            broker.gate(new ControlGate());
+            broker.gate(gate);
             broker.subscribe(id, prefix + '+', 1, false, this::deliver);
             strand.scheduleWithFixedDelay(this::tick, 0, StateTopic.EVERY.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final RuntimeException | Error e) {
@@ -148,6 +150,11 @@ public final class ControlPlane implements AutoCloseable {
         }
         LOG.log(System.Logger.Level.INFO, "control plane started [node=" + node + ", trustedKeys=" + trusted.size()
                 + ']');
+    }
+
+    /** The gate the plane installed, for a host that wraps it ({@link RemoteGate}). */
+    public Gate gate() {
+        return gate;
     }
 
     /** How many requests were applied or answered. */

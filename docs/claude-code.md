@@ -340,8 +340,9 @@ ask them as ordinary question cards. Reflect and a typed command carry no argume
 | `session_send` | `session`, `text` | prompts another running session, headed `[from session <sender>]`, without a card ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)); returns a cursor for `session_read` |
 | `session_read` | `session`, `after`, `wait_seconds` | another session's transcript as numbered blocks after a cursor, or the last 40; can wait up to 600 s until its turns are over |
 | `instances_list` | none | the other comando instances on frontear: name, id, version, busy, and their sessions ([record 123](adr/0123-instances-consult-each-other.md)) |
-| `instance_ask` | `instance`, `text`, `wait_seconds` | asks another instance; the reply is Claude's text in the turn that answers; waits 300 s by default, at most 600 s, else returns an id |
+| `instance_ask` | `instance`, `text`, `wait_seconds` | asks another instance, `<slug>` on this machine or `<slug>@<machine>` on a paired one ([record 189](adr/0189-frontear-across-machines.md)); the reply is Claude's text in the turn that answers; waits 300 s by default, at most 600 s, else returns an id |
 | `instance_reply` | `id`, `wait_seconds` | the reply to an earlier `instance_ask`, read once |
+| `machines` | `view` (`self`, `list`) or `action` (`listen`, `pair`, `unpair`) with `host`, `token`, `grant`, `machine` | this machine's id, gateway address, fingerprint and token, and the paired machines; listening and pairing are allowed by the user on a card ([record 189](adr/0189-frontear-across-machines.md)) |
 | `frontear_read` | `view`, `since`, `max` | this instance's frontear node as its frontear tab shows it ([record 187](adr/0187-frontear-lab-node-per-instance.md)): `overview`, `octopus`, `store`, or `traffic`, the packets after `since`, 200 by default, at most 2 000, with how many were missed and the next `since` |
 
 **Every action you have, an agent has** ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)). `core`

@@ -16,6 +16,12 @@ public final class Names {
     public static final String CONTROL = RESERVED + "control/";
     /** The Content Type (§3.3.2.3.9) of every JSON payload frontear publishes. */
     public static final String JSON = "application/json";
+    /**
+     * The User Property (§3.3.2.3.7) that names the machine a message came from, {@code @<machine>}: the broker sets
+     * it on every PUBLISH and will of a remote connection, in place of any the client sent; a message from this
+     * machine carries none the broker set.
+     */
+    public static final String ORIGIN = "frontear-origin";
 
     private Names() {
     }

@@ -68,6 +68,7 @@ import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
@@ -144,6 +145,10 @@ public final class SessionsSidebar {
         /** As {@link #openFile}, showing the file's text to edit rather than rendered. */
         default void editFile(final Path file) {
             openFile(file);
+        }
+
+        /** The Machines window (record 189), machine {@code select} selected when not empty. */
+        default void machines(final String select) {
         }
     }
 
@@ -797,6 +802,11 @@ public final class SessionsSidebar {
                 startFabric.run();
             }
         });
+    }
+
+    /** What the Instances tab's machine nodes read (record 189); their menu opens the Machines window. */
+    public void machines(final MachinesPort port) {
+        instances.machines(port, dialogs::machines);
     }
 
     private static final String SORT_TIP = "Sort: running first, then by name";

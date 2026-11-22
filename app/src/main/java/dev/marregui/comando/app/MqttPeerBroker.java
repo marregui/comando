@@ -20,6 +20,7 @@ import java.util.function.LongSupplier;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.frontear.protocol.MqttClient;
+import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Topics;
 import dev.marregui.comando.mcp.PeerBroker;
@@ -284,15 +285,38 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         }
     }
 
-    /** A received publish as {@link PeerBroker} hands it on. */
+    /**
+     * A received publish as {@link PeerBroker} hands it on, with the machine its {@link Names#ORIGIN} user property
+     * names, the last one when several came: the broker removes every one a remote client sent and adds its own after
+     * them.
+     */
     static Message message(final Packet.Publish p) {
-        return new Message(p.topic(), p.payload(), p.responseTopic(), p.correlation());
+        String origin = null;
+        for (final Packet.UserProperty u : p.meta().userProperties()) {
+            if (Names.ORIGIN.equals(u.name())) {
+                origin = u.value();
+            }
+        }
+        return new Message(p.topic(), p.payload(), p.responseTopic(), p.correlation(), origin);
     }
 
     /** What {@link #publish} sends: at least once, with the response topic and correlation data when given. */
     static Packet.Publish publishOf(final String topic, final byte[] payload, final boolean retained,
             final String responseTopic, final byte[] correlation) {
-        return new Packet.Publish(topic, payload, 1, retained, false, 0, responseTopic, correlation);
+        return publishOf(topic, payload, retained, responseTopic, correlation, 0L);
+    }
+
+    /** As above, with MQTT 5 message expiry {@code expirySeconds} when positive, none at 0. */
+    static Packet.Publish publishOf(
+            final String topic,
+            final byte[] payload,
+            final boolean retained,
+            final String responseTopic,
+            final byte[] correlation,
+            final long expirySeconds
+    ) {
+        final Packet.Publish p = new Packet.Publish(topic, payload, 1, retained, false, 0, responseTopic, correlation);
+        return expirySeconds > 0 ? p.withMeta(Packet.Meta.NONE.withMessageExpiry(expirySeconds)) : p;
     }
 
     private synchronized MqttClient current() {
@@ -316,13 +340,19 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     }
 
     @Override
-    public CompletableFuture<Void> publish(final String topic, final byte[] payload, final boolean retained,
-            final String responseTopic, final byte[] correlation) {
+    public CompletableFuture<Void> publish(
+            final String topic,
+            final byte[] payload,
+            final boolean retained,
+            final String responseTopic,
+            final byte[] correlation,
+            final long expirySeconds
+    ) {
         final MqttClient c = current();
         if (c == null || !c.connected()) {
             return CompletableFuture.failedFuture(new IllegalStateException("not connected to frontear"));
         }
-        return c.publish(publishOf(topic, payload, retained, responseTopic, correlation));
+        return c.publish(publishOf(topic, payload, retained, responseTopic, correlation, expirySeconds));
     }
 
     @Override

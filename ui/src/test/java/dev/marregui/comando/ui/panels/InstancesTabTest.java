@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JTree;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.port.InstancesPort;
+import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -37,6 +40,7 @@ import static org.awaitility.Awaitility.await;
 /// - an instance the user opened and selected stays so when what its row says changes
 /// - a change only the icons show draws the rows again
 /// - refusing, forgetting and setting the role run off the event thread
+/// - an instance of another machine sits under its machine's node, which says whether the machine is connected
 class InstancesTabTest {
 
     private static final String MARKUP = "<html><b>peer</b>";
@@ -179,6 +183,97 @@ class InstancesTabTest {
         });
         await().atMost(Duration.ofSeconds(5)).until(() -> onEdt.size() == 3);
         assertThat(onEdt).containsOnly(Map.entry("deny x true", false), Map.entry("forget y", false), Map.entry("role reviews", false));
+    }
+
+    /// An instance of machine `b`, `carol@b`, sits under a `b` node after this machine's instances, not beside them;
+    /// the node says `b` is not connected, as the port read off the event thread says, and once connected says so; a
+    /// paired machine no instance of which is known has its node too.
+    @Test
+    void anInstanceOfAnotherMachineSitsUnderItsMachinesNodeMarkedAsThePortSays() throws Exception {
+        final InstancesState.Instance me = new InstancesState.Instance("main", "comando", "2.0.0", "", "", false, "",
+                List.of(), false, true, 0L);
+        final InstancesState.Instance local = new InstancesState.Instance("x", "Expert", "2.0.0", "", "", false, "",
+                List.of(), false, true, 0L);
+        final InstancesState.Instance carol = new InstancesState.Instance("carol@b", "carol", "2.0.0", "", "", false,
+                "", List.of(), false, true, 0L);
+        final List<Boolean> readOnEdt = new CopyOnWriteArrayList<>();
+        final AtomicReference<Boolean> connected = new AtomicReference<>(false);
+        final MachinesPort port = new MachinesPort() {
+            @Override
+            public Self self() {
+                return MachinesPort.NONE.self();
+            }
+
+            @Override
+            public List<Paired> paired() {
+                readOnEdt.add(SwingUtilities.isEventDispatchThread());
+                return List.of(new Paired("b", "100.64.0.2", 18893, "bb".repeat(32), Grant.PEER, connected.get(), 0L),
+                        new Paired("c", "100.64.0.3", 18893, "cc".repeat(32), Grant.PEER, false, 0L));
+            }
+
+            @Override
+            public void listen(final String host) {
+            }
+
+            @Override
+            public Paired pair(final String token, final Grant grant) {
+                throw new IllegalArgumentException("not here");
+            }
+
+            @Override
+            public boolean unpair(final String machine) {
+                return false;
+            }
+        };
+        final AtomicReference<InstancesTab> tab = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            final InstancesTab t = new InstancesTab(i -> { }, () -> InstancesPort.NONE, () -> null);
+            t.render(States.twoPanels().withInstances(new InstancesState(true, me, List.of(carol, local), List.of(),
+                    List.of())));
+            t.machines(port, id -> { });
+            tab.set(t);
+        });
+        await().atMost(Duration.ofSeconds(5)).until(() -> top(tab.get()).size() == 4
+                && top(tab.get()).get(2).detail().startsWith("not"));
+        final List<ViewSpec.TreeNode> nodes = top(tab.get());
+        assertThat(nodes).extracting(ViewSpec.TreeNode::label).containsExactly("comando (this one)", "Expert", "b",
+                "c");
+        assertThat(nodes.get(2).detail()).isEqualTo("not connected; never connected");
+        assertThat(under(tab.get(), 2)).containsExactly("carol");
+        assertThat(under(tab.get(), 1)).as("this machine's instance has no machine node").isEmpty();
+        assertThat(under(tab.get(), 3)).as("a paired machine none of whose instances is known").isEmpty();
+        assertThat(readOnEdt).as("the port read on the event thread").containsOnly(false);
+        connected.set(true);
+        SwingUtilities.invokeAndWait(() -> tab.get().machines(port, id -> { }));
+        await().atMost(Duration.ofSeconds(5)).until(() -> top(tab.get()).get(2).detail().equals("connected"));
+    }
+
+    /// The tree's top nodes, read on the event thread.
+    private static List<ViewSpec.TreeNode> top(final InstancesTab t) throws Exception {
+        final List<ViewSpec.TreeNode> out = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            final JTree tree = find(t.component(), JTree.class);
+            final Object root = tree.getModel().getRoot();
+            for (int i = 0; i < tree.getModel().getChildCount(root); i++) {
+                final Object node = tree.getModel().getChild(root, i);
+                out.add((ViewSpec.TreeNode) ((DefaultMutableTreeNode) node).getUserObject());
+            }
+        });
+        return out;
+    }
+
+    /// The names of the nodes under the tree's top node `index`, read on the event thread.
+    private static List<String> under(final InstancesTab t, final int index) throws Exception {
+        final List<String> out = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            final JTree tree = find(t.component(), JTree.class);
+            final Object node = tree.getModel().getChild(tree.getModel().getRoot(), index);
+            for (int i = 0; i < tree.getModel().getChildCount(node); i++) {
+                final Object child = tree.getModel().getChild(node, i);
+                out.add(((ViewSpec.TreeNode) ((DefaultMutableTreeNode) child).getUserObject()).label());
+            }
+        });
+        return out;
     }
 
     /// Counts the nodes the model says changed into `changed[0]`.

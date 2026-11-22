@@ -22,17 +22,23 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
+import javax.net.ssl.SSLServerSocket;
+
+import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.frontear.channels.Entry;
 import dev.marregui.comando.frontear.channels.Match;
 import dev.marregui.comando.frontear.channels.TopicTree;
 import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Topics;
+import dev.marregui.comando.frontear.tls.Tls;
 import dev.marregui.comando.frontear.watch.ConnectionView;
 import dev.marregui.comando.frontear.watch.LinkStep;
 import dev.marregui.comando.frontear.watch.Watch;
@@ -66,6 +72,13 @@ import dev.marregui.comando.frontear.watch.Watch;
  * Watch: every message routed is kept in the broker's {@link Watch} while it is on, and one a link client published
  * (its client id {@code <node>~<link>}) as that link's arrival too. A broker started as a node refuses a link client
  * aimed at another node, and one started holding its links refuses every link client until {@link #openLinks()}.
+ * <p>
+ * Other machines: {@link #listenRemote} opens a second listener, TLS 1.3 with both sides authenticated, whose
+ * connections speak for the machine their certificate names (ADR 0189 §2.1). The gate decides what such a connection
+ * may do, through the methods that take a principal, and the broker stamps each message it publishes with that
+ * machine ({@link Names#ORIGIN}). A remote link client {@code <slug>~<node>} holds the session
+ * {@code <slug>@<machine>~<node>}, so two machines' links to one node, or a remote link and a local one, never take
+ * each other's session over, and its arrivals are those of this node's link {@code <slug>@<machine>}.
  */
 public final class Broker implements AutoCloseable {
 
@@ -103,6 +116,11 @@ public final class Broker implements AutoCloseable {
     final LongAdder backlogDisconnects = new LongAdder();
     private final LongAdder subscriberFailures = new LongAdder();
     private final LongAdder refusedRetained = new LongAdder();
+    private final Failures handshakeFailures = new Failures("remote handshake failed");
+    private final Failures unpinnedPeers = new Failures("remote peer refused, no machine is paired with its key");
+    private final Failures refusedRemote = new Failures("remote connection refused, the listener holds its most");
+    // numbers the connections of both listeners, so the names of their strands stay apart; taken by the accept strands
+    private final AtomicInteger numbered = new AtomicInteger();
     private final BrokerOptions options;
     private final ServerSocket server;
     private final int port;
@@ -121,12 +139,15 @@ public final class Broker implements AutoCloseable {
     // guards the sessions map's changes, a session's connection changes and the internal subscribers' registration
     private final Object sessionsLock = new Object();
     private final AtomicBoolean closed = new AtomicBoolean();
+    // guards remote's changes, and the remote accept strand's admission of a connection against them
+    private final Object remoteLock = new Object();
     // runs the accept loop, its one task for the broker's life: the operating system holds the clients waiting to be
     // accepted, ACCEPT_BACKLOG of them
     private final ExecutorService acceptor;
-    // runs the sweep, one periodic task that holds one place in its queue, and the ends offLocks hands it: at most one
-    // per connection, from the first send past its maxBacklogBytes, so its depth is at most one more than the
-    // connections alive
+    // runs the sweep, one periodic task that holds one place in its queue; the ends offLocks hands it, at most one
+    // per connection, from the first send past its maxBacklogBytes; and the handshake deadline of each remote
+    // connection, one per connection accepted and removed from the queue once cancelled: so its depth is at most one
+    // more than twice the connections alive
     private final ScheduledExecutorService sweeper;
     // runs, in the order the session lock handed them over, the publishes a lock held back. Its queue has no count
     // bound; what joins it is one task per cause the session lock saw: an accepted CONNECT (its presence, and the
@@ -150,6 +171,10 @@ public final class Broker implements AutoCloseable {
     // connection's reader at its CONNECT. A CONNECT read after the clear is let in; one read before it is refused and
     // its link comes again after its backoff, about a second for a frontear link refused 0x88.
     private volatile boolean linksHeld;
+    // the remote listener while it is open, else null; written under remoteLock by listenRemote, closeRemote and
+    // close, read under it by the remote accept strand and without it by remoteStats (any thread), which sees a whole
+    // listener or none
+    private volatile Remote remote;
 
     private Broker(final BrokerOptions options, final ServerSocket server, final Watch watch, final String node,
             final boolean holdLinks) {
@@ -217,6 +242,130 @@ public final class Broker implements AutoCloseable {
     /** The port the broker listens on. */
     public int port() {
         return port;
+    }
+
+    /**
+     * Opens the remote listener {@code r} beside the loopback one and returns its port: TLS 1.3 alone, each client
+     * authenticated by its certificate and speaking for the machine {@code r.machineOf()} names, at most
+     * {@code r.maxConnections()} of them at once. A client past that bound, one whose handshake fails or outlasts
+     * {@code r.handshake()}, and one whose key names no machine, are closed unanswered and counted in
+     * {@link #remoteStats()}, each kind logged at most once a minute.
+     *
+     * @throws IllegalStateException when the remote listener is open, or the broker closed
+     */
+    public int listenRemote(final RemoteListen r) throws IOException {
+        Objects.requireNonNull(r, "listen");
+        final int remotePort;
+        synchronized (remoteLock) {
+            if (closed.get() || remote != null) {
+                throw new IllegalStateException("remote listener not opened [port=" + port + ", closed="
+                        + closed.get() + ", open=" + (remote != null) + ']');
+            }
+            final SSLServerSocket listening = (SSLServerSocket) r.ssl().getServerSocketFactory().createServerSocket();
+            try {
+                listening.setEnabledProtocols(new String[] {Tls.PROTOCOL});
+                listening.setNeedClientAuth(true);
+                listening.bind(r.bind(), ACCEPT_BACKLOG);
+            } catch (final IOException | RuntimeException e) {
+                try {
+                    listening.close();
+                } catch (final IOException closeFailure) {
+                    e.addSuppressed(closeFailure);
+                }
+                throw e;
+            }
+            remotePort = listening.getLocalPort();
+            final Remote opened = new Remote(r, listening, Threads.strand("frontear-broker-accept-remote-" + port));
+            remote = opened;
+            opened.acceptor().execute(() -> acceptRemote(opened));
+        }
+        LOG.log(System.Logger.Level.INFO, "remote listener opened [port=" + port + ", remotePort=" + remotePort
+                + ", machine=" + r.machine() + ", maxConnections=" + r.maxConnections() + ", handshake="
+                + r.handshake() + ']');
+        return remotePort;
+    }
+
+    /**
+     * Closes the remote listener, its port free once this returns, and ends every remote connection: DISCONNECT 0x8B
+     * to a client past its CONNACK, its will published by its delay and its presence cleared. Nothing when the
+     * listener is not open; the loopback listener and its clients go on.
+     */
+    public void closeRemote() {
+        final Remote r;
+        synchronized (remoteLock) {
+            r = remote;
+            remote = null;
+        }
+        if (r == null) {
+            return;
+        }
+        stopListening(r);
+        final List<Connection> ended = new ArrayList<>();
+        final List<Deferred> deferred = new ArrayList<>();
+        // the accept strand admits a connection under remoteLock only while the listener is open, so past the detach
+        // above every remote connection is in connections
+        synchronized (sessionsLock) {
+            for (final Connection c : connections) {
+                if (c.listen() == null) {
+                    continue;
+                }
+                ended.add(c);
+                final Session s = c.session();
+                if (c.endHeld(c.clientId() == null ? Connection.NO_DISCONNECT : Packet.SERVER_SHUTTING_DOWN)
+                        && s != null) {
+                    detach(s, c, true, deferred);
+                }
+            }
+            later(deferred);
+        }
+        stopConnections(ended);
+        LOG.log(System.Logger.Level.INFO, "remote listener closed [port=" + port + ", remotePort="
+                + r.server().getLocalPort() + ", connections=" + ended.size() + ']');
+    }
+
+    /**
+     * Ends every remote connection whose peer's key is no longer pinned to the machine it speaks for, by the remote
+     * listener's {@link RemoteListen#machineOf()} as it reads now: DISCONNECT 0x87 to a client past its CONNACK, its
+     * will published by its delay and its presence cleared. For the host to call once the pairings changed; a
+     * connection still in its handshake checks the pairings as its handshake ends.
+     */
+    public void recheckRemote() {
+        final List<Connection> unpinned = new ArrayList<>();
+        // machineOf is the host's: asked outside the session lock
+        for (final Connection c : connections) {
+            if (c.listen() != null && !c.stillPinned()) {
+                unpinned.add(c);
+            }
+        }
+        if (unpinned.isEmpty()) {
+            return;
+        }
+        final List<Deferred> deferred = new ArrayList<>();
+        synchronized (sessionsLock) {
+            for (final Connection c : unpinned) {
+                final Session s = c.session();
+                if (c.endHeld(c.clientId() == null ? Connection.NO_DISCONNECT : Packet.NOT_AUTHORIZED) && s != null) {
+                    detach(s, c, true, deferred);
+                }
+            }
+            later(deferred);
+        }
+        stopConnections(unpinned);
+        LOG.log(System.Logger.Level.INFO, "remote connections ended, their keys no longer paired [port=" + port
+                + ", connections=" + unpinned.size() + ']');
+    }
+
+    /**
+     * The remote listener: its port (0 while it is closed), the remote connections held now against its bound, and
+     * since the broker started the clients refused past that bound, the handshakes that failed or outlasted theirs,
+     * and the peers whose key no machine is paired with.
+     */
+    @TestOnly
+    public RemoteStats remoteStats() {
+        final Remote r = remote;
+        return new RemoteStats(r == null ? 0 : r.server().getLocalPort(), remoteConnections(),
+                r == null ? 0 : r.listen().maxConnections(), refusedRemote.count(), handshakeFailures.count(),
+                unpinnedPeers.count());
     }
 
     /** Installs {@code g} for every client PUBLISH, will and SUBSCRIBE from here on; never for {@link #publish}. */
@@ -355,6 +504,14 @@ public final class Broker implements AutoCloseable {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
+        final Remote r;
+        synchronized (remoteLock) {
+            r = remote;
+            remote = null;
+        }
+        if (r != null) {
+            stopListening(r);
+        }
         try {
             server.close();
         } catch (final IOException e) {
@@ -371,17 +528,7 @@ public final class Broker implements AutoCloseable {
                         : Packet.SERVER_SHUTTING_DOWN);
             }
         }
-        final Map<String, ExecutorService> writers = new LinkedHashMap<>();
-        final Map<String, ExecutorService> readers = new LinkedHashMap<>();
-        for (final Connection c : all) {
-            writers.put("writer-" + c.number, c.writer());
-            readers.put("reader-" + c.number, c.reader());
-        }
-        ExecutorStop.drain(owner, ExecutorStop.WAIT, writers);
-        for (final Connection c : all) {
-            c.forceClose();
-        }
-        ExecutorStop.now(owner, readers);
+        stopConnections(all);
         // after the readers: a connection that ended before the close may still hand its publishes over, refused here
         ExecutorStop.now(owner, publisher);
         connections.clear();
@@ -396,27 +543,49 @@ public final class Broker implements AutoCloseable {
         return options.clock().millis();
     }
 
-    boolean mayPublish(final String clientId, final String topic) {
-        return gate.mayPublish(clientId, topic);
+    boolean mayPublish(final String principal, final String clientId, final String topic) {
+        return gate.mayPublish(principal, clientId, topic);
     }
 
-    boolean maySubscribe(final String clientId, final String filter) {
-        return gate.maySubscribe(clientId, filter);
+    boolean maySubscribe(final String principal, final String clientId, final String filter) {
+        return gate.maySubscribe(principal, clientId, filter);
+    }
+
+    boolean mayRetain(final String principal, final String clientId, final Packet.Publish message) {
+        return gate.mayRetain(principal, clientId, message);
+    }
+
+    /** Remote connection {@code conn}'s handshake failed or outlasted its bound with {@code e}: counted. */
+    void handshakeFailed(final Connection conn, final IOException e) {
+        handshakeFailures.add("port=" + port + ", connection=" + conn.number, e.toString(), System.nanoTime());
+    }
+
+    /** Remote connection {@code conn}'s peer has a key no machine is paired with: counted. */
+    void unpinned(final Connection conn) {
+        unpinnedPeers.add("port=" + port + ", connection=" + conn.number, "not paired", System.nanoTime());
     }
 
     /**
      * Takes {@code c} for connection {@code conn}: 0x00 once its CONNACK is queued, else the code to refuse it with.
      * An empty client id gets one assigned (§3.1.3.1); one that starts with {@code $} or cannot name a presence topic
      * is refused 0x85. A live connection on the same session is taken over with DISCONNECT 0x8E (§3.1.4); Clean Start,
-     * or a session past its expiry, starts a new session.
+     * or a session past its expiry, starts a new session. A remote connection's CONNECT the gate refuses is refused
+     * 0x87, and one it lets in holds the session its machine qualifies ({@link #remoteId}).
      */
     int connect(final Connection conn, final Packet.Connect c) {
+        final String principal = conn.principal();
+        if (principal != null && !gate.mayConnect(principal, c.clientId())) {
+            LOG.log(System.Logger.Level.DEBUG, "remote client refused by the gate [client=" + c.clientId()
+                    + ", machine=" + principal + ", connection=" + conn.number + ']');
+            return Packet.NOT_AUTHORIZED;
+        }
         final String assigned = c.clientId().isEmpty() ? ASSIGNED_PREFIX + UUID.randomUUID() : null;
-        final String id = assigned == null ? c.clientId() : assigned;
+        final String given = assigned == null ? c.clientId() : assigned;
+        final String id = principal == null ? given : remoteId(given, principal, conn.listen().machine());
         if (id.startsWith("$") || !Topics.validName(Names.PRESENCE + id)) {
             return Packet.CLIENT_ID_NOT_VALID;
         }
-        if (misdelivered(id)) {
+        if (misdelivered(given, conn.listen())) {
             LOG.log(System.Logger.Level.DEBUG, "link client refused, it is aimed at another node [client=" + id
                     + ", node=" + node + ']');
             return Packet.CLIENT_ID_NOT_VALID;
@@ -434,7 +603,11 @@ public final class Broker implements AutoCloseable {
                 refusedTopics.increment();
                 return Packet.TOPIC_NAME_INVALID;
             }
-            if (!mayPublish(id, c.will().topic())) {
+            if (!mayPublish(principal, id, c.will().topic())) {
+                return Packet.NOT_AUTHORIZED;
+            }
+            // an empty retained will clears its topic only once published, so it is not asked for as a clear
+            if (c.will().retain() && c.will().payload().length > 0 && !mayRetain(principal, id, c.will())) {
                 return Packet.NOT_AUTHORIZED;
             }
         }
@@ -587,7 +760,6 @@ public final class Broker implements AutoCloseable {
 
     /** The accept strand's one task: every client that connects gets a connection, until the broker closes. */
     private void acceptLoop() {
-        int number = 0;
         while (!closed.get()) {
             final Socket socket;
             try {
@@ -599,7 +771,7 @@ public final class Broker implements AutoCloseable {
                 }
                 return;
             }
-            number++;
+            final int number = numbered.incrementAndGet();
             try {
                 socket.setTcpNoDelay(true);
                 final Connection c = new Connection(this, socket, number);
@@ -614,6 +786,108 @@ public final class Broker implements AutoCloseable {
                     e.addSuppressed(closeFailure);
                 }
             }
+        }
+    }
+
+    /**
+     * The remote accept strand's one task: every client that connects to {@code r} gets a connection while {@code r} is
+     * open and holds fewer than its bound; one past the bound is closed unanswered and counted. The handshake runs on
+     * the connection's reader, so a slow client holds no other.
+     */
+    private void acceptRemote(final Remote r) {
+        while (true) {
+            final Socket socket;
+            try {
+                socket = r.server().accept();
+            } catch (final IOException e) {
+                if (remote == r) {
+                    LOG.log(System.Logger.Level.ERROR, "remote accept failed, the remote listener takes no more "
+                            + "clients [port=" + port + ", remotePort=" + r.server().getLocalPort() + ']', e);
+                }
+                return;
+            }
+            final int number = numbered.incrementAndGet();
+            Connection c = null;
+            boolean open = true;
+            boolean full = false;
+            try {
+                socket.setTcpNoDelay(true);
+                synchronized (remoteLock) {
+                    open = remote == r;
+                    full = open && remoteConnections() >= r.listen().maxConnections();
+                    if (open && !full) {
+                        c = new Connection(this, socket, number, r.listen());
+                        connections.add(c);
+                        // close() clears remote under this lock before it stops the sweeper, so the sweeper of an
+                        // open listener takes the deadline
+                        c.start(sweeper.schedule(c::handshakeOverdue, r.listen().handshake().toNanos(),
+                                TimeUnit.NANOSECONDS));
+                    }
+                }
+            } catch (final IOException e) {
+                LOG.log(System.Logger.Level.DEBUG, "remote connection not opened [port=" + port + ", connection="
+                        + number + ", cause=" + e + ']');
+            }
+            if (c == null) {
+                if (full) {
+                    refusedRemote.add("port=" + port + ", connection=" + number + ", maxConnections="
+                            + r.listen().maxConnections(), "full", System.nanoTime());
+                }
+                closeQuietly(socket, number);
+            }
+            if (!open) {
+                return;
+            }
+        }
+    }
+
+    /** The remote connections the broker holds, their sockets not yet closed, handshaking ones included. */
+    private int remoteConnections() {
+        int count = 0;
+        for (final Connection c : connections) {
+            if (c.listen() != null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Closes remote listener {@code r}'s socket, which frees its port, stops its accept strand, tells its counts. */
+    private void stopListening(final Remote r) {
+        try {
+            r.server().close();
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "remote listening socket close failed [port=" + port + ']', e);
+        }
+        ExecutorStop.now(owner, r.acceptor());
+        handshakeFailures.flush();
+        unpinnedPeers.flush();
+        refusedRemote.flush();
+    }
+
+    /**
+     * Lets the connections {@code ended}, already ended, write their last bytes within ExecutorStop's bound, then
+     * closes their sockets and stops their strands.
+     */
+    private void stopConnections(final List<Connection> ended) {
+        final Map<String, ExecutorService> writers = new LinkedHashMap<>();
+        final Map<String, ExecutorService> readers = new LinkedHashMap<>();
+        for (final Connection c : ended) {
+            writers.put("writer-" + c.number, c.writer());
+            readers.put("reader-" + c.number, c.reader());
+        }
+        ExecutorStop.drain(owner, ExecutorStop.WAIT, writers);
+        for (final Connection c : ended) {
+            c.forceClose();
+        }
+        ExecutorStop.now(owner, readers);
+    }
+
+    private static void closeQuietly(final Socket socket, final int number) {
+        try {
+            socket.close();
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, "socket close failed [connection=" + number + ", cause=" + e + ']');
         }
     }
 
@@ -792,10 +1066,33 @@ public final class Broker implements AutoCloseable {
         });
     }
 
-    /** Whether {@code clientId} is a link client's whose link id is not this node's name. */
-    private boolean misdelivered(final String clientId) {
+    /**
+     * Whether {@code clientId} is a link client's whose link id is not this node's name, nor, for a client of remote
+     * listener {@code listen} (null for the loopback one), {@code <node>@<machine>} with this machine's id.
+     */
+    private boolean misdelivered(final String clientId, final RemoteListen listen) {
         final int mark = clientId.lastIndexOf(LINK_MARK);
-        return node != null && mark >= 0 && !clientId.substring(mark + 1).equals(node);
+        if (node == null || mark < 0) {
+            return false;
+        }
+        final String target = clientId.substring(mark + 1);
+        return !target.equals(node)
+                && (listen == null || !target.equals(InstanceName.onMachine(node, listen.machine())));
+    }
+
+    /**
+     * The session id of machine {@code principal}'s client {@code given}, {@code <slug>~<node>}: the slug qualified
+     * {@code <slug>@<principal>}, the node without {@code @<machine>} when it names this machine. An id without
+     * {@code ~} is qualified whole.
+     */
+    private static String remoteId(final String given, final String principal, final String machine) {
+        final int mark = given.lastIndexOf(LINK_MARK);
+        if (mark < 0) {
+            return InstanceName.onMachine(given, principal);
+        }
+        final String target = given.substring(mark + 1);
+        final String aimed = machine.equals(InstanceName.machineOf(target)) ? InstanceName.slugOf(target) : target;
+        return InstanceName.onMachine(given.substring(0, mark), principal) + LINK_MARK + aimed;
     }
 
     /**
@@ -849,12 +1146,99 @@ public final class Broker implements AutoCloseable {
             long largestBacklogBytes, long backlogDisconnects) {
     }
 
+    /**
+     * The remote listener: its port, 0 while it is closed; the remote connections held now and their bound, 0 while
+     * closed; and since the broker started, the clients refused past the bound, the handshakes that failed or outlasted
+     * theirs, and the peers whose key no machine is paired with.
+     */
+    @TestOnly
+    public record RemoteStats(int port, int connections, int maxConnections, long refused, long handshakeFailures,
+            long unpinned) {
+    }
+
     /** A retained message and when the broker received it, for its expiry. */
     private record Retained(Packet.Publish message, long receivedMillis) {
     }
 
     /** A publish a lock held back, the origin it goes out with, and whether the retained store's bounds apply. */
     private record Deferred(Packet.Publish message, String origin, boolean bounded) {
+    }
+
+    /** An open remote listener: what it was opened with, its socket and the strand that accepts on it. */
+    private record Remote(RemoteListen listen, SSLServerSocket server, ExecutorService acceptor) {
+    }
+
+    /**
+     * A remote failure that can recur per connection, so it is counted every time and logged the first time, then at
+     * most once a {@link #TELL_EVERY_NANOS} with how many came since and the last one's cause.
+     */
+    static final class Failures {
+
+        /** At most one line a minute per kind: a peer retrying every second would otherwise write 3,600 an hour. */
+        static final long TELL_EVERY_NANOS = TimeUnit.MINUTES.toNanos(1);
+
+        private final String what;
+        private final LongAdder count = new LongAdder();
+        // the failures since the last line, when that line was written, whether one was, the last cause; all guarded
+        // by this
+        private long untold;
+        private long toldNanos;
+        private boolean told;
+        private String last;
+        private String lastContext;
+
+        Failures(final String what) {
+            this.what = what;
+        }
+
+        /**
+         * Counts a failure in {@code context} with {@code cause} at {@code nowNanos} and logs it when the class says:
+         * how many failures that line told, 0 when it wrote none.
+         */
+        long add(final String context, final String cause, final long nowNanos) {
+            count.increment();
+            final long times;
+            synchronized (this) {
+                untold++;
+                last = cause;
+                lastContext = context;
+                if (told && nowNanos - toldNanos < TELL_EVERY_NANOS) {
+                    return 0L;
+                }
+                times = untold;
+                untold = 0L;
+                told = true;
+                toldNanos = nowNanos;
+            }
+            tell(context, times, cause);
+            return times;
+        }
+
+        /** Logs the failures not yet told, as their listener closes: how many, 0 when there were none. */
+        long flush() {
+            final long times;
+            final String context;
+            final String cause;
+            synchronized (this) {
+                times = untold;
+                context = lastContext;
+                cause = last;
+                untold = 0L;
+            }
+            if (times > 0) {
+                tell(context, times, cause);
+            }
+            return times;
+        }
+
+        long count() {
+            return count.sum();
+        }
+
+        private void tell(final String context, final long times, final String cause) {
+            LOG.log(System.Logger.Level.WARNING, what + "; repeats are counted [" + context + ", times=" + times
+                    + ", last=" + cause + ']');
+        }
     }
 
     /** The gate until one is installed: everything outside {@code $frontear/}. */

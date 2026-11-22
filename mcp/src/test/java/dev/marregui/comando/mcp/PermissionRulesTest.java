@@ -284,6 +284,29 @@ class PermissionRulesTest {
         }
     }
 
+    /// A session made to only plan, as a peer's consult session is, stays in plan mode through a plan's approval in a
+    /// bypass kit, once or for the session: the plan is allowed once and no update changes the mode.
+    @Test
+    void aPlanApprovedInASessionThatOnlyPlansKeepsItInPlanMode() throws Exception {
+        final ObjectNode plan = Json.object().put("plan", "1. do it");
+        final SessionInfo info = new SessionInfo("conversation", "opus", "/w", "2.1", "plan", List.of());
+        final McpTools tools = new McpTools(i -> { }, () -> States.twoPanels().withSession("work",
+                s -> s.withSpec(s.spec().withPlanMode(true)).withInfo(info)), new TranscriptRegistry(), null,
+                AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
+        SessionKind.INSTANCE.defaults(new SessionKind.Defaults("", "", "bypassPermissions"));
+        try {
+            for (final ApprovalDecision decision : List.of(ApprovalDecision.allowOnce(),
+                    new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION),
+                    new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS))) {
+                final JsonNode r = Json.readTree(tools.permissionResult("work", "ExitPlanMode", plan, decision));
+                assertThat(r.path("behavior").asString()).isEqualTo("allow");
+                assertThat(r.has("updatedPermissions")).as("%s", decision).isFalse();
+            }
+        } finally {
+            SessionKind.INSTANCE.defaults(SessionKind.Defaults.NONE);
+        }
+    }
+
     /// Approving `ExitPlanMode` for the session allows it with the plan unchanged and one update setting the session's
     /// mode to `acceptEdits`.
     @Test

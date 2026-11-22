@@ -28,6 +28,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -52,9 +56,12 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.MachinesPort;
+import dev.marregui.comando.core.port.MachinesPort.Paired;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.InstancesState.Consult;
@@ -63,6 +70,7 @@ import dev.marregui.comando.core.state.InstancesState.Member;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.format.MachineTexts;
 import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -79,7 +87,9 @@ import dev.marregui.comando.ui.kit.tree.TreeView;
  * model, context, folder and tasks, and the first line of its last prompt and reply. A double click does nothing. An
  * instance that left stays, greyed, as last seen, until the user forgets it. The user asks an instance and refuses
  * one from its menu, and sets this instance's role from its own; everything shown comes from
- * {@link AppState#instances()}.
+ * {@link AppState#instances()}. An instance of another machine, {@code <slug>@<machine>}, sits under its machine's
+ * node, after this machine's instances, with every machine paired (record 189): the node says whether the machine is
+ * connected, as the {@link MachinesPort} reads it while the tab shows, and its menu opens the Machines window on it.
  */
 final class InstancesTab {
 
@@ -108,9 +118,18 @@ final class InstancesTab {
         };
     }
 
-    /** A tree node's value: an instance (this one or another) or one of its sessions. */
-    record Row(Instance instance, Member member, boolean self) {
+    /**
+     * A tree node's value: an instance (this one or another) or one of its sessions; or, {@code machine} not empty, a
+     * machine's node, whose instance is {@link Instance#NONE}.
+     */
+    record Row(Instance instance, Member member, boolean self, String machine) {
+        Row(final Instance instance, final Member member, final boolean self) {
+            this(instance, member, self, "");
+        }
     }
+
+    /** How often the machine nodes read the paired machines while shown: frontear's own look (record 189 §2.2). */
+    static final int LOOK_MILLIS = 5_000;
 
     private final IntentSink intents;
     private final Supplier<InstancesPort> port;
@@ -140,6 +159,17 @@ final class InstancesTab {
     private final JList<Consult> consults = new JList<>(consultModel);
     /** Refreshes the header while shown: frontear starts and stops without a change of state. */
     private final Timer header = new Timer(1_000, e -> header());
+    /** Reads the paired machines again while shown: a machine connects and leaves without a change of state. */
+    private final Timer machinesLook = new Timer(LOOK_MILLIS, e -> lookMachines());
+    /** What the machine nodes read; set by {@link #machines}. EDT only. */
+    private MachinesPort machines = MachinesPort.NONE;
+    /** Opens the Machines window on a machine; set by {@link #machines}. EDT only. */
+    private Consumer<String> openMachines = id -> {
+    };
+    /** The paired machines by id, as last read; null until read. EDT only. */
+    private Map<String, Paired> paired;
+    /** Whether a read of the paired machines is under way. EDT only. */
+    private boolean asking;
     private AppState state;
     private InstancesState shown;
 
@@ -208,11 +238,14 @@ final class InstancesTab {
             public void ancestorAdded(final AncestorEvent e) {
                 header();
                 header.start();
+                lookMachines();
+                machinesLook.start();
             }
 
             @Override
             public void ancestorRemoved(final AncestorEvent e) {
                 header.stop();
+                machinesLook.stop();
             }
 
             @Override
@@ -230,6 +263,50 @@ final class InstancesTab {
     void fabric(final Fabric f) {
         fabric = f == null ? Fabric.NONE : f;
         header();
+    }
+
+    /** What the machine nodes read (record 189), and how the window opens on a machine; reads it at once. */
+    void machines(final MachinesPort port, final Consumer<String> open) {
+        machines = port == null ? MachinesPort.NONE : port;
+        openMachines = open == null ? id -> {
+        } : open;
+        lookMachines();
+    }
+
+    /** Reads the paired machines off the EDT, as the port may read a file; the tree again when they changed. */
+    private void lookMachines() {
+        final MachinesPort p = machines;
+        if (asking || p == MachinesPort.NONE) {
+            return;
+        }
+        asking = true;
+        UiErrands.start("instances-machines", () -> {
+            List<Paired> read = null;
+            try {
+                read = p.paired();
+            } finally {
+                final List<Paired> got = read;
+                SwingUtilities.invokeLater(() -> machinesRead(got));
+            }
+        });
+    }
+
+    /** Takes the paired machines read, null when the read failed (its errand logged why). */
+    private void machinesRead(final List<Paired> got) {
+        asking = false;
+        if (got == null) {
+            return;
+        }
+        final Map<String, Paired> byId = new TreeMap<>();
+        got.forEach(m -> byId.put(m.machine(), m));
+        if (byId.equals(paired)) {
+            return;
+        }
+        paired = byId;
+        if (shown != null) {
+            rebuild(shown);
+            navigator.refresh(navigator::shown);
+        }
     }
 
     void render(final AppState s) {
@@ -259,7 +336,21 @@ final class InstancesTab {
         if (!i.self().slug().isEmpty()) {
             nodes.add(node(i.self(), true, i.self().version(), byKey));
         }
-        i.others().forEach(o -> nodes.add(node(o, false, i.self().version(), byKey)));
+        final List<Instance> remote = new ArrayList<>();
+        final Set<String> machineIds = new TreeSet<>(paired == null ? Set.of() : paired.keySet());
+        for (final Instance o : i.others()) {
+            if (machineOf(o.slug()).isEmpty()) {
+                nodes.add(node(o, false, i.self().version(), byKey));
+            } else {
+                remote.add(o);
+                machineIds.add(machineOf(o.slug()));
+            }
+        }
+        final long now = System.currentTimeMillis();
+        for (final String id : machineIds) {
+            final List<Instance> on = remote.stream().filter(o -> machineOf(o.slug()).equals(id)).toList();
+            nodes.add(machineNode(id, on, i.self().version(), now, byKey));
+        }
         rows = byKey;
         navigator.view().update(new ViewSpec.TreeNode("", "", "", nodes));
         // what only the icons show (busy, refused, hosting frontear) leaves the nodes equal: the rows are drawn again
@@ -279,6 +370,31 @@ final class InstancesTab {
         final String name = in.name() + (self ? " (this one)" : "");
         final String line = line(in, self, myVersion, System.currentTimeMillis(), ZoneId.systemDefault());
         return new ViewSpec.TreeNode(name, after(name, line), key(r), sessions);
+    }
+
+    /** Machine {@code id}'s node, the instances {@code on} it under it; each row kept in {@code byKey}. */
+    private ViewSpec.TreeNode machineNode(
+            final String id,
+            final List<Instance> on,
+            final String myVersion,
+            final long now,
+            final Map<String, Row> byKey
+    ) {
+        final List<ViewSpec.TreeNode> instances = new ArrayList<>();
+        on.forEach(o -> instances.add(node(o, false, myVersion, byKey)));
+        final Row r = new Row(Instance.NONE, null, false, id);
+        byKey.put(key(r), r);
+        final String line = line(id, pairedOf(id), paired != null, now, ZoneId.systemDefault());
+        return new ViewSpec.TreeNode(id, after(id, line), key(r), instances);
+    }
+
+    /** The machine of instance id {@code slug}, {@code <slug>@<machine>}; empty for an instance of this machine. */
+    static String machineOf(final String slug) {
+        return InstanceName.machineOf(slug);
+    }
+
+    private Paired pairedOf(final String id) {
+        return paired == null ? null : paired.get(id);
     }
 
     /** What {@code line} says after {@code name}, which it starts with: the row's detail. */
@@ -324,6 +440,18 @@ final class InstancesTab {
         final Instance in = r.instance();
         final JPopupMenu m = new JPopupMenu();
         if (r.member() != null) {
+            return m;
+        }
+        if (!r.machine().isEmpty()) {
+            final String id = r.machine();
+            final JMenuItem open = IconMenus.item("Machines…", "connection", () -> openMachines.accept(id));
+            open.setToolTipText("This machine and the paired ones: listen, pair, unpair");
+            m.add(open);
+            m.addSeparator();
+            final JMenuItem copyId = IconMenus.item("Copy the machine id (" + id + ")", "copy",
+                    () -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(id), null));
+            copyId.setName("instances-copy-machine-id");
+            m.add(copyId);
             return m;
         }
         if (r.self()) {
@@ -394,15 +522,23 @@ final class InstancesTab {
     }
 
     private static String key(final Row r) {
+        if (!r.machine().isEmpty()) {
+            return "machine:" + r.machine();
+        }
         return "instance:" + r.instance().slug() + (r.member() == null ? "" : "/" + r.member().name());
     }
 
     private static boolean same(final Row a, final Row b) {
-        return b != null && a.instance().slug().equals(b.instance().slug()) && a.self() == b.self()
-                && Objects.equals(a.member() == null ? null : a.member().name(), b.member() == null ? null : b.member().name());
+        return b != null && a.machine().equals(b.machine()) && a.instance().slug().equals(b.instance().slug())
+                && a.self() == b.self() && Objects.equals(a.member() == null ? null : a.member().name(),
+                b.member() == null ? null : b.member().name());
     }
 
     private Card cardOf(final Row r) {
+        if (!r.machine().isEmpty()) {
+            return machineCard(r.machine(), pairedOf(r.machine()), paired != null, System.currentTimeMillis(),
+                    ZoneId.systemDefault());
+        }
         return cardOf(r, shown == null ? "" : shown.self().version(), shown != null && shown.denied().contains(r.instance().slug()),
                 System.currentTimeMillis(), ZoneId.systemDefault());
     }
@@ -459,6 +595,29 @@ final class InstancesTab {
             f.add(Map.entry("Questions", "refused here"));
         }
         return new Card(in.name() + (r.self() ? " (this one)" : ""), List.copyOf(f), "", "");
+    }
+
+    /** A machine's card: its state, and for a paired one its address, grant and fingerprint; then its id. */
+    static Card machineCard(final String id, final Paired p, final boolean known, final long now, final ZoneId zone) {
+        final List<Map.Entry<String, String>> f = new ArrayList<>();
+        if (known) {
+            f.add(Map.entry("State", machineState(p, now, zone)));
+        }
+        if (p != null) {
+            f.add(Map.entry("Address", p.host() + ":" + p.port()));
+            f.add(Map.entry("Grant", MachineTexts.grant(p.grant())));
+            f.add(Map.entry("Fingerprint", p.fingerprint()));
+        }
+        f.add(Map.entry("Id", id));
+        return new Card(id + " (machine)", List.copyOf(f), "", "");
+    }
+
+    /** A machine's state: connected, or not and when it last was, or not paired when {@code p} is null. */
+    static String machineState(final Paired p, final long now, final ZoneId zone) {
+        if (p == null) {
+            return "not paired: its instances do not reach this one";
+        }
+        return MachineTexts.connection(p, now, zone);
     }
 
     /** An instance's state: busy and how many of its sessions run a turn, idle, or when it was last seen. */
@@ -588,6 +747,14 @@ final class InstancesTab {
         return b.toString();
     }
 
+    /**
+     * One line for machine {@code id}: its id, then its state once {@code known}, the paired machines read; {@code p}
+     * null when it is not paired.
+     */
+    static String line(final String id, final Paired p, final boolean known, final long now, final ZoneId zone) {
+        return id + (known ? " · " + machineState(p, now, zone) : "");
+    }
+
     /** One line for a session: its name, and what its turn is doing when it runs one. */
     static String line(final Member m) {
         return m.name() + (m.busy() && !m.activity().isEmpty() ? " · " + m.activity() : "");
@@ -647,16 +814,27 @@ final class InstancesTab {
         if (r.member() != null) {
             return new Dot(Icons.get("session"), dot(r.member()), null);
         }
+        if (!r.machine().isEmpty()) {
+            final Paired p = pairedOf(r.machine());
+            return new Dot(Icons.get("connection"), p != null && p.connected() ? Theme.OK : null, null);
+        }
         final Instance in = r.instance();
         final boolean denied = shown != null && shown.denied().contains(in.slug());
         final Color dot = !in.present() ? null : denied ? Theme.DANGER : in.busy() ? Theme.CLAUDE : Theme.OK;
         return new Dot(Icons.get("instances"), dot, in.host() ? Icons.get("frontear") : null);
     }
 
-    /** A row's name: muted for an instance that left, in the attention colour for another comando version. */
+    /**
+     * A row's name: muted for an instance that left or a machine not connected, in the attention colour for another
+     * comando version.
+     */
     private Color color(final Row r) {
         if (r == null || r.member() != null || r.self()) {
             return null;
+        }
+        if (!r.machine().isEmpty()) {
+            final Paired p = pairedOf(r.machine());
+            return p != null && p.connected() ? null : Theme.MUTED;
         }
         final String mine = shown == null ? "" : shown.self().version();
         return !r.instance().present() ? Theme.MUTED : !r.instance().version().equals(mine) ? Theme.ATTENTION : null;

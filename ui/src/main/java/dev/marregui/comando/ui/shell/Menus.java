@@ -64,6 +64,7 @@ final class Menus {
             // in no menu: the icon of the button or tab-menu item that does the same, shown in the palette
             Map.entry("panel.openSpec", "open-file"),
             Map.entry("files.settings", "folders"),
+            Map.entry("frontear.machines", "connection"),
             Map.entry("files.jobs", "sidebar/jobs"),
             Map.entry("kit.upgrade", "kit"),
             Map.entry("kit.backup", "export"),
@@ -191,6 +192,11 @@ final class Menus {
         };
     }
 
+    /** The Instances tab's menu: the Machines window (record 189), when comando has frontear. */
+    static List<String> instancesTab(final boolean fabric) {
+        return fabric ? List.of("frontear.machines") : List.of();
+    }
+
     /** The Connections tab's menu: the embedded server's start and stop, then frontear's, each when comando has one. */
     static List<String> toggles(final boolean server, final boolean fabric) {
         final List<String> ids = new ArrayList<>();
@@ -220,9 +226,9 @@ final class Menus {
         }
         SessionSpec.MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
         SessionSpec.EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));
-        put(a, "Connection", "server.start", "server.stop", "frontear.start", "frontear.stop", "connection.toggle",
-                "connection.schema", "panel.bindConnection", "connection.dialog", "connection.test",
-                "connection.copyDetails", "connection.clone", "connection.remove");
+        put(a, "Connection", "server.start", "server.stop", "frontear.start", "frontear.stop", "frontear.machines",
+                "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog",
+                "connection.test", "connection.copyDetails", "connection.clone", "connection.remove");
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive", "run.plotStop");
         put(a, "Edit", "view.copy", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings", "files.jobs");

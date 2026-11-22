@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-21 | accepted; built in task 218; supersedes [record 132](0132-instances-working-together-follow-seven-rules.md) R5's third-session clause and R6 | Miguel and Claude |
+| 2026-11-21 | accepted; built in task 218; supersedes [record 132](0132-instances-working-together-follow-seven-rules.md) R5's third-session clause and R6; amended by [record 189](0189-frontear-across-machines.md) (a remote asker's authority) | Miguel and Claude |
 
 ## 1. Context
 

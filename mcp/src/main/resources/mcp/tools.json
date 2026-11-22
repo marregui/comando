@@ -487,7 +487,7 @@
   },
   {
     "name": "instances_list",
-    "description": "Lists the other comando instances on this machine that are connected to frontear: each one's name, instance id, version, whether it is busy, and its sessions; nothing is asked of the user. Needs frontear running (its toggle at the top of any instance's workspace); without it, the answer says so.",
+    "description": "Lists the other comando instances on this machine that are connected to frontear, and those of the machines paired with it, as <slug>@<machine>: each one's name, instance id, version, whether it is busy, and its sessions; nothing is asked of the user. Needs frontear running (its toggle at the top of any instance's workspace); without it, the answer says so.",
     "inputSchema": {
       "type": "object",
       "properties": {}
@@ -501,7 +501,7 @@
       "properties": {
         "instance": {
           "type": "string",
-          "description": "The instance to ask: its id or name, from instances_list."
+          "description": "The instance to ask: its id or name, from instances_list; one on another machine as <slug>@<machine>. A bare id or name is this machine's instance first, else the one instance of a paired machine with it, and refused when several machines have one."
         },
         "text": {
           "type": "string",
@@ -509,7 +509,7 @@
         },
         "session": {
           "type": "string",
-          "description": "The session in that instance to prompt, from instances_list or a new name, made there when missing; absent, its session consult-<this instance>. An instance on an older comando ignores it and answers from consult-<this instance>, and the answer says so."
+          "description": "The session in that instance to prompt, from instances_list or a new name, made there when missing; absent, its session consult-<this instance>. An instance on an older comando ignores it and answers from consult-<this instance>, and the answer says so; one on another machine always answers from consult-<this instance>@<this machine>."
         },
         "wait_seconds": {
           "type": "integer",
@@ -579,6 +579,52 @@
           "maximum": 2000,
           "default": 200,
           "description": "traffic: at most this many packets."
+        }
+      }
+    }
+  },
+  {
+    "name": "machines",
+    "description": "This machine and the machines paired with it, whose instances are reached as <slug>@<machine>. view self: this machine's id, the address its gateway listens on, port, fingerprint, its token (the line another machine pairs with) and the questions from other machines dropped; view list: each paired machine's host, port, fingerprint, grant, whether its link is connected and when it last was. action listen: listen on host for the paired machines, after the user allows it on a card; an empty host stops listening, with no card. action pair: pair the machine of token as grant peer (its instances' questions answered here in plan mode) or overseer (its main's run as the user's own), after the user allows it on a card that shows the token's fingerprint; do it on both machines. action unpair: unpair machine, with no card.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "enum": [
+            "self",
+            "list"
+          ],
+          "default": "self"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "listen",
+            "pair",
+            "unpair"
+          ],
+          "description": "An action in place of a view."
+        },
+        "host": {
+          "type": "string",
+          "description": "listen: an address of this machine (a Tailscale or LAN one), never the wildcard; empty stops listening."
+        },
+        "token": {
+          "type": "string",
+          "description": "pair: the other machine's token, comando-pair:1:<machine>:<host>:<port>:<fingerprint>, from its view self."
+        },
+        "grant": {
+          "type": "string",
+          "enum": [
+            "peer",
+            "overseer"
+          ],
+          "default": "peer"
+        },
+        "machine": {
+          "type": "string",
+          "description": "unpair: the machine's id."
         }
       }
     }

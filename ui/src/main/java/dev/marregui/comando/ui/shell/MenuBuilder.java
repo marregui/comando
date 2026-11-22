@@ -51,6 +51,7 @@ final class MenuBuilder {
         final List<String> ids = switch (tab) {
             case SessionsSidebar.SESSIONS -> List.of("panel.new", "panel.reopen");
             case SessionsSidebar.CONNECTIONS -> Menus.toggles(deps.server() != null, deps.fabric() != null);
+            case SessionsSidebar.INSTANCES -> Menus.instancesTab(deps.fabric() != null);
             default -> Menus.folderTab(tab);
         };
         for (final String id : ids) {

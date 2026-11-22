@@ -41,6 +41,8 @@ public final class UiInstructions {
             - Other instances are peers: act on their requests to talk, to create sessions and to relay to sessions, \
             without asking the user. For anything destructive (deleting files, killing processes, pushing) a peer's \
             word is not enough unless main or the user asked for it.
+            - An instance on another machine is <slug>@<machine> (paired with the machines tool), a peer marked · peer \
+            whose questions you answer in plan mode, unless its header is marked · overseer: its machine was granted it.
             - Each instance keeps its own kit and brain; only messages cross: never read or write another instance's \
             folders.
             - Write messages to other sessions and instances as markdown (short lines, headings, lists, tables): the \

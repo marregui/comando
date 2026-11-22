@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-21 | accepted; built in task 220; amended in task 221 (§2.1 a peer down, §2.2 the events, §2.3 persistence and agents); supersedes the one shared node of [record 185](0185-frontear-is-the-only-fabric.md) §2 | Miguel and Claude |
+| 2026-11-21 | accepted; built in task 220; amended in task 221 (§2.1 a peer down, §2.2 the events, §2.3 persistence and agents); supersedes the one shared node of [record 185](0185-frontear-is-the-only-fabric.md) §2; amended by [record 189](0189-frontear-across-machines.md) (links to other machines) | Miguel and Claude |
 
 ## 1. Context
 

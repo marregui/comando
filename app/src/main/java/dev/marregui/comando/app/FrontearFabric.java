@@ -32,9 +32,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,10 +47,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
+import javax.net.ssl.SSLContext;
 
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.ArrayNode;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonException;
 import dev.marregui.comando.core.json.JsonNode;
@@ -57,13 +61,19 @@ import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.frontear.Frontear;
 import dev.marregui.comando.frontear.alexander.Signer;
 import dev.marregui.comando.frontear.gateway.InternalSubscriber;
+import dev.marregui.comando.frontear.gateway.RemoteListen;
+import dev.marregui.comando.frontear.octopus.LinkSpec;
 import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
+import dev.marregui.comando.frontear.tls.MachineKey;
+import dev.marregui.comando.frontear.tls.Pins;
+import dev.marregui.comando.frontear.tls.Tls;
 import dev.marregui.comando.mcp.Peers;
 import dev.marregui.comando.ui.shell.ServerToggle;
 
@@ -79,6 +89,14 @@ import dev.marregui.comando.ui.shell.ServerToggle;
  * through X's own control plane, signed with this instance's key, at every look of the peer link
  * ({@link #runningOrHost}). A link to a peer that is down stays: the messages for it queue in its log, and the peer's
  * restart on the same port drains them.
+ * <p>
+ * Across machines (record 189), the node of the instance {@code main} is the machine's gateway: while this machine
+ * listens on an address ({@link Machines}) and a machine is paired, it opens the remote listener there, over TLS with
+ * the paired machines' keys pinned, and keeps one link per paired machine {@code m}, id {@code main@m}, over TLS to
+ * that machine's gateway, with {@code m}'s inbox and reply topics and this machine's presences out, hop limit 2. Every
+ * other node adds to its link to the gateway the paired machines' inbox and reply topics and its own presence for
+ * them; the gateway adds to its link to each instance that instance's topics on this machine and the paired machines'
+ * presences, hop limit 3. A look reconciles all of it as it does the local links.
  * <p>
  * The node's data folder is {@code fabric/} in the instance's data root (the links' logs). The one control key it
  * trusts is this instance's own, an Ed25519 pair made at the first start and kept beside them ({@code pod.key},
@@ -110,6 +128,15 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     static final String PUBLIC_KEY = "pod.pub";
     /** A link's hop limit: each node pushes to a peer what that peer reads, and nothing it got from a link goes on. */
     static final int HOP_LIMIT = 1;
+    /** The instance whose node is the machine's gateway (ADR 0189 §2.1): the unnamed one, {@code main}. */
+    static final String GATEWAY = InstanceName.slug("");
+    /**
+     * The gateway's links to this machine's other nodes while a machine is paired: a question goes asker's node,
+     * gateway, the other gateway, the node asked, and nothing goes further (ADR 0189 §2.2).
+     */
+    static final int GATEWAY_HOP_LIMIT = 3;
+    /** A gateway's link to another machine's: from the asker's node to here, then across (ADR 0189 §2.2). */
+    static final int REMOTE_HOP_LIMIT = 2;
     private static final String ALGORITHM = "Ed25519";
     private static final Set<PosixFilePermission> READABLE = PosixFilePermissions.fromString("rw-r--r--");
     /**
@@ -130,7 +157,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
      * well under a second, so a hold this long is a comando stuck mid-start; a look that gives up tries again at the
      * peer link's next look.
      */
-    private static final Duration LOCK_WITHIN = Duration.ofSeconds(5);
+    static final Duration LOCK_WITHIN = Duration.ofSeconds(5);
     /** How often a held lock is tried again; a start under way ends in tens of milliseconds. */
     private static final Duration POLL_EVERY = Duration.ofMillis(50);
     /**
@@ -140,6 +167,10 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     private static final Duration CONTROL_WITHIN = Duration.ofSeconds(5);
     /** The internal subscriber that takes the control plane's answers, and the origin of the requests. */
     private static final String CONTROLLER = "comando-fabric";
+    /** At most this many remote connections at once on the gateway's listener (ADR 0189 §2.1). */
+    private static final int REMOTE_CONNECTIONS = 64;
+    /** A remote connection's TLS handshake is bounded to this (ADR 0189 §2.1). */
+    private static final Duration HANDSHAKE_WITHIN = Duration.ofSeconds(10);
     /**
      * This JVM's holds of a registry's lock, by lock file: a file lock is the process's, so the instances of one
      * process take turns here first.
@@ -196,6 +227,8 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     private volatile BiConsumer<String, String> gone = (_, _) -> { };
     /** Run when a link to a peer connects or a peer restarted; set at wiring, read by the reconciles. */
     private volatile Runnable linkUp = () -> { };
+    /** This machine and its pairings; set at wiring, read by the reconciles; null keeps the node to this machine. */
+    private volatile Machines machines;
     /**
      * The last notice a start of this instance's own posted, so one repeated at every look of the peer link is said
      * once; empty after a start that hosts. Guarded by this.
@@ -310,6 +343,11 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         linkUp = linkUpTo;
     }
 
+    /** The machine whose pairings the reconciles read, at every look, to link this node across machines. */
+    void machines(final Machines of) {
+        machines = of;
+    }
+
     /**
      * Starts this instance's node when it does not run and stops it when it does; on a virtual thread. While one start
      * or stop is under way, a second toggle changes nothing and says what is happening.
@@ -412,7 +450,9 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
      * Then tells {@link #onPeers}'s listeners of the peers whose process is gone, and whether a link connected or a
      * peer's node started again (its entry's {@code started} changed), since the reconcile before: a peer that
      * restarted between two reconciles is never seen disconnected, and its new node holds none of this one's retained
-     * messages. Does nothing while the node does not run or the registry is not of this version.
+     * messages. Across machines, the links carry the paired machines' topics, and on the gateway the remote listener
+     * and the links to the paired machines follow the pairings ({@link #wanted}); a link's put changes when its spec
+     * does. Does nothing while the node does not run or the registry is not of this version.
      */
     void reconcile() {
         final Hosted h = hosted;
@@ -446,9 +486,25 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
                         down.add(Map.entry(peer, e.started()));
                     }
                     resend |= restarted(h, peer, e.started());
-                    put(h, peer, e.port());
                 }
-                resend |= links(h, nodes.keySet());
+                final Remoting r = remoting();
+                final boolean gateway = GATEWAY.equals(slug);
+                if (gateway) {
+                    // first, so the links over TLS find the listener's context in place
+                    listen(h, r);
+                }
+                final Map<String, LinkSpec> wanted = wanted(slug, nodes, r.machine(), r.paired());
+                for (final LinkSpec spec : wanted.values()) {
+                    put(h, spec);
+                }
+                final Set<String> keep = new HashSet<>(nodes.keySet());
+                keep.addAll(wanted.keySet());
+                resend |= links(h, keep);
+                if (gateway && r.of() != null) {
+                    final Map<String, Boolean> up = new HashMap<>();
+                    r.paired().keySet().forEach(m -> up.put(m, Boolean.TRUE.equals(h.up.get(remoteLink(m)))));
+                    r.of().connected(up);
+                }
             }
         } catch (final InterruptedException _) {
             // the fabric is closing: its errands are interrupted
@@ -476,7 +532,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             return;
         }
         synchronized (h) {
-            if (h.ports.containsKey(peer)) {
+            if (h.specs.containsKey(peer)) {
                 return;
             }
         }
@@ -497,6 +553,65 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     /**
+     * The links node {@code slug} keeps, by id, for registry {@code nodes} on machine {@code machine} with
+     * {@code paired} paired (none while this machine listens nowhere). To each other slug with a port, a link with
+     * that slug's inbox and reply topics and this slug's presence out, hop limit {@link #HOP_LIMIT}. While a machine
+     * is paired, a node other than the gateway adds to its link to the gateway each paired machine's inbox and reply
+     * topics and its own presence on this machine; the gateway adds to its link to each slug {@code X} {@code X}'s
+     * inbox and reply topics on this machine and each paired machine's presences, hop limit {@link #GATEWAY_HOP_LIMIT},
+     * and keeps a link {@code main@m} to each paired machine {@code m}, over TLS, to its host and port, with
+     * {@code m}'s inbox and reply topics and this machine's presences out, hop limit {@link #REMOTE_HOP_LIMIT}
+     * (ADR 0189 §2.2).
+     */
+    static Map<String, LinkSpec> wanted(
+            final String slug,
+            final Map<String, Entry> nodes,
+            final String machine,
+            final Map<String, Machines.Remote> paired
+    ) {
+        final boolean gateway = GATEWAY.equals(slug);
+        final boolean across = !paired.isEmpty();
+        final Map<String, LinkSpec> specs = new TreeMap<>();
+        for (final Map.Entry<String, Entry> n : nodes.entrySet()) {
+            final String peer = n.getKey();
+            final int port = n.getValue().port();
+            if (peer.equals(slug) || port <= 0) {
+                continue;
+            }
+            final Set<String> out = new TreeSet<>(List.of(Peers.inboxTopic(peer), Peers.replyTopic(peer),
+                    Peers.presenceTopic(slug)));
+            int hopLimit = HOP_LIMIT;
+            if (across && gateway) {
+                out.add(Peers.inboxTopic(machine, peer));
+                out.add(Peers.replyTopic(machine, peer));
+                paired.keySet().forEach(m -> out.add(Peers.presenceTopic(m, "+")));
+                hopLimit = GATEWAY_HOP_LIMIT;
+            } else if (across && GATEWAY.equals(peer)) {
+                paired.keySet().forEach(m -> {
+                    out.add(Peers.inboxTopic(m, "+"));
+                    out.add(Peers.replyTopic(m, "+"));
+                });
+                out.add(Peers.presenceTopic(machine, slug));
+            }
+            specs.put(peer, new LinkSpec(peer, HOST, port, Set.copyOf(out), Set.of(), hopLimit));
+        }
+        if (gateway) {
+            for (final Machines.Remote r : paired.values()) {
+                final String id = remoteLink(r.machine());
+                final Set<String> out = Set.of(Peers.inboxTopic(r.machine(), "+"), Peers.replyTopic(r.machine(), "+"),
+                        Peers.presenceTopic(machine, "+"));
+                specs.put(id, new LinkSpec(id, r.host(), r.port(), out, Set.of(), REMOTE_HOP_LIMIT, true));
+            }
+        }
+        return specs;
+    }
+
+    /** The gateway's link to machine {@code machine}: {@code main@<machine>} (ADR 0189 §2.2). */
+    static String remoteLink(final String machine) {
+        return InstanceName.onMachine(GATEWAY, machine);
+    }
+
+    /**
      * Forgets peer {@code peer} on a virtual thread: its registry entry goes, unless its node runs, and with it this
      * node's link to it; the link's log stays (record 184).
      */
@@ -513,7 +628,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         }
         final AtomicBoolean dropped = new AtomicBoolean();
         try {
-            if (!underLock(() -> dropped.set(drop(peer)))) {
+            if (!underLock(lock, () -> dropped.set(drop(peer)))) {
                 LOG.log(System.Logger.Level.WARNING, "peer not forgotten: the registry's lock stays held [peer=" + peer
                         + ", lock=" + lock + ", waited=" + LOCK_WITHIN.toSeconds() + " s]");
                 return;
@@ -532,7 +647,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         }
         try {
             synchronized (h) {
-                h.ports.remove(peer);
+                h.specs.remove(peer);
                 h.up.remove(peer);
                 h.started.remove(peer);
                 control(h, "RemoveLink", Json.object().put("id", peer));
@@ -653,7 +768,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     private synchronized void flip(final Boolean want, final boolean onItsOwn) {
         final boolean held;
         try {
-            held = underLock(() -> flipHeld(want, onItsOwn));
+            held = underLock(lock, () -> flipHeld(want, onItsOwn));
         } catch (final IOException ex) {
             say(onItsOwn, Notice.Level.WARN, "Cannot lock the frontear registry [lock=" + lock + ", cause="
                     + ex.getMessage() + ']', null);
@@ -822,6 +937,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     private void stop() {
         final Hosted h = hosted;
         hosted = null;
+        disconnected();
         try {
             h.node().close();
         } catch (final RuntimeException ex) {
@@ -952,28 +1068,166 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         AtomicFiles.write(registry, JsonFile.pretty(tree));
     }
 
-    /** Puts the link to {@code peer} on {@code port} when this node has not put it there yet; under {@code h}. */
-    private void put(final Hosted h, final String peer, final int port) throws InterruptedException {
-        final Integer put = h.ports.get(peer);
-        if (port <= 0 || (put != null && put == port)) {
+    /** Puts link {@code spec} when this node has not put it as it is yet; under {@code h}. */
+    private void put(final Hosted h, final LinkSpec spec) throws InterruptedException {
+        if (spec.equals(h.specs.get(spec.id()))) {
             return;
         }
-        final ObjectNode spec = Json.object().put("id", peer).put("host", HOST).put("port", port);
-        spec.putArray("out").add(Peers.inboxTopic(peer)).add(Peers.replyTopic(peer)).add(Peers.presenceTopic(slug));
-        spec.putArray("in");
-        spec.put("hopLimit", HOP_LIMIT);
+        final ObjectNode body = Json.object().put("id", spec.id()).put("host", spec.host()).put("port", spec.port());
+        final ArrayNode out = body.putArray("out");
+        new TreeSet<>(spec.out()).forEach(out::add);
+        final ArrayNode in = body.putArray("in");
+        new TreeSet<>(spec.in()).forEach(in::add);
+        body.put("hopLimit", spec.hopLimit());
+        if (spec.tls()) {
+            // only when true: a body without it is plain, as every link on this machine is
+            body.put("tls", true);
+        }
         try {
-            control(h, "PutLink", spec);
-            h.ports.put(peer, port);
-            LOG.log(System.Logger.Level.INFO, "link put [node=" + slug + ", peer=" + peer + ", port=" + port + ']');
+            control(h, "PutLink", body);
+            h.specs.put(spec.id(), spec);
+            LOG.log(System.Logger.Level.INFO, "link put [node=" + slug + ", peer=" + spec.id() + ", host="
+                    + spec.host() + ", port=" + spec.port() + ", hopLimit=" + spec.hopLimit() + ", tls=" + spec.tls()
+                    + ']');
         } catch (final IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot put the link to a peer [node=" + slug + ", peer=" + peer
-                    + ", port=" + port + ", cause=" + e.getMessage() + ']');
+            LOG.log(System.Logger.Level.WARNING, "cannot put the link to a peer [node=" + slug + ", peer=" + spec.id()
+                    + ", host=" + spec.host() + ", port=" + spec.port() + ", cause=" + e.getMessage() + ']');
         }
     }
 
     /**
-     * Reads the node's links, removes those to a slug not in {@code slugs}, and says whether one connected since the
+     * This machine, its listen address and its pairings, as {@link #machines} reads them now; nothing paired while
+     * there are no machines, this machine is unnamed or listens nowhere, or the pairings do not read.
+     */
+    private Remoting remoting() {
+        final Machines of = machines;
+        if (of == null) {
+            return new Remoting(null, "", "", 0, Map.of());
+        }
+        final MachinesPort.Self me = of.self();
+        if (me.machine().isEmpty() || me.host().isEmpty()) {
+            return new Remoting(of, me.machine(), me.host(), me.port(), Map.of());
+        }
+        try {
+            return new Remoting(of, me.machine(), me.host(), me.port(), of.remotes());
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, "nothing linked across machines: the pairings do not read [node=" + slug
+                    + ", cause=" + e.getMessage() + ']');
+            return new Remoting(of, me.machine(), me.host(), me.port(), Map.of());
+        }
+    }
+
+    /**
+     * Brings the gateway's remote listener in line with {@code r}: the paired machines' keys pinned, a remote
+     * connection whose key is no longer pinned ended, each link to a paired machine given its TLS context
+     * ({@link #dialWith}), and the listener on {@code r}'s address while a machine is paired, none otherwise; a changed
+     * address restarts it. A start that fails is tried again at the next look and said once until it changes; under
+     * {@code h}.
+     */
+    private void listen(final Hosted h, final Remoting r) {
+        final Map<String, String> pinned = new HashMap<>();
+        r.paired().values().forEach(p -> pinned.put(p.fingerprint(), p.machine()));
+        if (!pinned.equals(h.pinned)) {
+            h.pins.set(pinned);
+            h.pinned = Map.copyOf(pinned);
+            // a machine unpaired, or paired again with another key, is cut now, not at its next connection
+            h.node().recheckRemote();
+        }
+        if (!dialWith(h, r)) {
+            // the listener needs the same key
+            return;
+        }
+        final InetSocketAddress want;
+        try {
+            want = r.paired().isEmpty() ? null : new InetSocketAddress(InetAddress.ofLiteral(r.host()), r.port());
+        } catch (final IllegalArgumentException e) {
+            sayListen(h, "remote listener not started: the listen address is not an IP literal [node=" + slug
+                    + ", host=" + r.host() + ']');
+            return;
+        }
+        if (Objects.equals(want, h.listening)) {
+            return;
+        }
+        if (h.listening != null) {
+            h.node().closeRemote();
+            LOG.log(System.Logger.Level.INFO, "remote listener stopped [node=" + slug + ", bind=" + h.listening + ']');
+            h.listening = null;
+        }
+        if (want == null) {
+            return;
+        }
+        try {
+            final SSLContext ssl = Tls.context(r.of().key(r.machine()), h.pins);
+            final int bound = h.node().listenRemote(new RemoteListen(want, ssl, h.pins::machineOf, r.machine(),
+                    REMOTE_CONNECTIONS, HANDSHAKE_WITHIN));
+            h.listening = want;
+            h.listenSaid = "";
+            LOG.log(System.Logger.Level.INFO, "remote listener up [node=" + slug + ", machine=" + r.machine()
+                    + ", bind=" + want + ", port=" + bound + ", paired=" + r.paired().size() + ']');
+        } catch (final IOException | RuntimeException e) {
+            sayListen(h, "remote listener not started [node=" + slug + ", bind=" + want + ", cause=" + e.getMessage()
+                    + ']');
+        }
+    }
+
+    /**
+     * Gives each link {@code main@<m>} to a paired machine {@code m} a TLS context of this machine's key that trusts
+     * {@code m}'s key alone, so a link to one machine never takes another paired machine's certificate. A context is
+     * kept while its machine's fingerprint holds, so an unchanged pairing does not reconnect its link, and the links
+     * are told only when a context changed. A key that does not read leaves the links as they were, said once until it
+     * changes, and is false; under {@code h}.
+     */
+    private boolean dialWith(final Hosted h, final Remoting r) {
+        final Map<String, Dial> next = new HashMap<>();
+        MachineKey key = null;
+        try {
+            for (final Machines.Remote p : r.paired().values()) {
+                final Dial before = h.dials.get(p.machine());
+                if (before != null && before.fingerprint().equals(p.fingerprint())) {
+                    next.put(p.machine(), before);
+                    continue;
+                }
+                if (key == null) {
+                    key = r.of().key(r.machine());
+                }
+                final Pins only = new Pins();
+                only.set(Map.of(p.fingerprint(), p.machine()));
+                next.put(p.machine(), new Dial(p.fingerprint(), Tls.context(key, only)));
+            }
+            if (next.equals(h.dials)) {
+                return true;
+            }
+            final Map<String, SSLContext> byLink = new HashMap<>();
+            next.forEach((m, d) -> byLink.put(remoteLink(m), d.context()));
+            final Map<String, SSLContext> contexts = Map.copyOf(byLink);
+            h.node().tls(contexts::get);
+            h.dials = Map.copyOf(next);
+            return true;
+        } catch (final IOException | RuntimeException e) {
+            sayListen(h, "links to the paired machines not given their TLS contexts [node=" + slug + ", machine="
+                    + r.machine() + ", cause=" + e.getMessage() + ']');
+            return false;
+        }
+    }
+
+    /** Logs {@code text} as a warning unless it is the last one the listener said; under {@code h}. */
+    private static void sayListen(final Hosted h, final String text) {
+        if (!text.equals(h.listenSaid)) {
+            h.listenSaid = text;
+            LOG.log(System.Logger.Level.WARNING, text);
+        }
+    }
+
+    /** Tells the machines that no gateway link of this node is connected, as it stops; nothing off the gateway. */
+    private void disconnected() {
+        final Machines of = machines;
+        if (of != null && GATEWAY.equals(slug)) {
+            of.connected(Map.of());
+        }
+    }
+
+    /**
+     * Reads the node's links, removes those whose id is not in {@code slugs}, and says whether one connected since the
      * last read; under {@code h}.
      */
     private boolean links(final Hosted h, final Set<String> slugs) throws IOException, InterruptedException {
@@ -981,12 +1235,12 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         for (final JsonNode link : control(h, "GetState", Json.object()).path("links")) {
             final String id = link.path("id").asString("");
             if (!slugs.contains(id)) {
-                h.ports.remove(id);
+                h.specs.remove(id);
                 h.up.remove(id);
                 h.started.remove(id);
                 control(h, "RemoveLink", Json.object().put("id", id));
-                LOG.log(System.Logger.Level.INFO, "link removed: its peer left the registry [node=" + slug + ", peer="
-                        + id + ']');
+                LOG.log(System.Logger.Level.INFO, "link removed: its peer left the registry or was unpaired [node="
+                        + slug + ", peer=" + id + ']');
                 continue;
             }
             final boolean now = link.path("connected").asBoolean(false);
@@ -1034,12 +1288,13 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
             return;
         }
         hosted = null;
+        disconnected();
         try {
             h.node().close();
         } finally {
             // under the registry's lock, as a start's write is; one that stays held leaves the entry to go stale
             try {
-                if (!underLock(this::markDown)) {
+                if (!underLock(lock, this::markDown)) {
                     LOG.log(System.Logger.Level.WARNING, "registry left to go stale with this process: its lock stays"
                             + " held [lock=" + lock + ", waited=" + LOCK_WITHIN.toSeconds() + " s]");
                 }
@@ -1057,10 +1312,11 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     /**
-     * Runs {@code action} holding this JVM's turn at the registry's lock, then the lock file's OS lock, both within
-     * {@link #LOCK_WITHIN} together; false, with nothing run, when either stays held that long.
+     * Runs {@code action} holding this JVM's turn at lock file {@code lock}, then its OS lock, both within
+     * {@link #LOCK_WITHIN} together; false, with nothing run, when either stays held that long. The registry's writes
+     * take its {@link #lockFile}, {@link Machines} the remotes file's.
      */
-    private boolean underLock(final Runnable action) throws IOException, InterruptedException {
+    static boolean underLock(final Path lock, final Runnable action) throws IOException, InterruptedException {
         final long deadline = System.nanoTime() + LOCK_WITHIN.toNanos();
         final ReentrantLock here = IN_PROCESS.computeIfAbsent(lock, _ -> new ReentrantLock());
         if (!here.tryLock(LOCK_WITHIN.toNanos(), TimeUnit.NANOSECONDS)) {
@@ -1116,9 +1372,23 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
     }
 
     /**
+     * What a reconcile links across machines: {@code of}, null when the fabric has no machines, this machine's id, the
+     * address and port it listens on, and the machines paired, none while nothing is linked across.
+     */
+    private record Remoting(Machines of, String machine, String host, int port, Map<String, Machines.Remote> paired) {
+    }
+
+    /** The TLS context a link to a paired machine dials with, and the fingerprint, that machine's, it trusts alone. */
+    private record Dial(String fingerprint, SSLContext context) {
+    }
+
+    /**
      * The node this instance hosts, the start it came from, the signer of its control requests and the answers they
-     * wait for. {@link #ports}, {@link #up} and {@link #started} are guarded by the instance: the links put, whether
-     * each was connected and the start its peer's entry named, at the last read.
+     * wait for. {@link #specs}, {@link #up}, {@link #started}, {@link #pinned}, {@link #dials}, {@link #listening}
+     * and {@link #listenSaid} are guarded by the instance: the links put, whether each was connected and the start its
+     * peer's entry named, at the last read; the fingerprints pinned and the links to paired machines' TLS contexts,
+     * by machine, as last given; and the gateway's remote listener's address, null while none runs, and its last
+     * failure said.
      */
     private static final class Hosted implements InternalSubscriber {
 
@@ -1127,10 +1397,16 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
         private final String replyTopic;
         private final Map<String, CompletableFuture<JsonNode>> replies = new ConcurrentHashMap<>();
         private final AtomicLong calls = new AtomicLong();
-        private final Map<String, Integer> ports = new HashMap<>();
+        private final Map<String, LinkSpec> specs = new HashMap<>();
         private final Map<String, Boolean> up = new HashMap<>();
         private final Map<String, String> started = new HashMap<>();
+        /** The paired machines' keys the remote listener trusts; replaced at each reconcile of the gateway. */
+        private final Pins pins = new Pins();
         private final long generation;
+        private Map<String, String> pinned = Map.of();
+        private Map<String, Dial> dials = Map.of();
+        private InetSocketAddress listening;
+        private String listenSaid = "";
 
         private Hosted(final Frontear node, final Signer signer, final String slug, final long generation) {
             this.node = node;

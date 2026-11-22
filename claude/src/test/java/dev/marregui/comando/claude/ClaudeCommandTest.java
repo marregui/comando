@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Gives new sessions their generated identifier and MCP configuration.
 /// - Resumes or forks stored sessions by their recorded identifier.
 /// - Omits optional flags whose specification values are empty.
-/// - Names no permission mode and no extra folder: the kit's settings hold.
+/// - Names no extra folder and no permission mode but plan: the kit's settings hold.
 class ClaudeCommandTest {
 
     /// A new `edge` session includes stream JSON, its supplied `id-new`, MCP approval plumbing, and UI instructions;
@@ -49,5 +49,15 @@ class ClaudeCommandTest {
                 ClaudeCommand.of("claude", made, "id", null, ""))) {
             assertThat(argv).doesNotContain("--permission-mode", "--add-dir", "--dangerously-skip-permissions");
         }
+    }
+
+    /// A session that only plans, as one answering a peer on another machine does (record 189), names plan mode and
+    /// nothing wider.
+    @Test
+    void aSessionThatOnlyPlansNamesPlanMode() {
+        final SessionSpec plans = SessionSpec.fresh("consult-main@b", "/w").withPlanMode(true);
+        final String argv = String.join(" ", ClaudeCommand.of("claude", plans, "id", Path.of("/run/x.json"), "ui"));
+        assertThat(argv).contains("--permission-mode plan")
+                .doesNotContain("--dangerously-skip-permissions", "--add-dir");
     }
 }

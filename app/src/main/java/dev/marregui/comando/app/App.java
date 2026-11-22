@@ -48,6 +48,7 @@ import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.result.ResultRegistry;
@@ -292,9 +293,21 @@ public final class App implements AutoCloseable {
                 mcpTools.peers(peers);
                 // the sidebar's Instances tab asks and refuses through it (record 124)
                 ui.instances(peers);
+                // this machine and its pairings: the gateway's node links to the paired machines' and every node
+                // carries their topics to it; a question from another machine is answered as its grant says
+                // (record 189)
+                final Machines machines = Machines.of();
+                fabric.machines(machines);
+                peers.machine(machines.self().machine());
+                peers.grants(machines::grantOf);
+                mcpTools.machines(machines);
+                ui.machines(machines);
             } else {
                 peerBroker = null;
                 peers = null;
+                // no node, no other machine: the tools and the window say so
+                mcpTools.machines(MachinesPort.NONE);
+                ui.machines(MachinesPort.NONE);
             }
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the kit check uses KitGit, Peers and the window: its strand stops before them

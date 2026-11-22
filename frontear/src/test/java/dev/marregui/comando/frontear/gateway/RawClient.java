@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import javax.net.ssl.SSLException;
 
 import dev.marregui.comando.frontear.protocol.Codec;
 import dev.marregui.comando.frontear.protocol.Packet;
@@ -31,10 +32,19 @@ final class RawClient implements AutoCloseable {
     private final OutputStream out;
 
     private RawClient(final int port) throws IOException {
-        socket = new Socket(InetAddress.getLoopbackAddress(), port);
+        this(new Socket(InetAddress.getLoopbackAddress(), port));
         socket.setSoTimeout(READ_MILLIS);
+    }
+
+    private RawClient(final Socket socket) throws IOException {
+        this.socket = socket;
         in = new BufferedInputStream(socket.getInputStream());
         out = socket.getOutputStream();
+    }
+
+    /// A client on `socket`, connected and with its read bound set, that has sent nothing yet: a TLS one, say.
+    static RawClient over(final Socket socket) throws IOException {
+        return new RawClient(socket);
     }
 
     /// A connection to `port` that has sent nothing yet.
@@ -142,8 +152,8 @@ final class RawClient implements AutoCloseable {
             while (true) {
                 before.add(read());
             }
-        } catch (final EOFException | SocketException _) {
-            // the broker closed it, by FIN or by reset
+        } catch (final EOFException | SocketException | SSLException _) {
+            // the broker closed it, by FIN or by reset, or a TLS one by an alert
             return before;
         }
     }

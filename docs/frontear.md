@@ -24,7 +24,9 @@ A frontear node has three parts. You reach each one over MQTT.
 
 Know these limits before you start:
 
-- A node listens on `127.0.0.1` only. It has no TLS and no client authentication: any local process can connect.
+- A node listens on `127.0.0.1`, without TLS or client authentication: any local process can connect. Inside
+  comando, the node of the instance `main` can also listen on one network address, TLS 1.3 only, for the machines
+  paired with this one (§8.1); nothing else reaches a node from another machine.
 - Only links are on disk: their configuration and their logs. Sessions and retained messages live in memory (§7.3).
 - QoS 2 is not supported (§10).
 
@@ -318,7 +320,7 @@ PUBACK waits for the file. A message the node has acknowledged therefore survive
 | Aspect | What frontear does |
 |---|---|
 | Out | Messages matching an `out` filter go to one internal subscriber, `$link/<id>`. A message matching several filters is queued once. |
-| In | The link subscribes on the peer at QoS 1, with No Local and Retain As Published. It publishes what arrives on this node. |
+| In | The link subscribes on the peer at QoS 1, with No Local and Retain As Published. It publishes on this node what arrives under its `in` filters. Anything else that arrives it drops and counts in `dropped`. |
 | Identity | The link connects to its peer as the MQTT client `<node>~<id>`, for example `a~b`. |
 | Order | Messages reach the peer in the order of the log. One exception: a message the peer refuses for now (`0x97` or `0x89`) is sent again alone, and counted in `reordered`. |
 | Loops | The link subscribes with No Local and never sends back what came in through it. Each link also adds 1 to the user property `frontear-hops` and stops a message that has reached its `hopLimit`. |
@@ -350,7 +352,7 @@ second.
 | `cursor` | The offset of the next message to deliver. |
 | `tail` | The offset the next logged message takes. |
 | `sent` | Messages sent to the peer. |
-| `dropped` | Messages not carried: past the hop limit, expired, refused by the peer for good, or QoS 0 over the queue bound. |
+| `dropped` | Messages not carried: past the hop limit, expired, refused by the peer for good, or QoS 0 over the queue bound; and messages from the peer outside the `in` filters. |
 | `reordered` | Messages the peer refused for now and accepted after a later one. |
 
 `cursor` and `tail` come from the log and survive a restart. `sent`, `dropped` and `reordered` start at 0 with the
@@ -361,7 +363,7 @@ link.
 | `connected:true`, `queued` near 0 | Healthy. | Nothing. |
 | `connected:false`, `queued` growing | The peer is unreachable. The link keeps retrying. | Check the peer process and the link's `host` and `port`. |
 | `connected:true`, `queued` growing | Publishers are faster than the peer takes messages. | Slow the publishers or narrow the `out` filters. |
-| `dropped` rising | Messages reach the hop limit, expire in the log, or the peer refuses them for good. | Compare `hopLimit` with the links a message crosses. Check message expiry. |
+| `dropped` rising | Messages reach the hop limit, expire in the log, or the peer refuses them for good; or the peer sends messages outside the link's `in` filters. | Compare `hopLimit` with the links a message crosses. Check message expiry. Compare the topics the peer sends with the link's `in` filters. |
 | `reordered` rising | The peer is full for moments. | Nothing, unless your receivers need strict order. |
 
 ### 6.2 Presence
@@ -519,6 +521,24 @@ umask 077
 | `Cannot read the frontear registry; remove it if no frontear runs [registry=…, cause=…]` | The registry does not read, or a newer comando wrote it. |
 | `not an Ed25519 key pair; remove both files to make a new one` | `pod.key` and `pod.pub` do not read as a pair. Remove both and start again. |
 
+### 8.1 Other machines
+
+Instances on two machines of yours talk through one gateway per machine, the node of its instance `main`
+([record 189](adr/0189-frontear-across-machines.md)). Nothing listens on the network until you pair a machine and name
+the address to listen on.
+
+| Fact | Value |
+|---|---|
+| Pairing | The Machines window (Instances tab menu, or the palette's "Machines…"), or the MCP tool `machines`. Each machine shows its token, `comando-pair:1:<machine>:<host>:<port>:<fingerprint>`; paste the other machine's token on each side and compare the fingerprint it shows with the one the other machine shows. A pairing grants `peer` (the default) or `overseer`. |
+| Listen address | One address of this machine you name, a Tailscale or LAN one; never the wildcard. Port 18893 unless set. Clear the address to stop listening. |
+| Security | TLS 1.3 only, both sides authenticated by their Ed25519 key, pinned by fingerprint; no TLS session is resumed, so a machine unpaired is refused at its next connection. A remote connection may publish only to the inboxes and replies of this machine's instances and to its own machine's presences; it subscribes to nothing. |
+| Names | An instance on another machine is `<slug>@<machine>`: `instance_ask main@laptop2`. A bare slug names this machine's instance first. |
+| Authority | A question from another machine is headed `[from instance <slug>@<machine> · peer]`, and its consult session runs in plan mode. With the grant `overseer`, `main@<machine>` is the overseer here too and its session runs as a local one. |
+| What the other machine sees | Each instance's name, version, role, whether it is busy, and its sessions' names. Folders, branches, prompts and replies stay here. |
+| Files | `~/.comando-machine/` (`machine.key`, `machine.crt`, `machine.json`) and `~/.comando-remotes.json`, readable by their owner only; shared by this machine's instances. |
+| Limits | Per other machine: 64 instances kept, 8 consult sessions; a question that would open a ninth is refused with a reply saying so. |
+| Reachability | A machine whose `main` is not running is unreachable from the others. A question to it waits in the link's log until its asker stops waiting; presences expire after 30 s. |
+
 ## 9. Troubleshooting
 
 ### 9.1 A control request is refused
@@ -553,7 +573,7 @@ Read the `reason` in the reply, or the reason code in the PUBACK.
 | A client is disconnected with `0x8E` | Another client connected with the same client id. | Give each client its own id. |
 | A client is disconnected with `0x8B` | The node is shutting down. | Reconnect when it serves again. |
 | A link stays at `connected:false` | The peer is not reachable at `host` and `port`. | Start the peer, or send `PutLink` with the right address. |
-| A link is connected and nothing arrives | No `out` filter matches, or the hop limit stops the message. | Publish a test message and read the state. `tail` rises when a filter matches, `dropped` when the hop limit stops it. |
+| A link is connected and nothing arrives | No `out` filter matches, the hop limit stops the message, or on the receiving side the topic is outside the `in` filters. | Publish a test message and read the state. `tail` rises when a filter matches, `dropped` when the hop limit stops it or the receiving link's `in` filters do not cover it. |
 | A link is missing after a restart | Its `link.json` could not be read (`link not restored […]` in the log). | Send `PutLink` for it (§7.3). |
 | Every request is `stale` right after a restart | The signer's clock runs behind the node's. | Wait that long, or synchronize the clocks. |
 
@@ -588,7 +608,9 @@ requests.
 
 ## 11. FAQ
 
-**Can a client on another machine connect?** No. A node listens on `127.0.0.1` only, without TLS or authentication.
+**Can a client on another machine connect?** Only another comando paired with this one, through the gateway of §8.1:
+a TLS 1.3 connection whose certificate's key is pinned, with a link's client id, that may publish to the inboxes,
+replies and presences ADR 0189 lists and subscribe to nothing. Any other client on another machine cannot.
 
 **Who may change the links?** Whoever can sign with a trusted private key. The node reads its trusted keys at start.
 To add or replace a key, restart the node with the new list of key files.

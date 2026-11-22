@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
+import javax.net.ssl.SSLContext;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,6 +40,10 @@ import dev.marregui.comando.frontear.protocol.FakeBroker;
 import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.store.LogOptions;
+import dev.marregui.comando.frontear.tls.MachineKey;
+import dev.marregui.comando.frontear.tls.Pins;
+import dev.marregui.comando.frontear.tls.Terminator;
+import dev.marregui.comando.frontear.tls.Tls;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,8 +54,9 @@ import static org.awaitility.Awaitility.await;
 /// link's restart with a backlog, filter changes that miss nothing covered and lose nothing queued, the hop limit on a
 /// loop of three, the PUBACK classes, a refused message sent again alone and counted when a later one overtook
 /// it, the bound on what waits for a link's strand, a close that answers what waits and interrupts nothing,
-/// expiry while queued, the IN side's PUBACK after the local publish, the checks on what a link is given, and a
-/// link's spec kept across a restart.
+/// expiry while queued, the IN side's PUBACK after the local publish, a message in outside the IN filters dropped,
+/// the checks on what a link is given, a link's spec kept across a restart, and a TLS link that waits for the mesh's
+/// TLS context.
 class LinksTest {
 
     private static final Duration WAIT = Duration.ofSeconds(20);
@@ -622,6 +628,36 @@ class LinksTest {
         }
     }
 
+    /// A peer that pushes a message the link never subscribed to (another machine's server, for one) is answered
+    /// 0x00 and nothing reaches the local broker, on a link with no IN filters and on one whose IN filters do not
+    /// cover the topic; each such message is counted as dropped, and one the filters cover still arrives.
+    @Test
+    void aMessageInOutsideTheInFiltersIsDroppedAndCounted() throws Exception {
+        try (FakeBroker peer = new FakeBroker(); FakeBroker other = new FakeBroker(); Broker a = broker(0);
+                Links links = new Links(a, "A", dir, LOG)) {
+            final Probe onA = Probe.on(a, "#");
+            links.put(new LinkSpec("main@b", HOST, peer.port(), Set.of("comando/v1/b/instance/+/inbox"), Set.of(),
+                    2));
+            links.put(new LinkSpec("ac", HOST, other.port(), Set.of(), Set.of("in/#"), 2));
+            awaitConnected(links, "main@b");
+            awaitConnected(links, "ac");
+            peer.send(new Packet.Publish("comando/v1/local/instance/x/inbox", bytes(0), 1, false, false, 7,
+                    "comando/v1/local/instance/main/reply", null));
+            other.send(new Packet.Publish("out/x", bytes(1), 1, false, false, 8, null, null));
+            await().atMost(WAIT).until(() -> peer.received(Packet.PubAck.class).size() == 1
+                    && other.received(Packet.PubAck.class).size() == 1);
+            assertThat(peer.received(Packet.PubAck.class)).containsExactly(new Packet.PubAck(7, Packet.SUCCESS,
+                    null));
+            assertThat(other.received(Packet.PubAck.class)).containsExactly(new Packet.PubAck(8, Packet.SUCCESS,
+                    null));
+            assertThat(state(links, "main@b").dropped()).isEqualTo(1);
+            assertThat(state(links, "ac").dropped()).isEqualTo(1);
+            other.send(new Packet.Publish("in/x", bytes(2), 1, false, false, 9, null, null));
+            await().atMost(WAIT).until(() -> onA.messages.size() == 1);
+            assertThat(onA.payloads()).containsExactly(2);
+        }
+    }
+
     /// The mesh refuses what it cannot run (an id that is not a folder name, an empty host, a port or hop limit out
     /// of range, a filter that is not one) and a change to an unknown link; it replaces a link put again, forgets a
     /// removed one, and lists the links by id.
@@ -653,6 +689,25 @@ class LinksTest {
             assertThat(links.state()).extracting(LinkState::id).containsExactly("ab");
             assertThat(a.publish(message("t/x", 1), "test").get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
                     .isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
+        }
+    }
+
+    /// A link to another machine's node is named `<node>@<machine>`: the mesh takes the id, keeps the link in a
+    /// folder of that name and brings it back from there after a restart; a `/` after it is still refused.
+    @Test
+    void aLinkToAnotherMachineIsNamedNodeAtMachine() throws Exception {
+        try (Broker a = broker(0); Broker b = broker(0)) {
+            final LinkSpec remote = new LinkSpec("main@b", HOST, b.port(), Set.of("t/#"), Set.of(), 2);
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                links.put(remote);
+                assertThat(links.state()).extracting(LinkState::id).containsExactly("main@b");
+                assertThatThrownBy(() -> links.put(new LinkSpec("main@b/x", HOST, b.port(), Set.of(), Set.of(), 1)))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
+            assertThat(dir.resolve("main@b").resolve(LinkFile.NAME)).isRegularFile();
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                assertThat(links.state()).extracting(LinkState::id).containsExactly("main@b");
+            }
         }
     }
 
@@ -720,6 +775,91 @@ class LinksTest {
         }
     }
 
+    /// A TLS link put before the mesh has a TLS context stays down, its state saying why, and opens no connection;
+    /// once the context is set it connects over TLS with this machine's key and its reason is cleared. Its spec, a
+    /// filter change included, keeps `tls` across a restart, where the link waits for the context again.
+    @Test
+    void tlsLinkWaitsForTheContextAndKeepsTlsAcrossARestart(@TempDir final Path keys) throws Exception {
+        final MachineKey local = MachineKey.loadOrCreate(keys.resolve("a"), "a");
+        final MachineKey remote = MachineKey.loadOrCreate(keys.resolve("b"), "b");
+        final SSLContext tls = Tls.context(local, pins(remote));
+        try (Broker a = broker(0); FakeBroker peer = new FakeBroker();
+                Terminator b = new Terminator(Tls.context(remote, pins(local)), peer.port())) {
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                links.put(new LinkSpec("ab", HOST, b.port(), Set.of("t/#"), Set.of(), 4, true));
+                await().atMost(WAIT).until(() -> state(links, "ab").reason().equals(Link.NO_TLS));
+                await().during(QUIET).atMost(WAIT).until(() -> !state(links, "ab").connected());
+                assertThat(b.protocols()).isEmpty();
+                assertThat(b.failures()).isEmpty();
+                links.tls(_ -> tls);
+                awaitConnected(links, "ab");
+                assertThat(state(links, "ab").reason()).isEmpty();
+                assertThat(b.peers()).containsExactly(local.fingerprint());
+                links.filters("ab", Direction.OUT, Set.of("u/#"));
+            }
+            assertThat(LinkFile.read(Files.readAllBytes(dir.resolve("ab").resolve(LinkFile.NAME))))
+                    .isEqualTo(new LinkSpec("ab", HOST, b.port(), Set.of("u/#"), Set.of(), 4, true));
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                await().atMost(WAIT).until(() -> state(links, "ab").reason().equals(Link.NO_TLS));
+                links.tls(_ -> tls);
+                awaitConnected(links, "ab");
+                assertThat(b.peers()).hasSize(2);
+            }
+        }
+    }
+
+    /// A plain link stays plain once the mesh has a TLS context, a TLS link whose handshake fails shows the failure
+    /// as its reason, and a closed mesh refuses a context.
+    @Test
+    void tlsContextLeavesPlainLinksPlainAndAFailedHandshakeIsTheReason(@TempDir final Path keys) throws Exception {
+        final MachineKey local = MachineKey.loadOrCreate(keys.resolve("a"), "a");
+        final MachineKey remote = MachineKey.loadOrCreate(keys.resolve("b"), "b");
+        final Links closed;
+        try (Broker a = broker(0); Broker c = broker(0); FakeBroker peer = new FakeBroker();
+                Terminator b = new Terminator(Tls.context(remote, pins(local)), peer.port());
+                Links links = new Links(a, "A", dir, LOG)) {
+            closed = links;
+            links.tls(_ -> Tls.context(local, new Pins()));
+            links.put(new LinkSpec("ab", HOST, b.port(), Set.of("t/#"), Set.of(), 4, true));
+            links.put(new LinkSpec("ac", HOST, c.port(), Set.of("t/#"), Set.of(), 4));
+            awaitConnected(links, "ac");
+            await().atMost(WAIT).until(() -> !b.failures().isEmpty());
+            await().atMost(WAIT).until(() -> !state(links, "ab").reason().isEmpty()
+                    && !state(links, "ab").reason().equals(Link.NO_TLS));
+            assertThat(state(links, "ab").connected()).isFalse();
+            assertThat(b.protocols()).isEmpty();
+        }
+        assertThatThrownBy(() -> closed.tls(_ -> Tls.context(local, new Pins())))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    /// Each TLS link dials with the context the mesh gives its id: a link to `b` whose context pins `b` alone fails
+    /// the handshake with a peer that presents `c`'s certificate, `c` pinned in another link's context, which connects
+    /// to that same peer; a link the mesh gives no context stays down with [Link#NO_TLS].
+    @Test
+    void eachTlsLinkTrustsOnlyTheKeyOfItsOwnContext(@TempDir final Path keys) throws Exception {
+        final MachineKey local = MachineKey.loadOrCreate(keys.resolve("a"), "a");
+        final MachineKey b = MachineKey.loadOrCreate(keys.resolve("b"), "b");
+        final MachineKey c = MachineKey.loadOrCreate(keys.resolve("c"), "c");
+        final Map<String, SSLContext> contexts = Map.of("ab", Tls.context(local, pins(b)),
+                "ac", Tls.context(local, pins(c)));
+        try (Broker a = broker(0); FakeBroker peer = new FakeBroker();
+                Terminator asC = new Terminator(Tls.context(c, pins(local)), peer.port());
+                Links links = new Links(a, "A", dir, LOG)) {
+            links.tls(contexts::get);
+            links.put(new LinkSpec("ab", HOST, asC.port(), Set.of("t/#"), Set.of(), 4, true));
+            links.put(new LinkSpec("ac", HOST, asC.port(), Set.of("t/#"), Set.of(), 4, true));
+            links.put(new LinkSpec("ax", HOST, asC.port(), Set.of("t/#"), Set.of(), 4, true));
+            awaitConnected(links, "ac");
+            await().atMost(WAIT).until(() -> !state(links, "ab").reason().isEmpty()
+                    && !state(links, "ab").reason().equals(Link.NO_TLS));
+            await().atMost(WAIT).until(() -> state(links, "ax").reason().equals(Link.NO_TLS));
+            await().during(QUIET).atMost(WAIT).until(() -> !state(links, "ab").connected()
+                    && !state(links, "ax").connected());
+            assertThat(asC.peers()).containsOnly(local.fingerprint());
+        }
+    }
+
     /// The strand of link `id`, for a test that holds it busy.
     private static ScheduledThreadPoolExecutor strandOf(final Links links, final String id) throws Exception {
         final Field linksField = Links.class.getDeclaredField("links");
@@ -756,6 +896,12 @@ class LinksTest {
             payloads.add(payload(p));
         }
         return payloads;
+    }
+
+    private static Pins pins(final MachineKey peer) {
+        final Pins pins = new Pins();
+        pins.set(Map.of(peer.fingerprint(), peer.machine()));
+        return pins;
     }
 
     private static Broker broker(final int port) throws IOException {

@@ -137,11 +137,13 @@ final class SessionRules {
         final boolean renamed = !i.previousName().equals(spec.name());
         final List<SessionState> sessions = new ArrayList<>(s.sessions().size());
         for (final SessionState x : s.sessions()) {
-            // the form has no carried summary, creator, family nor unread mark: they stay as they were (records 121,
-            // 136); the sessions it made name it by its new name, so a rename cuts no creation family (rule 1)
+            // the form has no carried summary, creator, family, unread mark nor permission mode: they stay as they
+            // were (records 121, 136, 189); the sessions it made name it by its new name, so a rename cuts no creation
+            // family (rule 1)
             sessions.add(x.name().equals(i.previousName())
                     ? x.withSpec(spec.withCarried(x.spec().carried()).withCreatedBy(x.spec().createdBy())
-                    .withFamily(x.spec().family()).withUnread(x.spec().unreadMillis()))
+                    .withFamily(x.spec().family()).withUnread(x.spec().unreadMillis())
+                    .withPlanMode(x.spec().planMode()))
                     : renamed && x.spec().createdBy().equals(i.previousName()) ? x.withSpec(x.spec().withCreatedBy(spec.name())) : x);
         }
         AppState next = s.withSessions(sessions);

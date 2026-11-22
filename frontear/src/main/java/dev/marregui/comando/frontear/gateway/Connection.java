@@ -7,19 +7,24 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.security.cert.Certificate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.net.ssl.SSLSocket;
 
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.frontear.protocol.Codec;
 import dev.marregui.comando.frontear.protocol.MqttException;
+import dev.marregui.comando.frontear.protocol.Names;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.Topics;
 
@@ -28,6 +33,12 @@ import dev.marregui.comando.frontear.protocol.Topics;
  * strand that writes what the broker sends it, in the order sent. The first packet must be a CONNECT, within
  * {@link #CONNECT_WAIT_MILLIS}; after it, a connection silent for one and a half times its keep alive is closed
  * (§3.1.2.10). The connection ends once, whichever side ends it: {@link #end} runs its effects a single time.
+ * <p>
+ * A connection of the remote listener first finishes its TLS handshake within its listener's bound, a deadline from
+ * its accept that the broker's timed strand holds, however the client spreads its bytes, and speaks for the machine
+ * its certificate names, its principal: every PUBLISH and will it sends carries that machine as its one
+ * {@link Names#ORIGIN} user property, whatever the client set there. When the pairings change, the broker checks its
+ * certificate again ({@link #stillPinned}) and ends it when its key is no longer pinned to that machine.
  */
 final class Connection {
 
@@ -52,6 +63,8 @@ final class Connection {
     final int number;
     private final Broker broker;
     private final Socket socket;
+    // the remote listener that accepted the connection; null for one of the loopback listener
+    private final RemoteListen listen;
     private final InputStream in;
     private final OutputStream out;
     // runs the read loop, its one task: what waits to be read waits in the socket's receive buffer, and a client past
@@ -81,11 +94,33 @@ final class Connection {
     private volatile long endedAtNanos;
     // written by the writer strand when a write fails; read by the threads that send, to stop queueing bytes
     private volatile boolean writeFailed;
+    // a remote connection's handshake, settled once: by the reader when it ends in time, or by the broker's deadline
+    // task when the bound passes first, which then closes the socket under it; set by whichever thread is first
+    private final AtomicBoolean handshakeSettled = new AtomicBoolean();
+    // the broker's deadline task for a remote connection's handshake, cancelled once the reader settles it; written by
+    // the remote accept strand before start(), which hands it to the reader, and read by the reader alone
+    private ScheduledFuture<?> handshakeDeadline;
+    // the certificate a remote connection's peer presented, null for a local one and before its handshake ends;
+    // written by the reader before it names the machine, read by the thread that checks the pairings again
+    // (stillPinned), so a check that runs before the reader names the machine sees the certificate or the reader
+    // sees the new pins
+    private volatile Certificate peerCertificate;
+    // the machine a remote connection's certificate names, null for a local one; written by the reader once its
+    // handshake ends, before it reads the CONNECT, and read by the reader and by the thread that checks the pairings
+    // again (stillPinned)
+    private volatile String principal;
 
     Connection(final Broker broker, final Socket socket, final int number) throws IOException {
+        this(broker, socket, number, null);
+    }
+
+    /** A connection of the remote listener {@code listen}, whose {@code socket} is a TLS one; null for loopback. */
+    Connection(final Broker broker, final Socket socket, final int number, final RemoteListen listen)
+            throws IOException {
         this.broker = broker;
         this.socket = socket;
         this.number = number;
+        this.listen = listen;
         this.in = new BufferedInputStream(socket.getInputStream(), BUFFER_BYTES);
         this.out = new BufferedOutputStream(socket.getOutputStream(), BUFFER_BYTES);
         final String owner = broker.port() + "-" + number;
@@ -98,9 +133,55 @@ final class Connection {
         reader.execute(this::read);
     }
 
+    /**
+     * Starts reading a remote connection's packets, {@code deadline} the broker's task that runs
+     * {@link #handshakeOverdue} once its handshake bound has passed since its accept.
+     */
+    void start(final ScheduledFuture<?> deadline) {
+        handshakeDeadline = deadline;
+        start();
+    }
+
+    /**
+     * The broker's deadline for a remote connection's handshake has passed: when the reader has not settled it yet,
+     * the socket closes under the handshake, whose read then fails and ends the connection, counted. Broker's timed
+     * strand.
+     */
+    void handshakeOverdue() {
+        if (handshakeSettled.compareAndSet(false, true)) {
+            LOG.log(System.Logger.Level.DEBUG, "remote handshake past its bound, socket closed [connection=" + number
+                    + ", handshake=" + listen.handshake() + ']');
+            closeSocket();
+        }
+    }
+
+    /**
+     * Whether a remote connection's peer certificate is still pinned to the machine it speaks for, by
+     * {@code listen().machineOf()} as it reads now: true for a local connection and for one still in its handshake.
+     */
+    boolean stillPinned() {
+        final Certificate peer = peerCertificate;
+        if (listen == null || peer == null) {
+            return true;
+        }
+        final String now = listen.machineOf().apply(peer);
+        final String machine = principal;
+        return now != null && (machine == null || machine.equals(now));
+    }
+
     /** The client id the connection's CONNECT gave or the broker assigned; null before CONNECT. */
     String clientId() {
         return clientId;
+    }
+
+    /** The remote listener that accepted the connection; null for one of the loopback listener. */
+    RemoteListen listen() {
+        return listen;
+    }
+
+    /** The machine the connection speaks for, null for a local one; meaningful on the reader, past the handshake. */
+    String principal() {
+        return principal;
     }
 
     /** Whether the connection has ended, by either side. */
@@ -201,12 +282,21 @@ final class Connection {
      * The caller, holding the broker's session lock, detaches it from the session. False when it had already ended.
      */
     boolean takenOver() {
+        return endHeld(Packet.SESSION_TAKEN_OVER);
+    }
+
+    /**
+     * Ends the connection, its will kept, with DISCONNECT {@code disconnectCode} ({@link #NO_DISCONNECT} for none),
+     * then the socket closes. The caller, holding the broker's session lock, detaches it from its session. False when
+     * it had already ended.
+     */
+    boolean endHeld(final int disconnectCode) {
         if (!endCause.compareAndSet(null, End.WILL)) {
             return false;
         }
-        finish(Packet.SESSION_TAKEN_OVER);
-        LOG.log(System.Logger.Level.DEBUG, "connection taken over [client=" + clientId + ", connection=" + number
-                + ']');
+        finish(disconnectCode);
+        LOG.log(System.Logger.Level.DEBUG, "connection ended by the broker [client=" + clientId + ", connection="
+                + number + ", disconnectCode=" + disconnectCode + ']');
         return true;
     }
 
@@ -232,6 +322,20 @@ final class Connection {
         } catch (final MqttException e) {
             throw new IllegalStateException("packet not writable [packet=" + packet + ']', e);
         }
+    }
+
+    /** {@code p} as a remote connection of {@code machine} sends it: each {@link Names#ORIGIN} dropped, one added. */
+    static Packet.Publish stamped(final Packet.Publish p, final String machine) {
+        final Packet.Meta meta = p.meta();
+        final List<Packet.UserProperty> kept = new ArrayList<>(meta.userProperties().size() + 1);
+        for (final Packet.UserProperty u : meta.userProperties()) {
+            if (!u.name().equals(Names.ORIGIN)) {
+                kept.add(u);
+            }
+        }
+        kept.add(new Packet.UserProperty(Names.ORIGIN, InstanceName.origin(machine)));
+        return p.withMeta(new Packet.Meta(meta.payloadFormat(), meta.messageExpirySeconds(), meta.contentType(),
+                kept));
     }
 
     /** What {@code bytes} hold while they wait on the writer. */
@@ -271,6 +375,9 @@ final class Connection {
     private void read() {
         boolean connected = false;
         try {
+            if (listen != null && !handshake()) {
+                return;
+            }
             socket.setSoTimeout(CONNECT_WAIT_MILLIS);
             connected = connect();
             while (connected && !ended()) {
@@ -305,6 +412,48 @@ final class Connection {
     }
 
     /**
+     * A remote connection's TLS handshake, within its listener's bound from the accept: true once the peer's
+     * certificate names a paired machine, the connection's principal from then on. A handshake that fails or outlasts
+     * the bound (the per-read timeout, or the broker's deadline closing the socket), and a peer whose key no machine is
+     * paired with, are counted by the broker and end the connection unanswered.
+     */
+    private boolean handshake() throws IOException {
+        if (!(socket instanceof final SSLSocket tls)) {
+            throw new IllegalStateException("remote connection without TLS [connection=" + number + ']');
+        }
+        socket.setSoTimeout(listen.handshakeMillis());
+        final Certificate[] chain;
+        try {
+            tls.startHandshake();
+            chain = tls.getSession().getPeerCertificates();
+            if (!handshakeSettled.compareAndSet(false, true)) {
+                throw new SocketTimeoutException("handshake past its bound [handshake=" + listen.handshake() + ']');
+            }
+        } catch (final IOException e) {
+            if (!ended()) {
+                broker.handshakeFailed(this, e);
+            }
+            end(End.WILL, NO_DISCONNECT);
+            return false;
+        } finally {
+            if (handshakeDeadline != null) {
+                handshakeDeadline.cancel(false);
+            }
+        }
+        if (chain.length > 0) {
+            peerCertificate = chain[0];
+        }
+        final String machine = chain.length == 0 ? null : listen.machineOf().apply(chain[0]);
+        if (machine == null) {
+            broker.unpinned(this);
+            end(End.WILL, NO_DISCONNECT);
+            return false;
+        }
+        principal = machine;
+        return true;
+    }
+
+    /**
      * Reads the first packet and hands a CONNECT to the broker: true when the broker accepted it and sent its CONNACK.
      * A CONNECT that cannot be read, or that the broker refuses, is answered with a CONNACK carrying the reason; any
      * other first packet closes the connection unanswered (§3.1.0).
@@ -326,10 +475,14 @@ final class Connection {
             }
             return false;
         }
-        if (!(first instanceof final Packet.Connect c)) {
+        if (!(first instanceof final Packet.Connect asked)) {
             end(End.WILL, NO_DISCONNECT);
             return false;
         }
+        final Packet.Connect c = principal == null || asked.will() == null ? asked : new Packet.Connect(
+                asked.clientId(), asked.cleanStart(), asked.keepAliveSeconds(), asked.sessionExpirySeconds(),
+                asked.receiveMaximum(), asked.maximumPacketSize(), stamped(asked.will(), principal),
+                asked.willDelaySeconds());
         final int code = broker.connect(this, c);
         if (code != Packet.SUCCESS) {
             refuse(code);
@@ -380,7 +533,8 @@ final class Connection {
      * A client PUBLISH: QoS 2 ends the connection with 0x9B, as CONNACK said Maximum QoS 1 (§3.3.1.4); a QoS 1 publish
      * past the broker's receive maximum with 0x93 (§3.3.4). A publish the gate refuses is acknowledged 0x87 and
      * routed nowhere; any other is retained when it asks, routed, and acknowledged once every internal subscriber it
-     * reached completed, with the worst of their codes. Acknowledgements go out in the order the publishes came.
+     * reached completed, with the worst of their codes. Acknowledgements go out in the order the publishes came. A
+     * remote connection's publish is routed {@link #stamped} with its machine.
      */
     private boolean publish(final Packet.Publish p) {
         if (p.qos() > 1) {
@@ -395,8 +549,10 @@ final class Connection {
                 }
             }
         }
-        final CompletableFuture<Integer> code = broker.mayPublish(clientId, p.topic())
-                ? broker.accept(p, clientId) : CompletableFuture.completedFuture(Packet.NOT_AUTHORIZED);
+        final CompletableFuture<Integer> code = broker.mayPublish(principal, clientId, p.topic())
+                && (!p.retain() || broker.mayRetain(principal, clientId, p))
+                ? broker.accept(principal == null ? p : stamped(p, principal), clientId)
+                : CompletableFuture.completedFuture(Packet.NOT_AUTHORIZED);
         if (p.qos() == 1) {
             synchronized (acks) {
                 acks.add(new InboundAck(p.packetId(), code));
@@ -439,7 +595,7 @@ final class Connection {
             } else if (Topics.levels(sub.filter()) > broker.options().maxTopicLevels()) {
                 broker.refusedTopics.increment();
                 codes.add(Packet.TOPIC_FILTER_INVALID);
-            } else if (!broker.maySubscribe(clientId, sub.filter())) {
+            } else if (!broker.maySubscribe(principal, clientId, sub.filter())) {
                 codes.add(Packet.NOT_AUTHORIZED);
             } else if (broker.subscriptionsFull(clientId, sub.filter())) {
                 broker.refusedSubscriptions.increment();

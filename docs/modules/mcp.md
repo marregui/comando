@@ -55,6 +55,7 @@ The tools, by family:
 | Sessions | `session_send`, `session_read` | Another session's prompt and transcript. |
 | Instances | `instances_list`, `instance_ask`, `instance_reply` | `Peers`. |
 | frontear | `frontear_read` | `LabTools`, over `LabPort`: the node's watch as the frontear tab reads it. |
+| Machines | `machines` | `MachinesTools`, over `MachinesPort`: this machine and the machines paired with it ([record 189](../adr/0189-frontear-across-machines.md)); listen and pair ask the user on a card. |
 | Actions | `panel_*`, `session_*`, `server_start`, `server_stop` and more | The same actions you run by hand. |
 | Terminals | `terminal_list`, `terminal_read`, `terminal_send`, `terminal_start`, `terminal_stop`, `terminal_interrupt` | `TerminalPort`. |
 

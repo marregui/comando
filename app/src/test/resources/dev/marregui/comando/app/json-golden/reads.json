@@ -167,7 +167,7 @@
   "mapper" : "file",
   "type" : "SessionSpec",
   "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"0\"}",
-  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=0.0, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=0]"
+  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=0.0, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=0, planMode=false]"
 }, {
   "mapper" : "file",
   "type" : "SessionSpec",
@@ -182,12 +182,12 @@
   "mapper" : "file",
   "type" : "SessionSpec",
   "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"NEW\",\"budgetUsd\":\"1.5\",\"unreadMillis\":1.9}",
-  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=1.5, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=1]"
+  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=1.5, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=1, planMode=false]"
 }, {
   "mapper" : "file",
   "type" : "SessionSpec",
   "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"NEW\",\"unreadMillis\":\"12\",\"checkpoint\":null,\"carried\":null}",
-  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=0.0, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=12]"
+  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=0.0, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=12, planMode=false]"
 }, {
   "mapper" : "file",
   "type" : "FolderRoot",

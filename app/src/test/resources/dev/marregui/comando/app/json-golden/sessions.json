@@ -12,7 +12,8 @@
     "carried" : "the summary\nof two lines",
     "createdBy" : "lead",
     "family" : "family",
-    "unreadMillis" : 1763100000000
+    "unreadMillis" : 1763100000000,
+    "planMode" : false
   }, {
     "name" : "Ünïcode ✓ 😀",
     "workDir" : "/tmp/a b",
@@ -25,6 +26,7 @@
     "carried" : "",
     "createdBy" : "",
     "family" : "",
-    "unreadMillis" : 0
+    "unreadMillis" : 0,
+    "planMode" : false
   } ]
 }

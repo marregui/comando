@@ -31,12 +31,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.IntFunction;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
 
 import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.frontear.tls.Tls;
 
 /**
  * An MQTT 5 client over a blocking socket, for the one broker its {@link Options} name: QoS 0 and 1 both ways,
@@ -51,6 +54,12 @@ import dev.marregui.comando.core.loop.Threads;
  * the {@code callbacks} executor in the order they happened; {@code disconnected} runs on the reader, and so does the
  * completion of {@link #connect}'s future, or on the thread that disconnects first.
  *
+ * <p>TLS. A client made with an {@link SSLContext} layers TLS 1.3 over each TCP connection and finishes its handshake
+ * before CONNECT. The handshake runs on the writer, idle until the broker accepts the connection, while the reader
+ * waits for it at most what {@link #CONNECT_WITHIN} leaves after the TCP connect and closes the socket when it is not
+ * done: a read of the handshake would wait its full timeout per record, so a peer that dribbles could hold it longer.
+ * A failed or late handshake reaches the handler's {@code disconnected} as any failed attempt does.
+ *
  * <p>Delivery. Within one connection, at least once both ways at QoS 1: a message in is acknowledged once the stage
  * its handler returned has completed, with the reason code it gave, and in the order the messages arrived (§4.6); a
  * publish out completes when its PUBACK arrives. The client starts every session clean and lets it expire on
@@ -60,7 +69,10 @@ import dev.marregui.comando.core.loop.Threads;
 public final class MqttClient implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(MqttClient.class.getName());
-    /** How long a TCP connect may take: the HiveMQ client's default, which this client replaced. */
+    /**
+     * How long a TCP connect, and the TLS handshake after it, may take: the HiveMQ client's default, which this client
+     * replaced.
+     */
     private static final Duration CONNECT_WITHIN = Duration.ofSeconds(10);
     /** How long the broker may take to answer CONNECT: the HiveMQ client's default, which this client replaced. */
     private static final Duration CONNACK_WITHIN = Duration.ofSeconds(60);
@@ -92,6 +104,8 @@ public final class MqttClient implements AutoCloseable {
     private final Options options;
     private final Handler handler;
     private final Executor callbacks;
+    /** The TLS each connection layers over TCP, null for plain TCP. */
+    private final SSLContext tls;
     /**
      * Runs one connection's task at a time, opening and reading it, and holds at most one more, the next connect the
      * handler scheduled ({@link #retry}): {@link #connect} queues the first only once, and each ended connection
@@ -157,9 +171,19 @@ public final class MqttClient implements AutoCloseable {
      * calls and its futures' completions on {@code callbacks}. Nothing connects before {@link #connect}.
      */
     public MqttClient(final Options options, final Handler handler, final Executor callbacks) {
+        this(options, handler, callbacks, null);
+    }
+
+    /**
+     * As {@link #MqttClient(Options, Handler, Executor)}, each connection over TLS 1.3 from {@code tls}, or over plain
+     * TCP when {@code tls} is null. The peer is authenticated by the context's trust manager alone: no host name is
+     * checked.
+     */
+    public MqttClient(final Options options, final Handler handler, final Executor callbacks, final SSLContext tls) {
         this.options = Objects.requireNonNull(options, "options");
         this.handler = Objects.requireNonNull(handler, "handler");
         this.callbacks = Objects.requireNonNull(callbacks, "callbacks");
+        this.tls = tls;
         this.reader = Threads.timedStrand("mqtt-" + options.clientId());
         this.writer = Threads.strand("mqtt-writer-" + options.clientId());
         this.waitingQos0 = Queues.gauge(qos0Name());
@@ -458,9 +482,10 @@ public final class MqttClient implements AutoCloseable {
      * as the cause; throws when the connection broke or the broker broke the protocol.
      */
     private MqttException run(final Connection c) throws IOException, InterruptedException {
+        final long startNanos = System.nanoTime();
         c.socket.setTcpNoDelay(true);
         c.socket.connect(new InetSocketAddress(options.host(), options.port()), (int) CONNECT_WITHIN.toMillis());
-        c.open();
+        c.open(tls == null ? c.socket : handshake(c, startNanos));
         // the reader writes CONNECT itself: nothing else writes on a connection the broker has not accepted, and the
         // send buffer of a new socket is empty, so the write does not wait for the broker
         c.write(Codec.encode(new Packet.Connect(options.clientId(), true, options.keepAliveSeconds(), 0,
@@ -497,6 +522,40 @@ public final class MqttClient implements AutoCloseable {
         firstConnect.complete(null);
         post(handler::connected);
         return readLoop(c);
+    }
+
+    /**
+     * Layers TLS 1.3 over {@code c}'s connected socket and runs the handshake on the writer, for at most what
+     * {@link #CONNECT_WITHIN} leaves since {@code startNanos}; a handshake not done by then is cut by closing the
+     * socket. Throws the handshake's own failure.
+     */
+    private SSLSocket handshake(final Connection c, final long startNanos) throws IOException, InterruptedException {
+        final SSLSocket s = (SSLSocket) tls.getSocketFactory().createSocket(c.socket, options.host(), options.port(),
+                true);
+        s.setUseClientMode(true);
+        s.setEnabledProtocols(new String[] {Tls.PROTOCOL});
+        final long leftNanos = CONNECT_WITHIN.toNanos() - (System.nanoTime() - startNanos);
+        try {
+            writer.submit(() -> {
+                s.startHandshake();
+                return null;
+            }).get(leftNanos, TimeUnit.NANOSECONDS);
+            return s;
+        } catch (final TimeoutException _) {
+            c.close();
+            throw new SocketTimeoutException("TLS handshake not done in time [client=" + options.clientId()
+                    + ", waitMillis=" + CONNECT_WITHIN.toMillis() + ']');
+        } catch (final RejectedExecutionException _) {
+            throw new IOException("client closing before the TLS handshake [client=" + options.clientId() + ']');
+        } catch (final ExecutionException e) {
+            switch (e.getCause()) {
+                case final IOException io -> throw io;
+                case final RuntimeException r -> throw r;
+                case final Error err -> throw err;
+                case null, default -> throw new IllegalStateException("TLS handshake failed [client="
+                        + options.clientId() + ']', e.getCause());
+            }
+        }
     }
 
     /** Reads packets until the broker disconnects, whose DISCONNECT this returns; throws when the connection breaks. */
@@ -1041,7 +1100,7 @@ public final class MqttClient implements AutoCloseable {
         }
     }
 
-    /** One TCP connection and what the client knows of it. */
+    /** One TCP connection, with the TLS layered over it when the client has one, and what the client knows of it. */
     private static final class Connection {
 
         private final Socket socket = new Socket();
@@ -1084,11 +1143,15 @@ public final class MqttClient implements AutoCloseable {
         /** Reader only. */
         private boolean pingOutstanding;
 
-        /** Takes the socket's streams; on the reader, once connected. */
-        void open() throws IOException {
+        /**
+         * Takes the streams of {@code wire}, the socket itself or the TLS layered over it; on the reader, once
+         * connected. Timeouts are set on the socket, which a layered TLS socket reads through; closing the socket
+         * ends a read or write on either.
+         */
+        void open(final Socket wire) throws IOException {
             readerThread = Thread.currentThread();
-            in = new BufferedInputStream(socket.getInputStream());
-            out = socket.getOutputStream();
+            in = new BufferedInputStream(wire.getInputStream());
+            out = wire.getOutputStream();
         }
 
         /** Takes the broker's CONNACK: its limits, and the keep alive that holds. On the reader. */

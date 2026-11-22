@@ -13,8 +13,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,13 +28,16 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
@@ -43,6 +48,7 @@ import dev.marregui.comando.testkit.States;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.awaitility.Awaitility.await;
 
 /// Instances consulting each other through a broker (record 123), with a broker in memory between fake instances: each
 /// with its own state, transcripts and data root, and a window that applies the intents a test needs.
@@ -755,6 +761,462 @@ class PeersTest {
         assertPrompted(main, b, "probe after an error");
     }
 
+    /// A presence on another machine's topic is taken only with that machine's origin: one stamped with a third
+    /// machine's, or with none, lists no instance.
+    @Test
+    void aPresenceFromAnotherMachineThanItsTopicsIsDropped() throws Exception {
+        final Bus a = new Bus("a");
+        final Node mainA = node(a, "", _ -> null);
+        final byte[] p = "{\"schema\":1,\"name\":\"comando · z\",\"slug\":\"z\",\"version\":\"2.0.0\",\"sessions\":[]}"
+                .getBytes(StandardCharsets.UTF_8);
+        a.deliver(new PeerBroker.Message(Peers.presenceTopic("b", "z"), p, null, null, "@c"), false);
+        a.deliver(new PeerBroker.Message(Peers.presenceTopic("b", "z"), p, null, null), false);
+        assertThat(call(mainA, "instances_list", "{}").text()).doesNotContain("z@b");
+        a.deliver(new PeerBroker.Message(Peers.presenceTopic("b", "z"), p, null, null, "@b"), false);
+        assertThat(call(mainA, "instances_list", "{}").text()).contains("(instance z@b)");
+    }
+
+    /// A question from a machine paired as a peer (record 189) is headed with its asker's id, `<slug>@<machine>`, and
+    /// the peer's mark, its main's too, and the consult session it makes runs in plan mode; the reply, stamped with
+    /// the asked machine's origin, reaches the asker.
+    @Test
+    void aPeerMachinesQuestionIsHeadedAsAPeerAndAnsweredInPlanMode() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node x = node(a, "x", _ -> null);
+        final Node mainA = node(a, "", _ -> null);
+        final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.PEER : null);
+        final CompletableFuture<McpTools.Outcome> asked = async(x, "instance_ask",
+                "{\"instance\":\"w@b\",\"text\":\"what is X?\",\"wait_seconds\":30}");
+        final Intent.PromptSession p = w.window.recorded.await(Intent.PromptSession.class, WAIT);
+        assertThat(p.session()).isEqualTo("consult-x@a");
+        assertThat(p.text()).isEqualTo("[from instance x@a · peer · session foreman]\nwhat is X?");
+        assertThat(made(w, "consult-x@a").planMode()).isTrue();
+        w.window.turn("consult-x@a", "X is a broker.");
+        assertThat(asked.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a broker.");
+
+        final McpTools.Outcome fromMain = call(mainA, "instance_ask",
+                "{\"instance\":\"w@b\",\"text\":\"and Y?\",\"wait_seconds\":0}");
+        assertThat(fromMain.error()).as(fromMain.text()).isFalse();
+        assertThat(w.window.recorded.await(Intent.PromptSession.class, q -> q.text().endsWith("and Y?"), WAIT).text())
+                .isEqualTo("[from instance main@a · peer · session foreman]\nand Y?");
+        assertThat(made(w, "consult-main@a").planMode()).as("a peer machine's main plans too").isTrue();
+    }
+
+    /// A machine granted the overseer's authority has its main's question headed with the overseer's mark and
+    /// answered in a session of the normal mode; its other instances stay peers that plan.
+    @Test
+    void anOverseerMachinesMainIsHeadedAsTheOverseerAndAnsweredInTheNormalMode() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node mainA = node(a, "", _ -> null);
+        final Node x = node(a, "x", _ -> null);
+        final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.OVERSEER : null);
+        assertThat(call(mainA, "instance_ask", "{\"instance\":\"w@b\",\"text\":\"do X\",\"wait_seconds\":0}").error())
+                .isFalse();
+        assertThat(w.window.recorded.await(Intent.PromptSession.class, WAIT).text())
+                .isEqualTo("[from instance main@a · overseer · session foreman]\ndo X");
+        assertThat(made(w, "consult-main@a").planMode()).isFalse();
+
+        assertThat(call(x, "instance_ask", "{\"instance\":\"w@b\",\"text\":\"do Y\",\"wait_seconds\":0}").error())
+                .isFalse();
+        assertThat(w.window.recorded.await(Intent.PromptSession.class, q -> q.text().endsWith("do Y"), WAIT).text())
+                .isEqualTo("[from instance x@a · peer · session foreman]\ndo Y");
+        assertThat(made(w, "consult-x@a").planMode()).isTrue();
+    }
+
+    /// A question from another machine is dropped, counted and never prompted when its `from` names an instance of
+    /// another machine than its origin, its response topic is not its asker's, its machine is not paired, or it came
+    /// on this machine's local inbox; the same question, well formed, is prompted.
+    @Test
+    void aSpoofedAskerAForeignResponseTopicAndNoGrantAreEachDropped() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.OVERSEER : null);
+        final String inbox = Peers.inboxTopic("b", "w");
+        question(b, inbox, "@a", "main@c", Peers.replyTopic("a", "main"), "q-1");
+        assertThat(w.peers.dropped()).as("a from of another machine").isEqualTo(1);
+        question(b, inbox, "@a", "main@a", Peers.replyTopic("a", "x"), "q-2");
+        assertThat(w.peers.dropped()).as("another instance's response topic").isEqualTo(2);
+        question(b, inbox, "@c", "main@c", Peers.replyTopic("c", "main"), "q-3");
+        assertThat(w.peers.dropped()).as("a machine not paired").isEqualTo(3);
+        question(b, Peers.inboxTopic("w"), "@a", "main@a", Peers.replyTopic("a", "main"), "q-4");
+        assertThat(w.peers.dropped()).as("on the local inbox").isEqualTo(4);
+
+        question(b, inbox, "@a", "main@a", Peers.replyTopic("a", "main"), "q-5");
+        assertThat(w.window.recorded.await(Intent.PromptSession.class, WAIT).text())
+                .startsWith("[from instance main@a · overseer");
+        assertThat(w.window.recorded.of(Intent.PromptSession.class)).hasSize(1);
+        assertThat(w.peers.dropped()).isEqualTo(4);
+    }
+
+    /// A reply to a question asked of another machine is taken only with that machine's origin: one stamped with a
+    /// third machine's, or with none, is dropped, and the real reply is the one read.
+    @Test
+    void aReplyFromAnotherMachineThanTheOneAskedIsDropped() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node x = node(a, "x", _ -> null);
+        final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.PEER : null);
+        final McpTools.Outcome asked = call(x, "instance_ask",
+                "{\"instance\":\"w@b\",\"text\":\"what is X?\",\"wait_seconds\":0}");
+        final Matcher id = ID.matcher(asked.text());
+        assertThat(id.find()).as(asked.text()).isTrue();
+        final byte[] correlation = id.group(1).getBytes(StandardCharsets.UTF_8);
+        final byte[] forged = ("{\"schema\":1,\"status\":\"ok\",\"text\":\"forged\",\"instance\":\"w@b\","
+                + "\"session\":\"\"}").getBytes(StandardCharsets.UTF_8);
+        a.deliver(new PeerBroker.Message(Peers.replyTopic("a", "x"), forged, null, correlation, "@c"), false);
+        a.deliver(new PeerBroker.Message(Peers.replyTopic("a", "x"), forged, null, correlation), false);
+
+        w.window.recorded.await(Intent.PromptSession.class, WAIT);
+        w.window.turn("consult-x@a", "X is a broker.");
+        final McpTools.Outcome read = call(x, "instance_reply", "{\"id\":\"" + id.group(1) + "\",\"wait_seconds\":10}");
+        assertThat(read.text()).contains("X is a broker.").doesNotContain("forged");
+    }
+
+    /// A question of a machine with an id to an instance of the same machine goes as before: on the local topics,
+    /// main headed as the overseer, its session in the normal mode; it expires with its asker's wait, as every question
+    /// does, and its reply, with no origin, is taken.
+    @Test
+    void aLocalQuestionOfAMachineWithAnIdGoesAsBefore() throws Exception {
+        final Bus a = new Bus("a");
+        final Node mainA = node(a, "", _ -> null);
+        final Node y = node(a, "y", _ -> null);
+        final CompletableFuture<McpTools.Outcome> asked = async(mainA, "instance_ask",
+                "{\"instance\":\"y\",\"text\":\"what is X?\",\"wait_seconds\":30}");
+        assertThat(y.window.recorded.await(Intent.PromptSession.class, WAIT).text())
+                .isEqualTo("[from instance comando · overseer · session foreman]\nwhat is X?");
+        assertThat(made(y, "consult-main").planMode()).isFalse();
+        final Sent q = mainA.link.sent.stream().filter(s -> s.message().topic().equals(Peers.inboxTopic("y")))
+                .findFirst().orElseThrow();
+        assertThat(q.message().responseTopic()).isEqualTo(Peers.replyTopic("main"));
+        assertThat(q.expirySeconds()).isEqualTo(Peers.ANSWER_WITHIN.plusSeconds(40).toSeconds());
+        y.window.turn("consult-main", "X is a broker.");
+        assertThat(asked.get(WAIT.toSeconds(), TimeUnit.SECONDS).text()).contains("X is a broker.");
+    }
+
+    /// The presence another machine sees carries the name, slug, version, role, whether it is busy and the sessions'
+    /// names only: no folder, branch, prompt, reply, task or kit, which this machine's presence carries; it expires
+    /// with the broker after 30 s, and this instance's close clears it on both machines.
+    @Test
+    void theCutPresenceCarriesNoFolderBranchPromptOrReplyAndIsClearedOnClose() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node x = node(a, "x", _ -> null);
+        x.window.dispatch(new Intent.PromptSession("work", "a secret prompt", ""));
+        x.window.turn("work", "a secret reply");
+        x.peers.resendPresence();
+        x.peers.tick();
+        final String cut = Peers.presenceTopic("a", "x");
+        final JsonNode full = Json.readTree(a.retained.get(Peers.presenceTopic("x")));
+        assertThat(full.path("sessions").get(0).propertyNames()).as("this machine's")
+                .contains("folder", "branch", "prompt", "reply", "tasks");
+        final JsonNode p = Json.readTree(b.retained.get(cut));
+        assertThat(p.propertyNames())
+                .containsExactlyInAnyOrder("schema", "name", "slug", "version", "role", "busy", "sessions");
+        assertThat(p.path("sessions").size()).isEqualTo(1);
+        assertThat(p.path("sessions").get(0).propertyNames()).containsExactly("name");
+        assertThat(p.path("sessions").get(0).path("name").asString()).isEqualTo("work");
+        assertThat(b.retainedOrigins.get(cut)).isEqualTo("@a");
+        assertThat(x.link.sent.stream().filter(s -> s.message().topic().equals(cut)).toList().getLast()
+                .expirySeconds()).isEqualTo(Peers.REMOTE_EXPIRY.toSeconds());
+
+        x.peers.close();
+        assertThat(a.retained).doesNotContainKey(cut);
+        assertThat(b.retained).doesNotContainKey(cut);
+    }
+
+    /// The cut presence goes out again unchanged once its resend interval less a tick has passed, so the machines
+    /// it reaches see the instance present for as long as it runs; within that interval an unchanged one is not sent.
+    @Test
+    void anUnchangedCutPresenceIsSentAgainOnlyOnceItsIntervalHasPassed() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final String cut = Peers.presenceTopic("a", "x");
+        final Node often = node(a, "x", "", Peers.ANSWER_WITHIN, Peers.ANSWER_WITHIN.plusSeconds(40),
+                Peers.REMOTE_EXPIRY, Peers.PRESENCE_EVERY, _ -> null);
+        // the connect queues a tick of its own on the ticks strand; the count is read once it has run
+        final long before = settled(often, cut);
+        often.peers.tick();
+        often.peers.tick();
+        assertThat(sent(often, cut)).as("each tick, at an interval of one tick").isEqualTo(before + 2);
+
+        final Bus c = new Bus("c");
+        final Bus d = new Bus("d");
+        Bus.cross(c, d);
+        final String seldom = Peers.presenceTopic("c", "y");
+        final Node y = node(c, "y", _ -> null);
+        final long first = settled(y, seldom);
+        y.peers.tick();
+        y.peers.tick();
+        assertThat(sent(y, seldom)).as("none within the default interval").isEqualTo(first);
+        assertThat(first).as("the connect's").isPositive();
+    }
+
+    /// How many messages `n` has published to `topic`, once the count has held for 300 ms: the ticks the connect
+    /// queued have run by then (a tick takes well under a millisecond in this fake).
+    private static long settled(final Node n, final String topic) {
+        final AtomicLong last = new AtomicLong(-1L);
+        await().atMost(Duration.ofSeconds(5)).pollInterval(Duration.ofMillis(300)).until(() -> {
+            final long now = sent(n, topic);
+            return now == last.getAndSet(now);
+        });
+        return last.get();
+    }
+
+    /// How many messages `n` has published to `topic`.
+    private static long sent(final Node n, final String topic) {
+        return n.link.sent.stream().filter(s -> s.message().topic().equals(topic)).count();
+    }
+
+    /// `instance_ask` names an instance of another machine by `<slug>@<machine>`, and by its bare slug when no instance
+    /// of this machine has it and one machine's only does; a bare slug several machines have is refused with their ids,
+    /// and one an instance of this machine has names that one.
+    @Test
+    void anAskResolvesAnInstanceOfAnotherMachineByIdOrBareSlugAndRefusesAnAmbiguousOne() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        final Bus c = new Bus("c");
+        Bus.cross(a, b, c);
+        final Function<String, MachinesPort.Grant> peer = m -> m.equals("a") ? MachinesPort.Grant.PEER : null;
+        final Node mainA = node(a, "", _ -> null);
+        final Node xb = node(b, "x", peer);
+        final Node yb = node(b, "y", peer);
+        final Node xc = node(c, "x", peer);
+        assertThat(call(mainA, "instances_list", "{}").text())
+                .contains("(instance x@b)", "(instance x@c)", "(instance y@b)", "<slug>@<machine>");
+
+        assertThat(call(mainA, "instance_ask", "{\"instance\":\"y\",\"text\":\"one\",\"wait_seconds\":0}").error())
+                .isFalse();
+        assertThat(yb.window.recorded.await(Intent.PromptSession.class, WAIT).text()).endsWith("one");
+        assertThat(call(mainA, "instance_ask", "{\"instance\":\"x@b\",\"text\":\"two\",\"wait_seconds\":0}").error())
+                .isFalse();
+        assertThat(xb.window.recorded.await(Intent.PromptSession.class, WAIT).text()).endsWith("two");
+        final McpTools.Outcome ambiguous = call(mainA, "instance_ask",
+                "{\"instance\":\"x\",\"text\":\"three\",\"wait_seconds\":0}");
+        assertThat(ambiguous.error()).isTrue();
+        assertThat(ambiguous.text()).contains("names instances on several machines: x@b, x@c");
+        assertThat(xc.window.recorded.of(Intent.PromptSession.class)).isEmpty();
+
+        final Node xa = node(a, "x", _ -> null);
+        assertThat(call(mainA, "instance_ask", "{\"instance\":\"x\",\"text\":\"four\",\"wait_seconds\":0}").error())
+                .isFalse();
+        assertThat(xa.window.recorded.await(Intent.PromptSession.class, WAIT).text())
+                .isEqualTo("[from instance comando · overseer · session foreman]\nfour");
+        assertThat(xb.window.recorded.of(Intent.PromptSession.class)).hasSize(1);
+    }
+
+    /// An instance of another machine is present for as long after its last presence came as the bound says: past it,
+    /// it is neither listed nor asked, and a presence sent again brings it back.
+    @Test
+    void anInstanceOfAnotherMachineGoesStaleAndAResendBringsItBack() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node mainA = node(a, "", Duration.ofMillis(500), _ -> null);
+        final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.PEER : null);
+        assertThat(call(mainA, "instances_list", "{}").text()).contains("(instance w@b)");
+        Awaitility.await().atMost(WAIT).until(() -> !call(mainA, "instances_list", "{}").text().contains("w@b"));
+        assertThat(call(mainA, "instance_ask", "{\"instance\":\"w@b\",\"text\":\"q\",\"wait_seconds\":0}").text())
+                .contains("no instance 'w@b' is present on frontear");
+
+        w.peers.resendPresence();
+        w.peers.tick();
+        assertThat(call(mainA, "instances_list", "{}").text()).contains("(instance w@b)");
+    }
+
+    /// A question from another machine goes to its asker's consult session whatever session it names: one naming
+    /// another machine's consult session, or a session that may act, is prompted in `consult-<asker>` in plan mode,
+    /// and the named session gets nothing.
+    @Test
+    void aPeerMachinesQuestionGoesToItsConsultSessionWhateverItNames() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node x = node(a, "x", _ -> null);
+        final Node w = node(b, "w", m -> m.equals("a") || m.equals("c") ? MachinesPort.Grant.PEER : null);
+        w.window.state.updateAndGet(s -> withSession(s, SessionSpec.fresh("consult-y@c", "/tmp").withPlanMode(true)));
+        for (final String named : List.of("consult-y@c", "work")) {
+            assertThat(call(x, "instance_ask", "{\"instance\":\"w@b\",\"session\":\"" + named
+                    + "\",\"text\":\"repeat " + named + "\",\"wait_seconds\":0}").error()).isFalse();
+            final Intent.PromptSession p = w.window.recorded.await(Intent.PromptSession.class,
+                    q -> q.text().endsWith("repeat " + named), WAIT);
+            assertThat(p.session()).as(named).isEqualTo("consult-x@a");
+        }
+        assertThat(made(w, "consult-x@a").planMode()).isTrue();
+        assertThat(w.window.recorded.of(Intent.PromptSession.class)).extracting(Intent.PromptSession::session)
+                .containsOnly("consult-x@a");
+    }
+
+    /// An instance keeps at most 64 instances of one other machine: a presence of a new one past them is dropped and
+    /// counted, while one of an instance kept is taken, another machine has room of its own, and an instance that
+    /// left makes room.
+    @Test
+    void anotherMachineHasAtMost64InstancesKeptAndAPresencePastThemIsDroppedAndCounted() throws Exception {
+        final Bus a = new Bus("a");
+        final Node mainA = node(a, "", _ -> null);
+        for (int i = 0; i < Peers.MAX_REMOTES; i++) {
+            remotePresence(a, "b", "s" + i);
+        }
+        assertThat(call(mainA, "instances_list", "{}").text()).contains("(instance s0@b)", "(instance s63@b)");
+        assertThat(mainA.peers.droppedPresences()).isZero();
+
+        remotePresence(a, "b", "s64");
+        assertThat(call(mainA, "instances_list", "{}").text()).doesNotContain("s64@b");
+        assertThat(mainA.peers.droppedPresences()).isEqualTo(1);
+        remotePresence(a, "b", "s0");
+        remotePresence(a, "c", "t");
+        assertThat(call(mainA, "instances_list", "{}").text()).as("a kept one, another machine's")
+                .contains("(instance s0@b)", "(instance t@c)");
+        assertThat(mainA.peers.droppedPresences()).isEqualTo(1);
+
+        a.deliver(new PeerBroker.Message(Peers.presenceTopic("b", "s0"), new byte[0], null, null, "@b"), false);
+        remotePresence(a, "b", "s64");
+        assertThat(call(mainA, "instances_list", "{}").text()).as("room once one left").contains("(instance s64@b)")
+                .doesNotContain("(instance s0@b)");
+        assertThat(mainA.peers.droppedPresences()).isEqualTo(1);
+    }
+
+    /// A machine with 64 instances kept, none of them present any more, has them make room for a new one.
+    @Test
+    void theInstancesOfAFullMachineNoLongerPresentMakeRoomForANewOne() throws Exception {
+        final Bus a = new Bus("a");
+        final Node mainA = node(a, "", Duration.ofMillis(300), _ -> null);
+        for (int i = 0; i < Peers.MAX_REMOTES; i++) {
+            remotePresence(a, "b", "s" + i);
+        }
+        Awaitility.await().atMost(WAIT).until(() -> !call(mainA, "instances_list", "{}").text().contains("@b"));
+        remotePresence(a, "b", "s64");
+        assertThat(call(mainA, "instances_list", "{}").text()).contains("(instance s64@b)");
+        assertThat(mainA.peers.droppedPresences()).isZero();
+    }
+
+    /// An instance makes at most 8 consult sessions for the instances of one other machine: the question of a ninth
+    /// asker of that machine is refused with a reply that says so and makes nothing, while those of another machine
+    /// and of this one do not count, and an asker that has its session is still answered.
+    @Test
+    void anotherMachineHasAtMost8ConsultSessionsAndTheQuestionOfANinthAskerIsRefused() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node x = node(a, "x", _ -> null);
+        final Node z = node(a, "z", _ -> null);
+        final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.PEER : null);
+        w.window.state.updateAndGet(s -> {
+            AppState with = withSession(withSession(s, SessionSpec.fresh("consult-y@c", "/tmp").withPlanMode(true)),
+                    SessionSpec.fresh("consult-v", "/tmp"));
+            for (int i = 0; i < Peers.MAX_CONSULTS - 1; i++) {
+                with = withSession(with, SessionSpec.fresh("consult-s" + i + "@a", "/tmp").withPlanMode(true));
+            }
+            return with;
+        });
+        assertThat(call(x, "instance_ask", "{\"instance\":\"w@b\",\"text\":\"eighth\",\"wait_seconds\":0}").error())
+                .isFalse();
+        assertThat(w.window.recorded.await(Intent.PromptSession.class, WAIT).session()).isEqualTo("consult-x@a");
+
+        final McpTools.Outcome ninth = call(z, "instance_ask",
+                "{\"instance\":\"w@b\",\"text\":\"ninth\",\"wait_seconds\":10}");
+        assertThat(ninth.error()).isTrue();
+        assertThat(ninth.text())
+                .contains("comando · w has 8 consult sessions for the instances of machine a, its most");
+        assertThat(w.window.recorded.of(Intent.SaveSession.class)).extracting(save -> save.spec().name())
+                .containsExactly("consult-x@a");
+
+        question(b, Peers.inboxTopic("b", "w"), "@a", "s0@a", Peers.replyTopic("a", "s0"), "q-1");
+        assertThat(w.window.recorded.await(Intent.PromptSession.class, p -> p.session().equals("consult-s0@a"), WAIT)
+                .text()).endsWith("\nq");
+    }
+
+    /// Delivers to `on` the presence of instance `slug` of machine `machine`, stamped with that machine's origin.
+    private static void remotePresence(final Bus on, final String machine, final String slug) {
+        final byte[] p = ("{\"schema\":1,\"name\":\"comando · " + slug + "\",\"slug\":\"" + slug + "\","
+                + "\"version\":\"2.0.0\",\"sessions\":[]}").getBytes(StandardCharsets.UTF_8);
+        on.deliver(new PeerBroker.Message(Peers.presenceTopic(machine, slug), p, null, null,
+                InstanceName.origin(machine)), false);
+    }
+
+    /// A consult session for another machine's asker that its user set out of plan mode is refused that asker's
+    /// question: it could act for an asker whose questions only plan; nothing is prompted there.
+    @Test
+    void aPeerMachinesQuestionToAConsultSessionThatDoesNotPlanIsRefused() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node x = node(a, "x", _ -> null);
+        final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.PEER : null);
+        w.window.state.updateAndGet(s -> withSession(s, SessionSpec.fresh("consult-x@a", "/tmp")));
+        final McpTools.Outcome out = call(x, "instance_ask",
+                "{\"instance\":\"w@b\",\"text\":\"rm it\",\"wait_seconds\":10}");
+        assertThat(out.error()).isTrue();
+        assertThat(out.text()).contains("session consult-x@a of comando · w does not run in plan mode");
+        assertThat(w.window.recorded.of(Intent.PromptSession.class)).isEmpty();
+    }
+
+    /// A session made to only plan whose process reports another mode takes no question, from this machine or
+    /// another, until it is started again in plan mode; one that reports plan, or no mode yet, takes it.
+    @Test
+    void aSessionMadeToPlanThatReportsAnotherModeIsRefusedEachQuestion() throws Exception {
+        final Bus a = new Bus("a");
+        final Bus b = new Bus("b");
+        Bus.cross(a, b);
+        final Node x = node(a, "x", _ -> null);
+        final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.PEER : null);
+        final Node v = node(b, "v", _ -> null);
+        w.window.state.updateAndGet(s -> withSession(withSession(s,
+                SessionSpec.fresh("consult-x@a", "/tmp").withPlanMode(true)),
+                SessionSpec.fresh("consult-v", "/tmp").withPlanMode(true)));
+        reports(w, "consult-x@a", "bypassPermissions");
+        reports(w, "consult-v", "acceptEdits");
+        final McpTools.Outcome remote = call(x, "instance_ask",
+                "{\"instance\":\"w@b\",\"text\":\"q\",\"wait_seconds\":10}");
+        assertThat(remote.error()).isTrue();
+        assertThat(remote.text()).contains("session consult-x@a of comando · w was made to only plan but reports mode "
+                + "bypassPermissions");
+        final McpTools.Outcome local = call(v, "instance_ask",
+                "{\"instance\":\"w\",\"text\":\"q\",\"wait_seconds\":10}");
+        assertThat(local.error()).isTrue();
+        assertThat(local.text()).contains("was made to only plan but reports mode acceptEdits");
+        assertThat(w.window.recorded.of(Intent.PromptSession.class)).isEmpty();
+
+        reports(w, "consult-x@a", "plan");
+        assertThat(call(x, "instance_ask", "{\"instance\":\"w@b\",\"text\":\"again\",\"wait_seconds\":0}").error())
+                .isFalse();
+        assertThat(w.window.recorded.await(Intent.PromptSession.class, WAIT).session()).isEqualTo("consult-x@a");
+    }
+
+    /// Has `n`'s session `session` report permission mode `mode`, as Claude Code's init does.
+    private static void reports(final Node n, final String session, final String mode) {
+        final SessionInfo info = new SessionInfo("conversation", "opus", "/tmp", "2.1", mode, List.of());
+        n.window.state.updateAndGet(s -> s.withSession(session, x -> x.withInfo(info)));
+    }
+
+    /// The spec of the session `n`'s window was asked to make under `name`.
+    private static SessionSpec made(final Node n, final String name) {
+        return n.window.recorded.of(Intent.SaveSession.class).stream().map(Intent.SaveSession::spec)
+                .filter(s -> s.name().equals(name)).findFirst().orElseThrow();
+    }
+
+    /// Delivers to `on` a question on `topic`, stamped with `origin`, from `from`, whose reply goes to `replyTo`.
+    private static void question(
+            final Bus on,
+            final String topic,
+            final String origin,
+            final String from,
+            final String replyTo,
+            final String correlation
+    ) {
+        final byte[] q = ("{\"schema\":1,\"from\":\"" + from + "\",\"name\":\"comando\",\"session\":\"work\","
+                + "\"text\":\"q\"}").getBytes(StandardCharsets.UTF_8);
+        on.deliver(new PeerBroker.Message(topic, q, replyTo, correlation.getBytes(StandardCharsets.UTF_8), origin),
+                false);
+    }
+
     /// Asks `to`'s session `work` from `from` and waits until that session is prompted with `text`: a session still
     /// marked waiting for a reply of its own is refused and never prompted.
     private void assertPrompted(final Node from, final Node to, final String text) throws Exception {
@@ -819,11 +1281,56 @@ class PeersTest {
     }
 
     private Node node(final String name, final String role, final Duration answerWithin, final Duration expireWithin) throws Exception {
-        final Path home = Files.createDirectories(dir.resolve(name.isEmpty() ? "main" : name));
+        return node(bus, name, role, answerWithin, expireWithin, Peers.REMOTE_EXPIRY, _ -> null);
+    }
+
+    /// Instance `name` on `on`'s machine, which grants each machine what `grants` says, at the defaults' bounds.
+    private Node node(final Bus on, final String name, final Function<String, MachinesPort.Grant> grants)
+            throws Exception {
+        return node(on, name, Peers.REMOTE_EXPIRY, grants);
+    }
+
+    /// As above, with how long a presence of another machine shows its instance present given.
+    private Node node(
+            final Bus on,
+            final String name,
+            final Duration presentFor,
+            final Function<String, MachinesPort.Grant> grants
+    ) throws Exception {
+        return node(on, name, "", Peers.ANSWER_WITHIN, Peers.ANSWER_WITHIN.plusSeconds(40), presentFor, grants);
+    }
+
+    private Node node(
+            final Bus on,
+            final String name,
+            final String role,
+            final Duration answerWithin,
+            final Duration expireWithin,
+            final Duration presentFor,
+            final Function<String, MachinesPort.Grant> grants
+    ) throws Exception {
+        return node(on, name, role, answerWithin, expireWithin, presentFor, Peers.REMOTE_EVERY, grants);
+    }
+
+    /// As above, with how long at most between two cut presences given too.
+    private Node node(
+            final Bus on,
+            final String name,
+            final String role,
+            final Duration answerWithin,
+            final Duration expireWithin,
+            final Duration presentFor,
+            final Duration resendEvery,
+            final Function<String, MachinesPort.Grant> grants
+    ) throws Exception {
+        final Path machineDir = on.machine.isEmpty() ? dir : dir.resolve(on.machine);
+        final Path home = Files.createDirectories(machineDir.resolve(name.isEmpty() ? "main" : name));
         final Window window = new Window();
-        final Link link = new Link(bus);
+        final Link link = new Link(on);
         final Peers peers = new Peers(link, Peers.Me.of(name, "2.0.0", role), window, window.state::get, window.transcripts, home.toString(),
-                home.resolve("agents.json"), answerWithin, expireWithin);
+                home.resolve("agents.json"), answerWithin, expireWithin, presentFor, resendEvery);
+        peers.machine(on.machine);
+        peers.grants(grants);
         peers.dataRoot(home);
         final McpTools tools = new McpTools(window, window.state::get, window.transcripts, null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         tools.peers(peers);
@@ -854,6 +1361,10 @@ class PeersTest {
     }
 
     private record Node(Window window, Link link, Peers peers, McpTools tools, Path agents, Path home) {
+    }
+
+    /** A message a link was asked to publish, and its expiry in seconds, 0 for none. */
+    private record Sent(PeerBroker.Message message, long expirySeconds) {
     }
 
     /** The window and reducer as far as the tests need them: a session with its panel, a prompt shown and counted. */
@@ -898,30 +1409,73 @@ class PeersTest {
         }
     }
 
-    /** A broker in memory: retained messages, last wills, delivery to each matching subscription of a live link. */
+    /**
+     * A broker in memory: retained messages, last wills, delivery to each matching subscription of a live link. A bus
+     * of a machine is one machine's broker: its topics between machines reach the buses it is crossed with, stamped
+     * with its origin as the gateway stamps them, and its {@code local} topics stay on it.
+     */
     private static final class Bus {
         final Map<String, byte[]> retained = new LinkedHashMap<>();
+        /** The origin each retained message came with, by topic; null for one of this bus's machine. */
+        final Map<String, String> retainedOrigins = new LinkedHashMap<>();
         final List<Link> links = new CopyOnWriteArrayList<>();
+        /** This bus's machine, empty for a bus crossed with none. */
+        final String machine;
+        final List<Bus> others = new CopyOnWriteArrayList<>();
+
+        Bus() {
+            this("");
+        }
+
+        Bus(final String machine) {
+            this.machine = machine;
+        }
+
+        /** Crosses each of {@code buses} with every other, as paired machines' gateways do. */
+        static void cross(final Bus... buses) {
+            for (final Bus a : buses) {
+                for (final Bus b : buses) {
+                    if (a != b) {
+                        a.others.add(b);
+                    }
+                }
+            }
+        }
 
         void publish(final String topic, final byte[] payload, final boolean retain, final String responseTopic, final byte[] correlation) {
+            deliver(new PeerBroker.Message(topic, payload, responseTopic, correlation), retain);
+            if (!machine.isEmpty() && topic.startsWith(Peers.MACHINES)
+                    && !topic.startsWith(Peers.MACHINES + Peers.LOCAL + '/')) {
+                for (final Bus o : others) {
+                    o.deliver(new PeerBroker.Message(topic, payload, responseTopic, correlation, '@' + machine),
+                            retain);
+                }
+            }
+        }
+
+        /** Keeps {@code m} when retained and delivers it to each link of this bus, as it is, its origin included. */
+        void deliver(final PeerBroker.Message m, final boolean retain) {
             if (retain) {
                 synchronized (retained) {
-                    if (payload.length == 0) {
-                        retained.remove(topic);
+                    if (m.payload().length == 0) {
+                        retained.remove(m.topic());
+                        retainedOrigins.remove(m.topic());
                     } else {
-                        retained.put(topic, payload);
+                        retained.put(m.topic(), m.payload());
+                        retainedOrigins.put(m.topic(), m.origin());
                     }
                 }
             }
             for (final Link l : links) {
-                l.deliver(new PeerBroker.Message(topic, payload, responseTopic, correlation));
+                l.deliver(m);
             }
         }
 
         List<PeerBroker.Message> retained(final String filter) {
             synchronized (retained) {
                 return retained.entrySet().stream().filter(e -> matches(filter, e.getKey()))
-                        .map(e -> new PeerBroker.Message(e.getKey(), e.getValue(), null, null)).toList();
+                        .map(e -> new PeerBroker.Message(e.getKey(), e.getValue(), null, null,
+                                retainedOrigins.get(e.getKey()))).toList();
             }
         }
 
@@ -947,6 +1501,8 @@ class PeersTest {
         volatile boolean up;
         /** Set by a test, read by the asking thread: a publish then fails while the link stays connected. */
         volatile boolean failing;
+        /** What this link was asked to publish, in order, sent or not, with each message's expiry. */
+        final List<Sent> sent = new CopyOnWriteArrayList<>();
         private Message will;
 
         Link(final Bus bus) {
@@ -1004,7 +1560,15 @@ class PeersTest {
         }
 
         @Override
-        public CompletableFuture<Void> publish(final String topic, final byte[] payload, final boolean retained, final String responseTopic, final byte[] correlation) {
+        public CompletableFuture<Void> publish(
+                final String topic,
+                final byte[] payload,
+                final boolean retained,
+                final String responseTopic,
+                final byte[] correlation,
+                final long expirySeconds
+        ) {
+            sent.add(new Sent(new PeerBroker.Message(topic, payload, responseTopic, correlation), expirySeconds));
             if (!up) {
                 return CompletableFuture.failedFuture(new IllegalStateException("not connected"));
             }

@@ -7,9 +7,9 @@ import java.util.List;
 import dev.marregui.comando.core.model.SessionSpec;
 
 /**
- * Builds the argument list of a headless Claude Code process for a session. It names no permission mode and no extra
- * folder: how Claude asks and what it reaches are the kit's {@code settings.json} rules, the same for every session
- * (record 7).
+ * Builds the argument list of a headless Claude Code process for a session. It names no extra folder and no permission
+ * mode but plan: how Claude asks and what it reaches are the kit's {@code settings.json} rules, the same for every
+ * session (record 7), and a session that only plans narrows them (record 189).
  */
 public final class ClaudeCommand {
 
@@ -65,7 +65,11 @@ public final class ClaudeCommand {
         }
         option(a, "--model", spec.model());
         option(a, "--effort", spec.effort());
-        // no permission mode and no extra folders: the kit's settings.json rules hold for every session (record 7)
+        // no extra folders and no mode but plan: the kit's settings.json rules hold for every session (records 7, 189)
+        if (spec.planMode()) {
+            a.add("--permission-mode");
+            a.add("plan");
+        }
         if (spec.budgetUsd() > 0.0) {
             a.add("--max-budget-usd");
             a.add(Double.toString(spec.budgetUsd()));

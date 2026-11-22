@@ -20,6 +20,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.net.ssl.SSLContext;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Queues;
@@ -30,6 +31,7 @@ import dev.marregui.comando.frontear.protocol.MqttClient;
 import dev.marregui.comando.frontear.protocol.MqttException;
 import dev.marregui.comando.frontear.protocol.Packet;
 import dev.marregui.comando.frontear.protocol.PublishRecord;
+import dev.marregui.comando.frontear.protocol.Topics;
 import dev.marregui.comando.frontear.store.LinkLog;
 import dev.marregui.comando.frontear.store.LogOptions;
 import dev.marregui.comando.frontear.store.QuotaExceededException;
@@ -56,11 +58,15 @@ import dev.marregui.comando.frontear.watch.Watch;
  *
  * <p>In, at least once. The link subscribes to its IN filters on the peer with No Local, so what it sends does not
  * come back, and publishes what arrives on the local broker as {@code $link/<id>}, whose own OUT subscription, No
- * Local under that owner, leaves it; the peer's PUBACK waits for that local publish and carries its reason code.
+ * Local under that owner, leaves it; the peer's PUBACK waits for that local publish and carries its reason code. A
+ * message whose topic none of the IN filters covers is dropped and counted: the peer may be another machine's server.
  *
  * <p>Reconnect. A lost or refused connection is tried again after a backoff that grows with each failure in a row
  * ({@link Forwarding#backoff}); a 0x88 refusal, from a node that runs and holds its links, after the first backoff;
  * and the peer's own link connecting to this node brings a waiting reconnect forward to now ({@link #wake}).
+ *
+ * <p>TLS. A link whose spec asks for TLS connects over the TLS context the mesh gives it ({@link #tls}), and while it
+ * has none it does not connect at all: it stays down, its state saying why, until a context is set.
  *
  * <p>Watch. While the node's {@link Watch} is on, the link keeps each message's steps there (appended, sent, arrived,
  * dropped and why) and each connection change; a connection the peer refused for the client id, a link aimed at a
@@ -85,6 +91,10 @@ final class Link implements AutoCloseable {
     static final long WAKE_EVERY_NANOS = TimeUnit.SECONDS.toNanos(1);
     /** The keep alive towards the peer: comando's peer client's. */
     private static final int KEEP_ALIVE_SECONDS = 60;
+    /** Why a TLS link is down while the mesh gives it no TLS context. */
+    static final String NO_TLS = "no TLS context for the link: it connects once the mesh gives it one";
+    /** Why a message in from the peer was dropped when none of the link's IN filters covers its topic. */
+    static final String NOT_IN = "not in the link's in filters";
 
     private final String id;
     private final String owner;
@@ -122,6 +132,8 @@ final class Link implements AutoCloseable {
     private Set<String> out = Set.of();
     /** Written by the mesh's caller under the mesh's lock; read by the strand. */
     private volatile LinkSpec spec;
+    /** The TLS context of a TLS link's clients, null while the mesh gives none; the mesh's caller, under its lock. */
+    private SSLContext tls;
     /**
      * The connection to the peer; written by the mesh's caller under the mesh's lock, replaced under
      * {@link #peerSwap}; read by the strand and by {@link #state}.
@@ -164,6 +176,11 @@ final class Link implements AutoCloseable {
     private volatile long sent;
     private volatile long dropped;
     private volatile long reordered;
+    /**
+     * Why the link is down: empty while up or connecting, else the last failure or {@link #NO_TLS}; written by the
+     * strand only, read by {@link #state} from any thread.
+     */
+    private volatile String reason = "";
 
     private Link(final String id, final String localId, final Broker broker, final LinkLog log,
             final LinkOptions options, final InstantSource clock, final Watch watch) {
@@ -287,7 +304,7 @@ final class Link implements AutoCloseable {
         final LinkSpec old = spec;
         spec = s;
         out(s.out());
-        if (!old.host().equals(s.host()) || old.port() != s.port()) {
+        if (!old.host().equals(s.host()) || old.port() != s.port() || old.tls() != s.tls()) {
             connect(s);
         } else if (!old.in().equals(s.in())) {
             post(this::syncIn);
@@ -297,7 +314,7 @@ final class Link implements AutoCloseable {
     /** Replaces the OUT filters with {@code filters}, every new one registered before an old one goes. */
     void out(final Set<String> filters) {
         final LinkSpec s = spec;
-        spec = new LinkSpec(s.id(), s.host(), s.port(), filters, s.in(), s.hopLimit());
+        spec = new LinkSpec(s.id(), s.host(), s.port(), filters, s.in(), s.hopLimit(), s.tls());
         for (final String f : filters) {
             if (!out.contains(f)) {
                 broker.subscribe(owner, f, 1, true, subscriber);
@@ -314,8 +331,21 @@ final class Link implements AutoCloseable {
     /** Replaces the IN filters with {@code filters}; on the peer, every new one is asked for before an old one goes. */
     void in(final Set<String> filters) {
         final LinkSpec s = spec;
-        spec = new LinkSpec(s.id(), s.host(), s.port(), s.out(), filters, s.hopLimit());
+        spec = new LinkSpec(s.id(), s.host(), s.port(), s.out(), filters, s.hopLimit(), s.tls());
         post(this::syncIn);
+    }
+
+    /**
+     * Takes {@code context} as the TLS context of the link's TLS connections; a started TLS link connects again over
+     * it when it changed. Mesh's caller, under its lock.
+     */
+    void tls(final SSLContext context) {
+        final SSLContext old = tls;
+        tls = context;
+        final LinkSpec s = spec;
+        if (s != null && s.tls() && old != context && !closed) {
+            connect(s);
+        }
     }
 
     String id() {
@@ -333,7 +363,7 @@ final class Link implements AutoCloseable {
         final long c = cursor;
         final long t = tail;
         return new LinkState(id, connected, Math.max(0, t - c), c, t, sent, dropped + shed.get() + droppedIn(),
-                reordered, waiting.depth(), options.queueMax());
+                reordered, waiting.depth(), options.queueMax(), reason);
     }
 
     /** The link's log now; from any thread. */
@@ -374,15 +404,28 @@ final class Link implements AutoCloseable {
         }
     }
 
-    /** A new client for {@code s}'s peer in place of the current one, which is closed first. Mesh's caller. */
+    /**
+     * A new client for {@code s}'s peer in place of the current one, which is closed first; for a TLS link while the
+     * mesh gives it no TLS context, no client, and the link waits down with {@link #NO_TLS}. Mesh's caller.
+     */
     private void connect(final LinkSpec s) {
         final Peer old = peer;
         if (old != null) {
             old.client.close();
         }
+        if (s.tls() && tls == null) {
+            replace(old, null);
+            post(this::waitForTls);
+            LOG.log(System.Logger.Level.INFO, "link waits for a TLS context [link=" + id + ", peer=" + s.host() + ':'
+                    + s.port() + ']');
+            return;
+        }
         final Peer p = new Peer(s);
         replace(old, p);
-        post(() -> down(null));
+        post(() -> {
+            down(null);
+            reason = "";
+        });
         p.client.connect();
         LOG.log(System.Logger.Level.INFO, "link connecting [link=" + id + ", peer=" + s.host() + ':' + s.port()
                 + ", clientId=" + clientId() + ']');
@@ -774,6 +817,7 @@ final class Link implements AutoCloseable {
     /** The peer accepted connection {@code p}: asks for the IN filters and sends from the cursor. Strand. */
     private void up(final Peer p) {
         up = true;
+        reason = "";
         connected = true;
         window = Math.max(1, Math.min(p.client.receiveMaximum(), options.windowMax()));
         subscribedIn = new HashSet<>();
@@ -797,14 +841,27 @@ final class Link implements AutoCloseable {
         if ((up || cause != null) && watch.on()) {
             watch.step(id, LinkStep.Kind.DISCONNECTED, -1, null, 0, disconnected(cause));
         }
+        if (cause != null) {
+            reason = disconnected(cause);
+        }
         up = false;
         connected = false;
         rewindToCursor();
     }
 
+    /** A TLS link with no TLS context: down, with no client, saying why. Strand. */
+    private void waitForTls() {
+        down(null);
+        reason = NO_TLS;
+        if (watch.on()) {
+            watch.step(id, LinkStep.Kind.DISCONNECTED, -1, null, 0, NO_TLS);
+        }
+    }
+
     /**
-     * Why the connection ended, for the watch: empty for a replacement, a refused client id named as a link aimed at
-     * the wrong node (a node refuses a link client whose id does not end with its name), else the cause's message.
+     * Why the connection ended, for the watch and the state: empty for a replacement, a refused client id named as a
+     * link aimed at the wrong node (a node refuses a link client whose id does not end with its name), else the cause's
+     * message.
      */
     private String disconnected(final Throwable cause) {
         if (cause == null) {
@@ -893,8 +950,19 @@ final class Link implements AutoCloseable {
         }
     }
 
-    /** A message in from the peer: published locally as the link, unless it has made its hops. Strand. */
+    /**
+     * A message in from the peer: published locally as the link, unless no IN filter of the link covers its topic or
+     * it has made its hops. The peer may push what the link never subscribed to (a server of another machine, or one
+     * that kept an old subscription), so a topic outside the IN filters is answered 0x00 and dropped. Strand.
+     */
     private CompletionStage<Integer> arrive(final Packet.Publish m) {
+        if (!covered(m.topic())) {
+            dropped++;
+            LOG.log(System.Logger.Level.DEBUG, () -> "message in not published, not in the link's in filters [link="
+                    + id + ", topic=" + m.topic() + ']');
+            watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, NOT_IN);
+            return CompletableFuture.completedFuture(Packet.SUCCESS);
+        }
         final int hops = Forwarding.hops(m);
         if (hops < 0 || hops >= spec.hopLimit()) {
             dropped++;
@@ -920,6 +988,16 @@ final class Link implements AutoCloseable {
             }
             return code;
         });
+    }
+
+    /** Whether one of the link's IN filters matches {@code topic}. */
+    private boolean covered(final String topic) {
+        for (final String f : spec.in()) {
+            if (Topics.matches(f, topic)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Runs {@code task} on the strand; false once it has stopped. */
@@ -974,7 +1052,8 @@ final class Link implements AutoCloseable {
             // one client id per link, so two links to one peer do not take over each other's session; the peer's QoS 0
             // messages wait for the strand within the link's queue bound, as the broker's do
             this.client = new MqttClient(new MqttClient.Options(s.host(), s.port(), clientId(), KEEP_ALIVE_SECONDS,
-                    Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null, IN_RECEIVE_MAXIMUM, options.queueMax()), this, strand);
+                    Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null, IN_RECEIVE_MAXIMUM, options.queueMax()), this, strand,
+                    s.tls() ? tls : null);
         }
 
         @Override

@@ -52,6 +52,7 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.LabPort;
+import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.port.SearchPort;
 import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.core.port.TopicPort;
@@ -71,6 +72,7 @@ import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.dialogs.folders.FoldersDialog;
+import dev.marregui.comando.ui.dialogs.machines.MachinesDialog;
 import dev.marregui.comando.ui.dialogs.resource.ResourceDialog;
 import dev.marregui.comando.ui.dialogs.sessions.ImportSessionsDialog;
 import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
@@ -170,6 +172,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private volatile InstancesPort instances = InstancesPort.NONE;
     /** What the frontear tab reads (record 187); null until set, and then the tab shows nothing. */
     private volatile LabPort lab;
+    /**
+     * This machine and the paired ones (record 189): written once through {@link #machines} by the app before the
+     * build, read by the build and on the EDT by the Machines window.
+     */
+    private volatile MachinesPort machines = MachinesPort.NONE;
     /**
      * Where the checkpoint threshold goes, in percent of a session's context window (record 129); nowhere until
      * {@link #checkpointThreshold} sets it.
@@ -301,6 +308,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** What the frontear tab reads (record 187); set before {@link #start}, as the build reads it. */
     public void lab(final LabPort port) {
         lab = port;
+    }
+
+    /** This machine and the paired ones (record 189); set before {@link #start}, as the build reads it. */
+    public void machines(final MachinesPort port) {
+        machines = port == null ? MachinesPort.NONE : port;
     }
 
     /** The panels' Terminals for agents (record 148): any thread but the EDT; refused until the window is built. */
@@ -465,6 +477,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             public void newSession(final String name) {
                 sessionsDialog.showNew(deps.state().get(), name);
             }
+
+            @Override
+            public void machines(final String select) {
+                openMachines(select);
+            }
         }, deps.texts(), () -> actions.run("view.sidebar"));
         final MenuBuilder menus = new MenuBuilder(deps, actions);
         sidebar.onTabMenu(menus::tabMenu);
@@ -502,6 +519,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 fabric.toggle();
             }
         });
+        sidebar.machines(machines);
         jobs.attach(sidebar);
         final FindBar findBar = new FindBar();
         final SearchHub.Opener hitOpener = new SearchHub.Opener() {
@@ -960,6 +978,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      */
     public static Intent saveConnection(final String previous, final ConnectionSpec spec, final Set<String> typed) {
         return new Intent.SaveConnection(previous, spec, typed.contains(PASSWORD));
+    }
+
+    /** The Machines window (record 189), machine {@code select} selected when not empty. */
+    void openMachines(final String select) {
+        MachinesDialog.show(parts.frame(), machines, select);
     }
 
     /** The folder tabs' folders in their window; saving replaces them. */

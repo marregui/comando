@@ -6,6 +6,8 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import dev.marregui.comando.core.json.Json;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -21,6 +23,22 @@ class LinkFileTest {
         assertThat(LinkFile.read(bytes)).isEqualTo(spec);
         assertThat(LinkFile.write(new LinkSpec("ab", "127.0.0.1", 1884, Set.of("a/+", "b/#"), Set.of("r/#"), 4)))
                 .isEqualTo(bytes);
+    }
+
+    /// A TLS link keeps `tls` across a restart. The property is written only when true, so a plain link's file is
+    /// the one a node from before TLS wrote and reads; a file without it reads as plain, and a `tls` that is not a
+    /// boolean is refused.
+    @Test
+    void tlsIsKeptAndWrittenOnlyForATlsLink() {
+        final LinkSpec tls = new LinkSpec("ab", "127.0.0.1", 1884, Set.of("a/+"), Set.of(), 4, true);
+        assertThat(LinkFile.read(LinkFile.write(tls))).isEqualTo(tls);
+        final LinkSpec plain = new LinkSpec("ab", "127.0.0.1", 1884, Set.of("a/+"), Set.of(), 4);
+        assertThat(Json.readTree(LinkFile.write(plain)).has("tls")).isFalse();
+        assertThat(Json.readTree(LinkFile.write(tls)).get("tls").asBoolean()).isTrue();
+        final String old = "{\"version\":1,\"id\":\"ab\",\"host\":\"h\",\"port\":1,\"out\":[],\"in\":[],\"hopLimit\":1";
+        assertThat(LinkFile.read((old + "}").getBytes(StandardCharsets.UTF_8)).tls()).isFalse();
+        assertThatThrownBy(() -> LinkFile.read((old + ",\"tls\":\"yes\"}").getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     /// Each malformed file is refused: not JSON, not an object, another version, an unknown property, a missing

@@ -43,6 +43,7 @@ import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.LabPort;
+import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.port.TerminalPort;
@@ -155,6 +156,11 @@ public final class McpTools {
      * when the node's watch is built, read by the request threads; {@link LabPort#NONE} until then.
      */
     private volatile LabPort lab = LabPort.NONE;
+    /**
+     * This machine and the machines paired with it, for {@code machines} (record 189): written once by the application
+     * thread at wiring, read by the request threads; {@link MachinesPort#NONE} until then.
+     */
+    private volatile MachinesPort machines = MachinesPort.NONE;
     /** Permits for {@link #MAX_SCANS} scans; a call that finds none is refused, never queued. */
     private final Semaphore scans = new Semaphore(MAX_SCANS);
     private final AtomicLong approvalIds = new AtomicLong(1_000_000L);
@@ -237,6 +243,11 @@ public final class McpTools {
         this.lab = lab;
     }
 
+    /** This machine and its paired machines, which {@code machines} reads and changes (record 189); set once. */
+    public void machines(final MachinesPort port) {
+        this.machines = port == null ? MachinesPort.NONE : port;
+    }
+
     /** The rows of the panels' runs, which the result tools read (record 145); the application sets it once. */
     public void results(final ResultRegistry results) {
         this.results = results;
@@ -303,6 +314,7 @@ public final class McpTools {
                 case "instance_ask" -> peers().ask(session, args);
                 case "instance_reply" -> peers().replyOf(session, args);
                 case "frontear_read" -> LabTools.read(lab, args);
+                case "machines" -> machines(session, args);
                 default -> ActionTools.handles(name, builtIn) ? actions.run(session, name, args) : Outcome.fail("unknown tool " + name);
             };
         } catch (final IllegalArgumentException e) {
@@ -478,6 +490,11 @@ public final class McpTools {
         return BYPASS.equals(unknown ? SessionKind.INSTANCE.defaults().permissionMode() : reported);
     }
 
+    /** Whether {@code session}'s spec has it only plan, so no approval may move it out of plan mode. */
+    private boolean onlyPlans(final String session) {
+        return state.get().session(session).map(s -> s.spec().planMode()).orElse(false);
+    }
+
     /** The JSON Claude Code expects back from a permission-prompt tool. */
     String permissionResult(final String session, final String tool, final ObjectNode input, final ApprovalDecision decision) {
         final ObjectNode r = Json.object();
@@ -497,6 +514,10 @@ public final class McpTools {
                 r.put("behavior", "allow");
                 r.set("updatedInput", input);
                 final boolean plan = ApprovalKind.ofTool(tool) == ApprovalKind.PLAN;
+                if (plan && onlyPlans(session)) {
+                    // a session made to only plan (a peer's consult session) stays in plan mode: the plan runs once
+                    break;
+                }
                 // accept edits asks for more than bypass does, so a session in bypass goes back to it
                 final boolean keepsBypass = plan && runsInBypass(session);
                 if (a.scope() == ApprovalDecision.Scope.ONCE && !keepsBypass) {
@@ -884,6 +905,28 @@ public final class McpTools {
             throw new IllegalArgumentException("this comando has no connection to other instances");
         }
         return p;
+    }
+
+    /**
+     * {@code machines} (record 189): a view, or an action on this machine's pairings; listening on an address and
+     * pairing open this machine to another, so each waits for the user's yes on a card.
+     */
+    private Outcome machines(final String session, final JsonNode args) {
+        final String refusal = MachinesTools.refusal(args);
+        if (!refusal.isEmpty()) {
+            return Outcome.fail(refusal);
+        }
+        final MachinesPort port = machines;
+        final String card = MachinesTools.card(port, args);
+        if (!card.isEmpty()) {
+            final ApprovalDecision d = ask(session, ApprovalKind.CONNECTION, "machines", args.toString(), card, "");
+            audit.record(session, "approval", "machines", redacted(args), d.toString());
+            if (d instanceof ApprovalDecision.Deny deny) {
+                return Outcome.fail("The user denied it" + (deny.message().isBlank() ? "." : ": " + deny.message()));
+            }
+        }
+        final Peers p = peers;
+        return MachinesTools.run(port, p == null ? 0L : p.dropped(), args);
     }
 
     private static String sessionNames(final AppState s) {

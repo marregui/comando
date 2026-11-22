@@ -26,6 +26,21 @@ class RequestTest {
                 2)));
     }
 
+    /// `PutLink` reads `tls` as a flag: `true` gives a TLS link, `false` or no property a plain one, and any other
+    /// value is a bad request, never a plain link.
+    @Test
+    void tlsIsAFlagOfPutLinkThatDefaultsToPlain() throws Exception {
+        final String good = "\"id\":\"a\",\"host\":\"h\",\"port\":1883,\"out\":[],\"in\":[],\"hopLimit\":2";
+        assertThat(parse("PutLink", "{" + good + ",\"tls\":true}"))
+                .isEqualTo(new Request.PutLink(new LinkSpec("a", "h", 1883, Set.of(), Set.of(), 2, true)));
+        assertThat(parse("PutLink", "{" + good + ",\"tls\":false}"))
+                .isEqualTo(new Request.PutLink(new LinkSpec("a", "h", 1883, Set.of(), Set.of(), 2, false)));
+        assertThat(parse("PutLink", "{" + good + "}"))
+                .isEqualTo(new Request.PutLink(new LinkSpec("a", "h", 1883, Set.of(), Set.of(), 2, false)));
+        assertRefused("PutLink", "{" + good + ",\"tls\":\"true\"}", Refusal.BAD_REQUEST);
+        assertRefused("PutLink", "{" + good + ",\"tls\":1}", Refusal.BAD_REQUEST);
+    }
+
     /// `RemoveLink`, `SetFilters` and `GetState` read their fields.
     @Test
     void theOtherMethodsReadTheirFields() throws Exception {

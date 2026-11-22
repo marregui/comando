@@ -519,6 +519,19 @@ class ReducerTest {
         assertThat(state.notice().text()).contains("no open panel");
     }
 
+    /// A session made to only plan (record 189) starts in plan mode, and an edit from the form, which has no permission
+    /// mode, keeps it: an edit never lifts it.
+    @Test
+    void aSessionThatOnlyPlansKeepsItThroughAnEdit() {
+        final SessionSpec plans = SessionSpec.fresh("consult-main@b", "/tmp").withPlanMode(true);
+        apply(new Intent.SaveSession("", plans));
+        apply(new Intent.SaveSession("consult-main@b", SessionSpec.fresh("consult-main@b", "/tmp").withModel("haiku")));
+        assertThat(state.session("consult-main@b").orElseThrow().spec().planMode()).as("kept by the edit").isTrue();
+        apply(new Intent.StartSession("consult-main@b"));
+        assertThat(effects).anySatisfy(e -> assertThat(e).isInstanceOfSatisfying(Effect.StartClaude.class,
+                c -> assertThat(c.spec().planMode()).isTrue()));
+    }
+
     /// An imported conversation starts in FORK mode, and its first init records the fork's id with RESUME.
     @Test
     void anImportedConversationForksOnceThenResumesTheFork() {

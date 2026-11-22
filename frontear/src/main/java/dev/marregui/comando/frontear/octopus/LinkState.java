@@ -1,5 +1,7 @@
 package dev.marregui.comando.frontear.octopus;
 
+import org.jetbrains.annotations.TestOnly;
+
 /**
  * A link at one moment: whether the peer accepted its connection, the messages {@code queued} in its log between the
  * {@code cursor} (the next to deliver) and the {@code tail} (the next offset an append takes), and since the link
@@ -8,10 +10,18 @@ package dev.marregui.comando.frontear.octopus;
  * messages the peer refused for now (0x97, 0x89) and took only after it had accepted a later one of the same window,
  * so the peer holds that later message before the refused one. {@code queuedDeliveries} is how many of the broker's
  * messages wait for the link to append them, beside {@code queueMax}, the bound past which one is refused
- * ({@link LinkOptions#queueMax}).
+ * ({@link LinkOptions#queueMax}). {@code reason} says why a link is down: empty while it is up or connecting, else its
+ * last failure, or that a TLS link waits for a TLS context.
  */
 public record LinkState(String id, boolean connected, long queued, long cursor, long tail, long sent, long dropped,
-        long reordered, int queuedDeliveries, int queueMax) {
+        long reordered, int queuedDeliveries, int queueMax, String reason) {
+
+    /** A state with no reason given, the shape before the reason was shown. */
+    @TestOnly
+    public LinkState(final String id, final boolean connected, final long queued, final long cursor, final long tail,
+            final long sent, final long dropped, final long reordered, final int queuedDeliveries, final int queueMax) {
+        this(id, connected, queued, cursor, tail, sent, dropped, reordered, queuedDeliveries, queueMax, "");
+    }
 
     /** A state with no deliveries waiting under the default bound, the shape before the deliveries were shown. */
     public LinkState(final String id, final boolean connected, final long queued, final long cursor, final long tail,

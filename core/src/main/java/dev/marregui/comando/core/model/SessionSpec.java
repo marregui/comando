@@ -6,7 +6,9 @@ import java.util.Objects;
 /**
  * Configuration of one Claude Code session. Empty strings mean "the CLI's configured default". How Claude asks before a
  * tool, and which folders it may reach, is not a session's: the kit's {@code settings.json} rules hold for every session
- * (record 7), so a session an agent creates has its creator's permissions by construction.
+ * (record 7), so a session an agent creates has its creator's permissions by construction. The one exception is
+ * plan mode: a session that answers an instance on another machine with no more than a peer's grant only plans
+ * (record 189), which narrows the kit's rules and never widens them.
  *
  * @param name            unique name, the key panels bind to; also passed as {@code --name}
  * @param workDir         working directory of the CLI process
@@ -27,6 +29,10 @@ import java.util.Objects;
  * @param unreadMillis    when the session finished work the user has not looked at (record 136); 0 for none, which is
  *                        also what a {@code sessions.json} without the field reads as. Kept by every edit; only the
  *                        reducer sets it
+ * @param planMode        whether the session only plans ({@code --permission-mode plan}): it reads, but edits nothing
+ *                        and runs no command; false for the kit's rules, which is also what a {@code sessions.json}
+ *                        without the field reads as. Not {@code permissionMode}, the field record 7 dropped, which an
+ *                        old file can still hold with a wider mode. Kept by every edit
  */
 public record SessionSpec(
         String name,
@@ -40,7 +46,8 @@ public record SessionSpec(
         String carried,
         String createdBy,
         String family,
-        long unreadMillis) {
+        long unreadMillis,
+        boolean planMode) {
 
     /** The checkpoint command of a session that never set one: what Reflect sends. */
     public static final String DEFAULT_CHECKPOINT = "/reflect";
@@ -84,6 +91,25 @@ public record SessionSpec(
         if (startMode != StartMode.NEW && claudeSessionId.isEmpty()) {
             throw new IllegalArgumentException("startMode " + startMode + " needs a claudeSessionId");
         }
+    }
+
+    /** A session under the kit's rules. */
+    public SessionSpec(
+            final String name,
+            final String workDir,
+            final String model,
+            final String effort,
+            final double budgetUsd,
+            final String claudeSessionId,
+            final StartMode startMode,
+            final String checkpoint,
+            final String carried,
+            final String createdBy,
+            final String family,
+            final long unreadMillis
+    ) {
+        this(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy,
+                family, unreadMillis, false);
     }
 
     /** A session with nothing to read. */
@@ -145,7 +171,7 @@ public record SessionSpec(
      */
     public SessionSpec restarted() {
         return new SessionSpec(name, workDir, model, effort, budgetUsd, "", StartMode.NEW, checkpoint, carried,
-                createdBy, family, unreadMillis);
+                createdBy, family, unreadMillis, planMode);
     }
 
     /**
@@ -158,46 +184,46 @@ public record SessionSpec(
 
     public SessionSpec withName(final String newName) {
         return new SessionSpec(newName, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint,
-                carried, createdBy, family, unreadMillis);
+                carried, createdBy, family, unreadMillis, planMode);
     }
 
     /** After Claude Code reports its session id, later starts resume that conversation. */
     public SessionSpec resumable(final String sessionId) {
         return new SessionSpec(name, workDir, model, effort, budgetUsd, sessionId, StartMode.RESUME, checkpoint,
-                carried, createdBy, family, unreadMillis);
+                carried, createdBy, family, unreadMillis, planMode);
     }
 
     public SessionSpec withCheckpoint(final String newCheckpoint) {
         return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, newCheckpoint,
-                carried, createdBy, family, unreadMillis);
+                carried, createdBy, family, unreadMillis, planMode);
     }
 
     /** The checkpoint's summary that goes in front of the next prompt; empty once it has gone. */
     public SessionSpec withCarried(final String newCarried) {
         return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint,
-                newCarried, createdBy, family, unreadMillis);
+                newCarried, createdBy, family, unreadMillis, planMode);
     }
 
     public SessionSpec withModel(final String newModel) {
         return new SessionSpec(name, workDir, newModel, effort, budgetUsd, claudeSessionId, startMode, checkpoint,
-                carried, createdBy, family, unreadMillis);
+                carried, createdBy, family, unreadMillis, planMode);
     }
 
     public SessionSpec withEffort(final String newEffort) {
         return new SessionSpec(name, workDir, model, newEffort, budgetUsd, claudeSessionId, startMode, checkpoint,
-                carried, createdBy, family, unreadMillis);
+                carried, createdBy, family, unreadMillis, planMode);
     }
 
     /** The same session, recorded as created by {@code creator} (a session or client name; empty for the user). */
     public SessionSpec withCreatedBy(final String creator) {
         return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried,
-                creator, family, unreadMillis);
+                creator, family, unreadMillis, planMode);
     }
 
     /** The same session, recorded as of the creation family whose root was {@code root}, the removed session's name. */
     public SessionSpec withFamily(final String root) {
         return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried,
-                createdBy, root, unreadMillis);
+                createdBy, root, unreadMillis, planMode);
     }
 
     /** Whether the session finished work the user has not looked at. */
@@ -208,6 +234,12 @@ public record SessionSpec(
     /** The same session, with its work finished at {@code atMillis} for the user to read; 0 when nothing waits. */
     public SessionSpec withUnread(final long atMillis) {
         return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried,
-                createdBy, family, atMillis);
+                createdBy, family, atMillis, planMode);
+    }
+
+    /** The same session, only planning when {@code plans}, else under the kit's rules. */
+    public SessionSpec withPlanMode(final boolean plans) {
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried,
+                createdBy, family, unreadMillis, plans);
     }
 }
