@@ -35,7 +35,9 @@ final class Forwarding {
     /** The hops {@code m} has made, 0 when it carries no count, -1 when its count is not one decimal number. */
     static int hops(final Packet.Publish m) {
         String value = null;
-        for (final Packet.UserProperty p : m.meta().userProperties()) {
+        final List<Packet.UserProperty> users = m.meta().userProperties();
+        for (int i = 0; i < users.size(); i++) {
+            final Packet.UserProperty p = users.get(i);
             if (HOPS.equals(p.name())) {
                 if (value != null) {
                     return -1;
@@ -83,7 +85,9 @@ final class Forwarding {
     static Packet.Publish outgoing(final Packet.Publish record, final long nowMillis) {
         final List<Packet.UserProperty> kept = new ArrayList<>();
         long queuedMillis = -1;
-        for (final Packet.UserProperty p : record.meta().userProperties()) {
+        final List<Packet.UserProperty> users = record.meta().userProperties();
+        for (int i = 0; i < users.size(); i++) {
+            final Packet.UserProperty p = users.get(i);
             if (QUEUED.equals(p.name())) {
                 queuedMillis = millis(p.value());
             } else {
@@ -104,7 +108,9 @@ final class Forwarding {
 
     /** When {@code record} joined a link's log, in epoch milliseconds; -1 when it does not say. */
     static long queuedMillis(final Packet.Publish record) {
-        for (final Packet.UserProperty p : record.meta().userProperties()) {
+        final List<Packet.UserProperty> users = record.meta().userProperties();
+        for (int i = 0; i < users.size(); i++) {
+            final Packet.UserProperty p = users.get(i);
             if (QUEUED.equals(p.name())) {
                 return millis(p.value());
             }
@@ -127,7 +133,9 @@ final class Forwarding {
     private static Packet.Publish stamped(final Packet.Publish m, final int qos, final int packetId, final int hops,
             final long queuedMillis) {
         final List<Packet.UserProperty> properties = new ArrayList<>();
-        for (final Packet.UserProperty p : m.meta().userProperties()) {
+        final List<Packet.UserProperty> users = m.meta().userProperties();
+        for (int i = 0; i < users.size(); i++) {
+            final Packet.UserProperty p = users.get(i);
             if (!HOPS.equals(p.name()) && !QUEUED.equals(p.name())) {
                 properties.add(p);
             }

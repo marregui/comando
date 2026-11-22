@@ -69,6 +69,16 @@ class HealthRowsTest {
         assertThat(h.read(node(62_000L, link("bob", true, 0L, 4L))).getFirst().status()).isEqualTo(Status.OK);
     }
 
+    /// A refusal since the last read flags the link `dropping` for a minute, as a drop does: a link whose queue
+    /// refuses by its wait or its weight is far under its count and would read ok.
+    @Test
+    void aRefusalFlagsTheLinkForAMinute() {
+        final HealthRows h = new HealthRows();
+        h.read(node(1_000L, refusing("bob", 5L)));
+        assertThat(h.read(node(2_000L, refusing("bob", 6L))).getFirst().status()).isEqualTo(Status.DROPPING);
+        assertThat(h.read(node(62_000L, refusing("bob", 6L))).getFirst().status()).isEqualTo(Status.OK);
+    }
+
     /// A link whose gateway messages wait at the limit is `log full`; a log whose 99th percentile force is over 50 ms
     /// is `slow disk`.
     @Test
@@ -183,6 +193,10 @@ class HealthRowsTest {
     private static Node counted(final long atMillis, final long ringMissed) {
         return new Node("main", 18883, atMillis, true, Totals.NONE, List.of(), List.of(),
                 new Counts(0L, ringMissed, 0L, 0L, 0L));
+    }
+
+    private static Link refusing(final String id, final long refused) {
+        return new Link(id, true, 0L, 0L, 0L, 0L, 0L, 0L, 0, 64, 0.0, 0.0, 1L, 0L, "", refused, 0L, 0L, 0L, false);
     }
 
     private static Link link(final String id, final boolean up, final long queued, final long dropped) {

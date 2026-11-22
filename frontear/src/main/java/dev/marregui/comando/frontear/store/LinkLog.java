@@ -233,8 +233,16 @@ public final class LinkLog implements AutoCloseable {
     public CompletableFuture<Long> append(final byte[] record) {
         Objects.requireNonNull(record, "record");
         // the forcer writes it after the caller moves on, which may reuse the array
-        final byte[] copy = record.clone();
-        final long held = FRAME + (long) copy.length;
+        return appendOwned(record.clone());
+    }
+
+    /**
+     * As {@link #append}, taking {@code record} itself rather than a copy: the caller hands it over and never writes
+     * it again. For a caller that made the array for this append alone, which saves a copy of every record.
+     */
+    public CompletableFuture<Long> appendOwned(final byte[] record) {
+        Objects.requireNonNull(record, "record");
+        final long held = FRAME + (long) record.length;
         final CompletableFuture<Long> future = new CompletableFuture<>();
         synchronized (lock) {
             final IOException refused = refusal("append");
@@ -243,14 +251,14 @@ public final class LinkLog implements AutoCloseable {
             }
             final long offset = tail;
             byte[] delta = active == null || active.version != VERSION || active.previous == null
-                    || (offset - active.base) % KEYFRAME_EVERY == 0L ? null : Deltas.encode(active.previous, copy);
+                    || (offset - active.base) % KEYFRAME_EVERY == 0L ? null : Deltas.encode(active.previous, record);
             final boolean roll = active == null || active.count > 0L && active.size + FRAME
-                    + (delta == null ? copy.length : delta.length) > options.segmentBytes();
+                    + (delta == null ? record.length : delta.length) > options.segmentBytes();
             if (roll) {
                 // a segment's first record is written whole
                 delta = null;
             }
-            final byte[] stored = delta == null ? copy : delta;
+            final byte[] stored = delta == null ? record : delta;
             final long frame = FRAME + (long) stored.length;
             final long need = frame + (roll ? HEADER : 0L);
             if (bytes + need > options.maxBytes()) {
@@ -263,11 +271,11 @@ public final class LinkLog implements AutoCloseable {
             if (roll) {
                 roll(offset);
             }
-            pending.addLast(new Pending(offset, active, active.size, copy, stored,
+            pending.addLast(new Pending(offset, active, active.size, record, stored,
                     delta == null ? stored.length : DELTA | stored.length, future));
             active.size += frame;
             active.count++;
-            active.previous = copy;
+            active.previous = record;
             tail = offset + 1L;
             bytes += need;
             roundBytes += held;

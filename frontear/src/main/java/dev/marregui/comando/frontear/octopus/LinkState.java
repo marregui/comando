@@ -10,7 +10,8 @@ import org.jetbrains.annotations.TestOnly;
  * link's queue bound) and {@code reordered}: the messages the peer refused for now (0x97, 0x89) and took only after it
  * had accepted a later one of the same window, so the peer holds that later message before the refused one.
  * {@code queuedDeliveries} is how many of the gateway's messages wait for the link to append them, beside
- * {@code queueMax}, the bound past which one is refused ({@link LinkOptions#queueMax}). {@code reason} says why a link
+ * {@code queueMax}, the count past which one is refused ({@link LinkOptions#queueMax}); the queue's weight and wait
+ * bounds refuse earlier, and those refusals show in {@code refused} and {@code dropped}. {@code reason} says why a link
  * is down: empty while it is up or connecting, else its last failure, or that a TLS link waits for a TLS context.
  * {@code refused} counts the gateway's QoS 1 messages the link answered 0x97 since it started: its queue, its log or
  * its backlog was full. {@code coalesced} counts the retained messages never sent because a newer one on the same

@@ -24,12 +24,13 @@ record Schedule(Topology topology, int hopLimit, Map<String, List<String>> filte
     /// A batch is at most this many messages: well under the client's publish queue of 1,000, so none is refused
     /// there, and a node's backlog after a reconnect stays under a client session's queue.
     private static final int BATCH_MAX = 150;
-    /// A burst is more than the link's queue of 1,000 deliveries (`LinkOptions.defaults().queueMax()`), so the
-    /// queue fills when its strand lags, and at most two and a half queues, to keep a run short.
+    /// A burst is more than one append batch of the link's strand (1,000 deliveries), so many wait at once when the
+    /// strand lags, and the queue refuses once the oldest has waited past its wait bound; at most 2,500, to keep a run
+    /// short. The queue's count bound, 16,384, is out of a burst's reach: `LinksTest` covers it.
     private static final int BURST_MIN = 1_200;
     private static final int BURST_MAX = 2_500;
-    /// A burst of a run checked on every hop is at most one queue and a half: past the far node, a refused resend
-    /// waits a backoff that grows to 30 s, and a chain of them would hold a run past its minute.
+    /// A burst of a run checked on every hop is at most one and a half append batches: past the far node, a refused
+    /// resend waits a backoff that grows to 30 s, and a chain of them would hold a run past its minute.
     private static final int PATH_BURST_MAX = 1_500;
     /// The longest walk a run checked on every hop may make: 4 hops go round the ring with a shortcut and back.
     private static final int PATH_HOPS_MAX = 4;

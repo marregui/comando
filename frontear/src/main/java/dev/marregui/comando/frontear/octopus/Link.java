@@ -48,24 +48,24 @@ import dev.marregui.comando.frontear.watch.Watch;
  * touches its log; it is also its client's callbacks executor, so the client's events reach it in order.
  *
  * <p>Out, at least once. Every message the local gateway routes to the link's OUT filters, all under the one internal
- * subscriber {@code $link/<id>}, waits for the strand in a queue of {@link LinkOptions#queueMax} and joins the log at
- * its tail with its hop count incremented; the gateway hears 0x00 once the record is durable, 0x97 when the log or the
- * queue is full (a QoS 0 message over the queue is dropped), 0x8B when the link closed first. The sender reads from
+ * subscriber {@code $link/<id>}, waits for the strand in a queue bounded as {@link LinkOptions} says and joins the log
+ * at its tail with its hop count incremented; the gateway hears 0x00 once the record is durable, 0x97 when the log or
+ * the queue is full (a QoS 0 message over the queue is dropped), 0x8B when the link closed first. The sender reads from
  * the log's cursor, at most the peer's Receive Maximum and {@link LinkOptions#windowMax} at a time, publishes each
  * record at QoS 1 and moves the cursor past the prefix the peer has answered. A peer that answers 0x97 or 0x89 holds
- * that message back: the link sends nothing new and sends the refused message again, alone, after a backoff that
- * grows with each refusal in a row, until the peer takes it; the window then opens again. A message the peer accepted
- * is not sent again on the same connection, so the messages of the window already sent after a refused one may reach
- * the peer before it ({@code reordered}). A lost connection sends again, in order, everything past the cursor, so the
- * peer may see a message twice.
+ * that message back: the link sends nothing new and sends the refused message again, alone, after a backoff that grows
+ * with each refusal in a row, until the peer takes it; the window then opens again. A message the peer accepted is not
+ * sent again on the same connection, so the messages of the window already sent after a refused one may reach the peer
+ * before it ({@code reordered}). A lost connection sends again, in order, everything past the cursor, so the peer may
+ * see a message twice.
  *
  * <p>Backlog. What waits between the cursor and the tail is bounded by {@link LinkOptions#maxBacklogBytes} and
  * {@link LinkOptions#maxBacklogAge}. While the link is down it moves its cursor past the oldest records the bounds no
  * longer hold, counted in {@code dropped}, and past the oldest retained records a newer one on their topic supersedes,
  * counted in {@code coalesced}; while it is up it answers a message past the byte bound 0x97. A retained record
  * superseded while it waited is never sent, wherever it waits: only the newest of each topic reaches the peer. The
- * queue in front of the strand is a second bound: at {@link LinkOptions#queueMax}, smaller than one publisher's
- * Receive Maximum, a burst that arrives faster than the strand appends is answered 0x97, a QoS 1 message counted in
+ * queue in front of the strand is a second bound: a message that finds it past its count or its weight, or finds its
+ * oldest message waiting past {@link LinkOptions#maxQueueWait}, is answered 0x97, a QoS 1 message counted in
  * {@code refused}, a QoS 0 one in {@code dropped}; the publisher sees each answer, never a lost acknowledgement.
  *
  * <p>In, at least once. The link subscribes to its IN filters on the peer with No Local, so what it sends does not
@@ -116,6 +116,16 @@ final class Link implements AutoCloseable {
     static final long BACKLOG_WARN_NANOS = TimeUnit.MINUTES.toNanos(5);
     /** The records a restart reads at a time to learn the backlog it left; unmeasured: a sizing hint only. */
     private static final int SCAN_BATCH = 256;
+    /**
+     * The most deliveries one strand task appends, so the link's other steps run between: the queue's bound before task
+     * 234 raised it, under which the strand kept up to 60,000 messages a second.
+     */
+    private static final int APPEND_BATCH = 1_000;
+    /**
+     * The most of the peer's QoS 0 messages that wait for the strand: the queue's count before task 234 raised it.
+     * They have no weight or wait bound of their own, so the raised count does not apply to them.
+     */
+    private static final int IN_QUEUED_QOS0 = 1_000;
 
     private final String id;
     private final String owner;
@@ -134,6 +144,15 @@ final class Link implements AutoCloseable {
     private final ScheduledExecutorService strand;
     /** The gateway's messages waiting for the strand to append them, oldest first; any thread. */
     private final ArrayBlockingQueue<Delivery> deliveries;
+    /**
+     * The weight of {@link #deliveries}. Written by the gateway's threads (added in {@link #deliver}, taken off again
+     * when the queue refuses it or the link closed), by the strand (taken off as it polls) and by the closing thread
+     * ({@link #failDeliveries}); read by the gateway's threads in {@link #deliver}. The queue's offer takes its lock
+     * on the same event, so this second write per message adds no contention of a new kind.
+     */
+    private final AtomicLong queuedBytes = new AtomicLong();
+    /** {@link LinkOptions#maxQueueWait} in nanoseconds. */
+    private final long maxQueueWaitNanos;
     /** How many of {@link #deliveries} wait, as the queue readings report it. */
     private final Queues.Gauge waiting;
     /** Set by the gateway's thread that posts the strand's append of the deliveries, cleared by that task. */
@@ -241,6 +260,7 @@ final class Link implements AutoCloseable {
         this.options = options;
         this.clock = clock;
         this.deliveries = new ArrayBlockingQueue<>(options.queueMax());
+        this.maxQueueWaitNanos = options.maxQueueWait().toNanos();
         this.cursor = log.cursor();
         this.tail = log.tail();
         // what an open finds in the log was read from its files, so all of it is durable
@@ -506,13 +526,23 @@ final class Link implements AutoCloseable {
         if (closed) {
             return CompletableFuture.completedFuture(Packet.SERVER_SHUTTING_DOWN);
         }
-        final Delivery d = new Delivery(m, new CompletableFuture<>());
+        final long nowNanos = System.nanoTime();
+        final Delivery oldest = deliveries.peek();
+        final long waitedNanos = oldest == null ? 0L : nowNanos - oldest.queuedNanos();
+        if (waitedNanos > maxQueueWaitNanos) {
+            return queueFull(m, "wait", waitedNanos, queuedBytes.get());
+        }
+        final long weight = m.weight();
+        final long bytes = queuedBytes.addAndGet(weight);
+        // a message heavier than the bound alone is taken when nothing else waits
+        if (bytes > options.maxQueueBytes() && bytes != weight) {
+            queuedBytes.addAndGet(-weight);
+            return queueFull(m, "bytes", waitedNanos, bytes - weight);
+        }
+        final Delivery d = new Delivery(m, new CompletableFuture<>(), weight, nowNanos);
         if (!deliveries.offer(d)) {
-            turnedAway(m);
-            LOG.log(System.Logger.Level.DEBUG, () -> "message refused: the link's queue is full [link=" + id
-                    + ", topic=" + m.topic() + ", qos=" + m.qos() + ", queueMax=" + options.queueMax() + ']');
-            watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "the link's queue is full");
-            return CompletableFuture.completedFuture(Packet.QUOTA_EXCEEDED);
+            queuedBytes.addAndGet(-weight);
+            return queueFull(m, "count", waitedNanos, queuedBytes.get());
         }
         waiting.sample();
         if (closed) {
@@ -524,15 +554,33 @@ final class Link implements AutoCloseable {
         return d.done();
     }
 
-    /** Appends the waiting messages in the order they came, a queue's worth a task, so other steps run between. */
+    /**
+     * Answers {@code m} 0x97: the queue in front of the strand is past its {@code bound}, its oldest message waiting
+     * {@code waitedNanos} and {@code queuedBytes} of weight in it.
+     */
+    private CompletionStage<Integer> queueFull(final Packet.Publish m, final String bound, final long waitedNanos,
+            final long queuedBytes) {
+        turnedAway(m);
+        LOG.log(System.Logger.Level.DEBUG, () -> "message refused: the link's queue is full [link=" + id
+                + ", topic=" + m.topic() + ", qos=" + m.qos() + ", bound=" + bound + ", waitedMicros="
+                + waitedNanos / 1_000L + ", queued=" + deliveries.size() + ", queuedBytes=" + queuedBytes
+                + ", weight=" + m.weight() + ", queueMax=" + options.queueMax() + ", maxQueueBytes="
+                + options.maxQueueBytes() + ", maxQueueWait=" + options.maxQueueWait() + ']');
+        watch.step(id, LinkStep.Kind.DROPPED, -1, m.topic(), m.payload().length, "the link's queue is full [bound="
+                + bound + ']');
+        return CompletableFuture.completedFuture(Packet.QUOTA_EXCEEDED);
+    }
+
+    /** Appends the waiting messages in the order they came, a batch a task, so other steps run between. */
     private void appendDeliveries() {
         // cleared before the queue is read: a message queued after the last poll posts this task again
         appendPosted.set(false);
-        for (int i = 0; i < options.queueMax(); i++) {
+        for (int i = 0; i < APPEND_BATCH; i++) {
             final Delivery d = deliveries.poll();
             if (d == null) {
                 return;
             }
+            queuedBytes.addAndGet(-d.weight());
             append(d.message(), d.done());
         }
         if (!deliveries.isEmpty() && appendPosted.compareAndSet(false, true) && !post(this::appendDeliveries)) {
@@ -543,6 +591,7 @@ final class Link implements AutoCloseable {
     /** Answers 0x8B to every message still waiting for the strand: the link closed before it was appended. */
     private void failDeliveries() {
         for (Delivery d = deliveries.poll(); d != null; d = deliveries.poll()) {
+            queuedBytes.addAndGet(-d.weight());
             d.done().complete(Packet.SERVER_SHUTTING_DOWN);
         }
     }
@@ -583,7 +632,8 @@ final class Link implements AutoCloseable {
         final long offset = log.tail();
         final CompletableFuture<Long> appended;
         try {
-            appended = log.append(record);
+            // the record was encoded for this append alone and is not written again
+            appended = log.appendOwned(record);
         } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "message not queued [link=" + id + ", topic=" + m.topic() + ']', e);
             done.complete(Packet.UNSPECIFIED);
@@ -1427,8 +1477,11 @@ final class Link implements AutoCloseable {
         }
     }
 
-    /** A message the gateway handed the link and the future its outcome completes. */
-    private record Delivery(Packet.Publish message, CompletableFuture<Integer> done) {
+    /**
+     * A message the gateway handed the link, the future its outcome completes, its weight in the queue's byte bound and
+     * when it joined the queue ({@link System#nanoTime}).
+     */
+    private record Delivery(Packet.Publish message, CompletableFuture<Integer> done, long weight, long queuedNanos) {
     }
 
     /** A record sent and its answer; strand only. */
@@ -1460,10 +1513,10 @@ final class Link implements AutoCloseable {
 
         Peer(final LinkSpec s) {
             // one client id per link, so two links to one peer do not take over each other's session; the peer's QoS 0
-            // messages wait for the strand within the link's queue bound, as the gateway's do
+            // messages wait for the strand within the link's queue count, at most IN_QUEUED_QOS0
             this.client = new MqttClient(new MqttClient.Options(s.host(), s.port(), clientId(), KEEP_ALIVE_SECONDS,
-                    Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null, IN_RECEIVE_MAXIMUM, options.queueMax()), this, strand,
-                    s.tls() ? tls : null);
+                    Packet.PROTOCOL_MAXIMUM_PACKET_SIZE, null, IN_RECEIVE_MAXIMUM,
+                    Math.min(options.queueMax(), IN_QUEUED_QOS0)), this, strand, s.tls() ? tls : null);
         }
 
         @Override

@@ -248,8 +248,9 @@ class LinkBacklogTest {
         }
     }
 
-    /// The backlog bounds the options refuse: none, and an age that is not positive; the defaults are 64 MiB and a
-    /// day, and the two-bound constructor takes them.
+    /// The backlog and queue bounds the options refuse: none, and an age or wait that is not positive; the backlog's
+    /// defaults are 64 MiB and a day, the queue's 16,384 messages, 8 MiB and 50 ms, and the shorter constructors take
+    /// them.
     @Test
     void backlogBoundsOutOfRangeAreRefused() {
         assertThatThrownBy(() -> new LinkOptions(1, 1, 0, DAY)).isInstanceOf(IllegalArgumentException.class);
@@ -260,6 +261,13 @@ class LinkBacklogTest {
         assertThatThrownBy(() -> new LinkOptions(1, 1, 1, null)).isInstanceOf(NullPointerException.class);
         assertThat(LinkOptions.defaults().maxBacklogBytes()).isEqualTo(64L << 20);
         assertThat(LinkOptions.defaults().maxBacklogAge()).isEqualTo(DAY);
+        assertThat(LinkOptions.defaults().queueMax()).isEqualTo(16_384);
+        assertThat(LinkOptions.defaults().maxQueueBytes()).isEqualTo(8L << 20);
+        assertThat(LinkOptions.defaults().maxQueueWait()).isEqualTo(Duration.ofMillis(50));
+        assertThatThrownBy(() -> new LinkOptions(1, 1, 1, DAY, 0, DAY)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LinkOptions(1, 1, 1, DAY, 1, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LinkOptions(1, 1, 1, DAY, 1, null)).isInstanceOf(NullPointerException.class);
         assertThat(new LinkOptions(3, 2)).isEqualTo(new LinkOptions(3, 2, 64L << 20, DAY));
     }
 

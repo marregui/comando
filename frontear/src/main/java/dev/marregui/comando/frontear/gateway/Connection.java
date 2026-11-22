@@ -328,7 +328,9 @@ final class Connection {
     static Packet.Publish stamped(final Packet.Publish p, final String machine) {
         final Packet.Meta meta = p.meta();
         final List<Packet.UserProperty> kept = new ArrayList<>(meta.userProperties().size() + 1);
-        for (final Packet.UserProperty u : meta.userProperties()) {
+        final List<Packet.UserProperty> users = meta.userProperties();
+        for (int i = 0; i < users.size(); i++) {
+            final Packet.UserProperty u = users.get(i);
             if (!u.name().equals(Names.ORIGIN)) {
                 kept.add(u);
             }

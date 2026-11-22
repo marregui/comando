@@ -197,17 +197,21 @@ public final class HealthRows {
                 : millis >= MINUTE_MILLIS ? millis / MINUTE_MILLIS + "m" : millis / 1_000L + "s";
     }
 
-    /** Whether {@code l} dropped a message within the last {@link #DROP_MILLIS}; its first read counts none. */
+    /**
+     * Whether {@code l} dropped or refused a message within the last {@link #DROP_MILLIS}; its first read counts none.
+     * A refusal counts: a link whose queue refuses by its wait or its weight is far under its count.
+     */
     private boolean dropping(final Link l, final long nowMillis) {
+        final long given = l.dropped() + l.refused();
         final long[] d = drops.get(l.id());
         if (d == null) {
-            drops.put(l.id(), new long[]{l.dropped(), NEVER});
+            drops.put(l.id(), new long[]{given, NEVER});
             return false;
         }
-        if (l.dropped() > d[0]) {
+        if (given > d[0]) {
             d[1] = nowMillis;
         }
-        d[0] = l.dropped();
+        d[0] = given;
         return d[1] != NEVER && nowMillis - d[1] < DROP_MILLIS;
     }
 

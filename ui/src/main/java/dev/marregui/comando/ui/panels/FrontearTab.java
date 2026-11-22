@@ -61,6 +61,8 @@ final class FrontearTab {
     /** The packets the tab keeps, as many as the port's window keeps (record 187). */
     static final int KEPT = 10_000;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS", Locale.ROOT);
+    // a row's kind as the log names it, by ordinal: the traffic view names every row at each refresh
+    private static final String[] KIND_NAMES = kindNames();
     private static final String EVERY_KIND = "every kind";
     private static final String HEALTH =
             "One row per link to a peer, the worst first: its trouble, its rate, and what waits for it";
@@ -359,11 +361,13 @@ final class FrontearTab {
         rows = TrafficRows.of(packets, filter.getText(), kind, control.isSelected(),
                 everyPresence.isSelected());
         final List<Object[]> cells = new ArrayList<>(rows.size());
+        // read once a refresh, not once a row: the default zone is a copy each time it is read
+        final ZoneId zone = ZoneId.systemDefault();
         for (final Row r : rows) {
             final Packet p = r.packet();
             final boolean step = p.kind() != Kind.PUBLISHED;
             final String name = r.count() > 1 ? kindName(p.kind()) + " (" + r.count() + ")" : kindName(p.kind());
-            cells.add(new Object[]{time(p.atMillis()), name, step ? p.link() : p.origin(), p.topic(),
+            cells.add(new Object[]{time(p.atMillis(), zone), name, step ? p.link() : p.origin(), p.topic(),
                 step ? "" : p.qos(), step ? "" : p.retain(), p.bytes(), step ? "" : p.hops(), p.correlation()});
         }
         selecting = true;
@@ -435,8 +439,17 @@ final class FrontearTab {
 
     /** A kind as the log names it, a word: Published, Appended, Sent, Arrived, Dropped, Connected, Disconnected. */
     static String kindName(final Kind k) {
-        final String name = k.name();
-        return name.charAt(0) + name.substring(1).toLowerCase(Locale.ROOT);
+        return KIND_NAMES[k.ordinal()];
+    }
+
+    private static String[] kindNames() {
+        final Kind[] kinds = Kind.values();
+        final String[] names = new String[kinds.length];
+        for (final Kind k : kinds) {
+            final String name = k.name();
+            names[k.ordinal()] = name.charAt(0) + name.substring(1).toLowerCase(Locale.ROOT);
+        }
+        return names;
     }
 
     /** {@code view} under a line saying what its rows are, named {@code frontear.caption.<name>}. */
@@ -466,7 +479,11 @@ final class FrontearTab {
     }
 
     private static String time(final long atMillis) {
-        return atMillis <= 0L ? "" : TIME.format(Instant.ofEpochMilli(atMillis).atZone(ZoneId.systemDefault()));
+        return time(atMillis, ZoneId.systemDefault());
+    }
+
+    private static String time(final long atMillis, final ZoneId zone) {
+        return atMillis <= 0L ? "" : TIME.format(Instant.ofEpochMilli(atMillis).atZone(zone));
     }
 
     private static String rate(final double perSecond) {

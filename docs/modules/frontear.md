@@ -119,7 +119,7 @@ What the octopus is for: [frontear §2.3](../frontear.md#23-the-octopus-links-be
 | `Link` | One link: its strand, its log, its MQTT client to the peer, both directions. |
 | `LinkSpec` | `LinkSpec(id, host, port, out, in, hopLimit, tls)`: what a link is. |
 | `LinkFile` | The spec as `link.json`, version 1, written whole and forced before it takes effect. |
-| `LinkOptions` | A link's bounds: 1,000 messages waiting to be logged, at most 1,000 in flight to the peer. |
+| `LinkOptions` | A link's bounds: messages waiting to be logged (16,384, 8 MiB, and 50 ms for the oldest), at most 1,000 in flight to the peer, and the backlog (64 MiB, 24 h). |
 | `LinkState` | What `GetState` and the state topic report: `connected`, `queued`, `cursor`, `tail`, `sent`, `dropped`, `reordered`, and why a link is down. |
 | `Forwarding` | The user properties a link writes, `frontear-hops` and `frontear-queued-ms`, and the backoff: 1 s doubling to 30 s, up to a fifth taken off at random. |
 | `Direction` | `OUT` or `IN`. |
@@ -139,7 +139,7 @@ message on a topic outside the `in` filters is dropped and counted.
 
 | Event | What the link does |
 |---|---|
-| The log or the queue of 1,000 is full | Answers the gateway 0x97. A QoS 0 message is dropped and counted. |
+| The log or the queue in front of it is full | Answers the gateway 0x97. A QoS 0 message is dropped and counted. |
 | The peer answers 0x97 or 0x89 | Resends that one message alone after a backoff, 1 s growing to 30 s. |
 | The peer answers 0x88 to CONNECT | Tries again after the first backoff, 1 s, without growing it. |
 | The connection drops | Resends everything past the cursor, in order. The peer may see a message twice. |

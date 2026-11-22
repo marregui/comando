@@ -79,6 +79,26 @@ class LinkLogTest {
         }
     }
 
+    /// A record handed over with `appendOwned` is taken as it is, without a copy, and reads back byte for byte at the
+    /// offset its append returned.
+    @Test
+    void anOwnedRecordReadsBackAtItsOffset() throws Exception {
+        try (LinkLog log = LinkLog.open(dir, SMALL)) {
+            final byte[] first = new byte[40];
+            random.nextBytes(first);
+            final byte[] second = new byte[90];
+            random.nextBytes(second);
+            final byte[] firstExpected = first.clone();
+            final byte[] secondExpected = second.clone();
+            assertThat(log.appendOwned(first).get(WAIT_SECONDS, TimeUnit.SECONDS)).isZero();
+            assertThat(log.appendOwned(second).get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(1);
+            final List<Record> read = log.read(0, 10);
+            assertThat(read).hasSize(2);
+            assertThat(read.get(0).bytes()).isEqualTo(firstExpected);
+            assertThat(read.get(1).bytes()).isEqualTo(secondExpected);
+        }
+    }
+
     /// Offsets run 0, 1, 2… across segment files and across a close and reopen, which reads every record again.
     @Test
     void offsetsAreGapFreeAcrossSegmentsAndReopen() throws Exception {

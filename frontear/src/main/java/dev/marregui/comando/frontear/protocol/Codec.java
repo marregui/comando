@@ -409,7 +409,10 @@ public final class Codec {
         if (meta.contentType() != null) {
             props.u8(CONTENT_TYPE).string(meta.contentType());
         }
-        for (final Packet.UserProperty u : meta.userProperties()) {
+        // by index: an iterator would be one object a call, and a link encodes every message twice
+        final List<Packet.UserProperty> users = meta.userProperties();
+        for (int i = 0; i < users.size(); i++) {
+            final Packet.UserProperty u = users.get(i);
             props.u8(USER_PROPERTY).string(u.name()).string(u.value());
         }
         if (p.responseTopic() != null) {
@@ -513,6 +516,9 @@ public final class Codec {
 
     /** The application properties of a PUBLISH or a will read into {@code props}. */
     private static Packet.Meta meta(final Props props) {
+        if (props == Props.NONE) {
+            return Packet.Meta.NONE;
+        }
         return new Packet.Meta((int) props.number(PAYLOAD_FORMAT, -1), props.number(MESSAGE_EXPIRY, -1),
                 props.string(CONTENT_TYPE), props.userProperties());
     }
@@ -591,7 +597,12 @@ public final class Codec {
 
     /** A property section: its length, then properties of the ids {@code allowed} holds, each checked (§2.2.2). */
     private static Props properties(final Wire.In in, final long allowed) throws MqttException {
-        final Wire.In section = in.slice(in.vbi());
+        final int length = in.vbi();
+        if (length == 0) {
+            // most packets carry none: one shared empty set, which nothing writes, instead of one each
+            return Props.NONE;
+        }
+        final Wire.In section = in.slice(length);
         final Props props = new Props();
         while (section.remaining() > 0) {
             final int id = section.vbi();
@@ -652,6 +663,9 @@ public final class Codec {
 
     /** The properties read from one section, by identifier. */
     private static final class Props {
+
+        /** An empty section's properties: none; read only, as {@link #properties} writes only a set it made. */
+        static final Props NONE = new Props();
 
         private final Object[] values = new Object[TYPE.length];
         private final List<Packet.UserProperty> users = new ArrayList<>();

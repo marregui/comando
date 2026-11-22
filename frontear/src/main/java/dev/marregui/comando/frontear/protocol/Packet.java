@@ -90,6 +90,24 @@ public sealed interface Packet {
     }
 
     /**
+     * As {@link #check(boolean, String)}, the message {@code text}, {@code value} and {@code ]}, built only on a
+     * refusal: the constructors run once per message, and an eager concatenation allocated about 65 MB/s on a link
+     * carrying 60,000 messages a second (JFR on an Apple M2 Max, task 232's second load round; record 193).
+     */
+    private static void check(final boolean valid, final String text, final long value) {
+        if (!valid) {
+            throw new IllegalArgumentException(text + value + ']');
+        }
+    }
+
+    /** As {@link #check(boolean, String, long)}, for a text value. */
+    private static void check(final boolean valid, final String text, final String value) {
+        if (!valid) {
+            throw new IllegalArgumentException(text + value + ']');
+        }
+    }
+
+    /**
      * CONNECT (§3.1). A session expiry of 0, a receive maximum of {@link #DEFAULT_RECEIVE_MAXIMUM} and a maximum
      * packet size of {@link #PROTOCOL_MAXIMUM_PACKET_SIZE} are the defaults, which go unwritten; so does a Topic
      * Alias Maximum, which is always 0: this client takes no topic alias. {@code will} is null for none;
@@ -109,18 +127,17 @@ public sealed interface Packet {
         /** Refuses a value CONNECT cannot carry. */
         public Connect {
             Objects.requireNonNull(clientId, "clientId");
-            check(willDelaySeconds >= 0 && willDelaySeconds <= 0xFFFF_FFFFL, "will delay out of range [seconds="
-                    + willDelaySeconds + ']');
-            check(will != null || willDelaySeconds == 0, "a will delay without a will [seconds=" + willDelaySeconds
-                    + ']');
-            check(keepAliveSeconds >= 0 && keepAliveSeconds <= 65_535, "keep alive out of range [seconds="
-                    + keepAliveSeconds + ']');
+            check(willDelaySeconds >= 0 && willDelaySeconds <= 0xFFFF_FFFFL,
+                    "will delay out of range [seconds=", willDelaySeconds);
+            check(will != null || willDelaySeconds == 0, "a will delay without a will [seconds=", willDelaySeconds);
+            check(keepAliveSeconds >= 0 && keepAliveSeconds <= 65_535,
+                    "keep alive out of range [seconds=", keepAliveSeconds);
             check(sessionExpirySeconds >= 0 && sessionExpirySeconds <= 0xFFFF_FFFFL,
-                    "session expiry out of range [seconds=" + sessionExpirySeconds + ']');
-            check(receiveMaximum >= 1 && receiveMaximum <= 65_535, "receive maximum out of range [value="
-                    + receiveMaximum + ']');
+                    "session expiry out of range [seconds=", sessionExpirySeconds);
+            check(receiveMaximum >= 1 && receiveMaximum <= 65_535,
+                    "receive maximum out of range [value=", receiveMaximum);
             check(maximumPacketSize >= 1 && maximumPacketSize <= PROTOCOL_MAXIMUM_PACKET_SIZE,
-                    "maximum packet size out of range [bytes=" + maximumPacketSize + ']');
+                    "maximum packet size out of range [bytes=", maximumPacketSize);
             check(will == null || !will.dup(), "a will cannot be a duplicate");
         }
     }
@@ -145,15 +162,15 @@ public sealed interface Packet {
         /** Refuses a value CONNACK cannot carry. */
         public ConnAck {
             Objects.requireNonNull(capabilities, "capabilities");
-            check(reasonCode >= 0 && reasonCode <= 0xFF, "reason code out of range [code=" + reasonCode + ']');
-            check(receiveMaximum >= 1 && receiveMaximum <= 65_535, "receive maximum out of range [value="
-                    + receiveMaximum + ']');
+            check(reasonCode >= 0 && reasonCode <= 0xFF, "reason code out of range [code=", reasonCode);
+            check(receiveMaximum >= 1 && receiveMaximum <= 65_535,
+                    "receive maximum out of range [value=", receiveMaximum);
             check(maximumPacketSize >= 1 && maximumPacketSize <= PROTOCOL_MAXIMUM_PACKET_SIZE,
-                    "maximum packet size out of range [bytes=" + maximumPacketSize + ']');
-            check(topicAliasMaximum >= 0 && topicAliasMaximum <= 65_535, "topic alias maximum out of range [value="
-                    + topicAliasMaximum + ']');
+                    "maximum packet size out of range [bytes=", maximumPacketSize);
+            check(topicAliasMaximum >= 0 && topicAliasMaximum <= 65_535,
+                    "topic alias maximum out of range [value=", topicAliasMaximum);
             check(serverKeepAliveSeconds >= NO_SERVER_KEEP_ALIVE && serverKeepAliveSeconds <= 65_535,
-                    "server keep alive out of range [seconds=" + serverKeepAliveSeconds + ']');
+                    "server keep alive out of range [seconds=", serverKeepAliveSeconds);
             check(!sessionPresent || reasonCode == SUCCESS, "session present on a refused connect");
         }
     }
@@ -170,7 +187,7 @@ public sealed interface Packet {
 
         /** Refuses a Maximum QoS out of range. */
         public Capabilities {
-            check(maximumQos >= 0 && maximumQos <= 2, "maximum QoS out of range [qos=" + maximumQos + ']');
+            check(maximumQos >= 0 && maximumQos <= 2, "maximum QoS out of range [qos=", maximumQos);
         }
     }
 
@@ -206,15 +223,16 @@ public sealed interface Packet {
         /** Refuses a value PUBLISH cannot carry. */
         public Publish {
             Objects.requireNonNull(topic, "topic");
-            check(Topics.validName(topic), "not a topic name [topic=" + topic + ']');
-            check(qos >= 0 && qos <= 2, "QoS out of range [qos=" + qos + ']');
+            check(Topics.validName(topic), "not a topic name [topic=", topic);
+            check(qos >= 0 && qos <= 2, "QoS out of range [qos=", qos);
             check(!dup || qos > 0, "a QoS 0 message cannot be a duplicate");
-            check(qos > 0 ? packetId >= 0 && packetId <= 65_535 : packetId == 0, "packet id out of range [id="
-                    + packetId + ", qos=" + qos + ']');
-            check(responseTopic == null || Topics.validName(responseTopic), "response topic not a topic name [topic="
-                    + responseTopic + ']');
-            check(correlation == null || correlation.length <= Wire.MAX_LENGTH,
-                    "correlation data too long [bytes=" + (correlation == null ? 0 : correlation.length) + ']');
+            if (qos > 0 ? packetId < 0 || packetId > 65_535 : packetId != 0) {
+                throw new IllegalArgumentException("packet id out of range [id=" + packetId + ", qos=" + qos + ']');
+            }
+            check(responseTopic == null || Topics.validName(responseTopic),
+                    "response topic not a topic name [topic=", responseTopic);
+            check(correlation == null || correlation.length <= Wire.MAX_LENGTH, "correlation data too long [bytes=",
+                    correlation == null ? 0 : correlation.length);
             Objects.requireNonNull(meta, "meta");
             payload = payload == null ? new byte[0] : payload;
         }
@@ -241,7 +259,10 @@ public sealed interface Packet {
             bytes += charBytes(responseTopic);
             bytes += correlation == null ? 0 : correlation.length;
             bytes += charBytes(meta.contentType());
-            for (final UserProperty p : meta.userProperties()) {
+            // by index: an iterator would be one object a call, and a link weighs every message it queues
+            final List<UserProperty> users = meta.userProperties();
+            for (int i = 0; i < users.size(); i++) {
+                final UserProperty p = users.get(i);
                 bytes += PROPERTY_OVERHEAD_BYTES + charBytes(p.name()) + charBytes(p.value());
             }
             return bytes;
@@ -295,10 +316,9 @@ public sealed interface Packet {
 
         /** Refuses a value PUBLISH cannot carry. */
         public Meta {
-            check(payloadFormat >= -1 && payloadFormat <= 1, "payload format out of range [value=" + payloadFormat
-                    + ']');
+            check(payloadFormat >= -1 && payloadFormat <= 1, "payload format out of range [value=", payloadFormat);
             check(messageExpirySeconds >= -1 && messageExpirySeconds <= 0xFFFF_FFFFL,
-                    "message expiry out of range [seconds=" + messageExpirySeconds + ']');
+                    "message expiry out of range [seconds=", messageExpirySeconds);
             userProperties = List.copyOf(userProperties);
         }
 
@@ -323,8 +343,8 @@ public sealed interface Packet {
 
         /** Refuses a value PUBACK cannot carry. */
         public PubAck {
-            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=" + packetId + ']');
-            check(reasonCode >= 0 && reasonCode <= 0xFF, "reason code out of range [code=" + reasonCode + ']');
+            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=", packetId);
+            check(reasonCode >= 0 && reasonCode <= 0xFF, "reason code out of range [code=", reasonCode);
         }
     }
 
@@ -333,7 +353,7 @@ public sealed interface Packet {
 
         /** Refuses a value SUBSCRIBE cannot carry. */
         public Subscribe {
-            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=" + packetId + ']');
+            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=", packetId);
             subscriptions = List.copyOf(subscriptions);
             check(!subscriptions.isEmpty(), "a subscribe needs a filter");
         }
@@ -355,10 +375,9 @@ public sealed interface Packet {
         /** Refuses a filter that is not a Topic Filter, or a QoS or Retain Handling out of range. */
         public Subscription {
             Objects.requireNonNull(filter, "filter");
-            check(Topics.validFilter(filter), "not a topic filter [filter=" + filter + ']');
-            check(qos >= 0 && qos <= 2, "QoS out of range [qos=" + qos + ']');
-            check(retainHandling >= 0 && retainHandling <= 2, "retain handling out of range [value=" + retainHandling
-                    + ']');
+            check(Topics.validFilter(filter), "not a topic filter [filter=", filter);
+            check(qos >= 0 && qos <= 2, "QoS out of range [qos=", qos);
+            check(retainHandling >= 0 && retainHandling <= 2, "retain handling out of range [value=", retainHandling);
         }
     }
 
@@ -367,11 +386,11 @@ public sealed interface Packet {
 
         /** Refuses a value UNSUBSCRIBE cannot carry. */
         public Unsubscribe {
-            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=" + packetId + ']');
+            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=", packetId);
             filters = List.copyOf(filters);
             check(!filters.isEmpty(), "an unsubscribe needs a filter");
             for (final String f : filters) {
-                check(Topics.validFilter(f), "not a topic filter [filter=" + f + ']');
+                check(Topics.validFilter(f), "not a topic filter [filter=", f);
             }
         }
     }
@@ -381,7 +400,7 @@ public sealed interface Packet {
 
         /** Refuses a value UNSUBACK cannot carry. */
         public UnsubAck {
-            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=" + packetId + ']');
+            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=", packetId);
             reasonCodes = List.copyOf(reasonCodes);
             check(!reasonCodes.isEmpty(), "an unsubscribe acknowledgement needs a reason code");
         }
@@ -392,7 +411,7 @@ public sealed interface Packet {
 
         /** Refuses a value SUBACK cannot carry. */
         public SubAck {
-            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=" + packetId + ']');
+            check(packetId >= 1 && packetId <= 65_535, "packet id out of range [id=", packetId);
             reasonCodes = List.copyOf(reasonCodes);
             check(!reasonCodes.isEmpty(), "a subscribe acknowledgement needs a reason code");
         }
@@ -414,9 +433,9 @@ public sealed interface Packet {
 
         /** Refuses a reason code or a session expiry out of range. */
         public Disconnect {
-            check(reasonCode >= 0 && reasonCode <= 0xFF, "reason code out of range [code=" + reasonCode + ']');
+            check(reasonCode >= 0 && reasonCode <= 0xFF, "reason code out of range [code=", reasonCode);
             check(sessionExpirySeconds >= -1 && sessionExpirySeconds <= 0xFFFF_FFFFL,
-                    "session expiry out of range [seconds=" + sessionExpirySeconds + ']');
+                    "session expiry out of range [seconds=", sessionExpirySeconds);
         }
 
         /** A DISCONNECT without a Session Expiry Interval. */

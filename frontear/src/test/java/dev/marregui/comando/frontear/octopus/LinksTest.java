@@ -64,6 +64,11 @@ class LinksTest {
     private static final LogOptions LOG = new LogOptions(64 * 1024, 64 * 1024 * 1024, Duration.ZERO);
     private static final String HOST = "127.0.0.1";
     private static final int QUEUE_MAX = LinkOptions.defaults().queueMax();
+    private static final int WINDOW_MAX = LinkOptions.defaults().windowMax();
+    /// A queue bound of messages small enough to fill quickly, the queue's weight and wait out of its way.
+    private static final int COUNT_BOUND = 1_000;
+    private static final LinkOptions COUNT_ONLY = new LinkOptions(COUNT_BOUND, WINDOW_MAX, 64L << 20,
+            Duration.ofDays(1), Long.MAX_VALUE, Duration.ofDays(1));
 
     private static ExecutorService callbacks;
 
@@ -346,13 +351,13 @@ class LinksTest {
     /// queue holds one append for all of them; once free, the strand appends what waited.
     @Test
     void qosZeroMessagesOverTheLinksQueueAreDroppedAndCounted() throws Exception {
-        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG);
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG, COUNT_ONLY);
                 MqttClient publisher = client(a, "publisher")) {
             links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
             final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
             final CountDownLatch release = new CountDownLatch(1);
             strand.execute(() -> hold(release, new AtomicBoolean()));
-            final int count = 3 * QUEUE_MAX;
+            final int count = 3 * COUNT_BOUND;
             final byte[] payload = new byte[1024];
             final List<CompletableFuture<Void>> written = new ArrayList<>();
             for (int i = 0; i < count; i++) {
@@ -361,12 +366,12 @@ class LinksTest {
             for (final CompletableFuture<Void> w : written) {
                 w.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
             }
-            await().atMost(WAIT).until(() -> state(links, "ab").dropped() == count - QUEUE_MAX);
-            assertThat(waiting("ab")).isEqualTo(QUEUE_MAX);
+            await().atMost(WAIT).until(() -> state(links, "ab").dropped() == count - COUNT_BOUND);
+            assertThat(waiting("ab")).isEqualTo(COUNT_BOUND);
             assertThat(strand.getQueue().size()).as("tasks waiting on the link strand").isLessThan(100);
             release.countDown();
-            await().atMost(WAIT).until(() -> state(links, "ab").tail() == QUEUE_MAX);
-            assertThat(state(links, "ab").dropped()).isEqualTo(count - QUEUE_MAX);
+            await().atMost(WAIT).until(() -> state(links, "ab").tail() == COUNT_BOUND);
+            assertThat(state(links, "ab").dropped()).isEqualTo(count - COUNT_BOUND);
         }
     }
 
@@ -375,16 +380,16 @@ class LinksTest {
     /// waited and answers each 0x00.
     @Test
     void aQosOneMessageOverTheLinksQueueIsAnsweredQuotaExceeded() throws Exception {
-        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG)) {
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG, COUNT_ONLY)) {
             links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
             final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
             final CountDownLatch release = new CountDownLatch(1);
             strand.execute(() -> hold(release, new AtomicBoolean()));
             final List<CompletableFuture<Integer>> waiting = new ArrayList<>();
-            for (int i = 0; i < QUEUE_MAX; i++) {
+            for (int i = 0; i < COUNT_BOUND; i++) {
                 waiting.add(a.publish(message("t/x", i), "test"));
             }
-            assertThat(a.publish(message("t/x", QUEUE_MAX), "test")).succeedsWithin(Duration.ofSeconds(5))
+            assertThat(a.publish(message("t/x", COUNT_BOUND), "test")).succeedsWithin(Duration.ofSeconds(5))
                     .isEqualTo(Packet.QUOTA_EXCEEDED);
             assertThat(a.publish(new Packet.Publish("t/x", bytes(0), 0, false, false, 0, null, null), "test"))
                     .succeedsWithin(Duration.ofSeconds(5)).isEqualTo(Packet.QUOTA_EXCEEDED);
@@ -395,7 +400,7 @@ class LinksTest {
             for (final CompletableFuture<Integer> w : waiting) {
                 assertThat(w.get(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.SUCCESS);
             }
-            assertThat(state(links, "ab").tail()).isEqualTo(QUEUE_MAX);
+            assertThat(state(links, "ab").tail()).isEqualTo(COUNT_BOUND);
         }
     }
 
@@ -405,7 +410,9 @@ class LinksTest {
     @Test
     void theLinksQueueBoundComesFromItsOptionsAndItsStateShowsItsUsage() throws Exception {
         final int queueMax = 10;
-        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG, new LinkOptions(queueMax, QUEUE_MAX))) {
+        final LinkOptions options = new LinkOptions(queueMax, WINDOW_MAX, 64L << 20, Duration.ofDays(1), Long.MAX_VALUE,
+                Duration.ofDays(1));
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG, options)) {
             links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
             final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
             final CountDownLatch release = new CountDownLatch(1);
@@ -427,6 +434,63 @@ class LinksTest {
         }
     }
 
+    /// A strand behind past the queue's wait bound refuses the next message 0x97, far under the queue's count, and
+    /// takes the messages that waited once it is free: the queue holds what arrives within the wait, whatever the rate.
+    @Test
+    void aStrandBehindPastTheQueuesWaitRefusesTheNextMessageAndTakesTheOnesThatWaited() throws Exception {
+        final Duration maxQueueWait = Duration.ofMillis(20);
+        final LinkOptions options = new LinkOptions(QUEUE_MAX, WINDOW_MAX, 64L << 20, Duration.ofDays(1), 8L << 20,
+                maxQueueWait);
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG, options)) {
+            links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
+            final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
+            final CountDownLatch release = new CountDownLatch(1);
+            strand.execute(() -> hold(release, new AtomicBoolean()));
+            final long firstNanos = System.nanoTime();
+            final CompletableFuture<Integer> first = a.publish(message("t/x", 0), "test");
+            await().atMost(WAIT).until(() -> System.nanoTime() - firstNanos > 2 * maxQueueWait.toNanos());
+            assertThat(a.publish(message("t/x", 1), "test")).succeedsWithin(Duration.ofSeconds(5))
+                    .isEqualTo(Packet.QUOTA_EXCEEDED);
+            assertThat(state(links, "ab").queuedDeliveries()).isEqualTo(1);
+            assertThat(state(links, "ab").refused()).isEqualTo(1);
+            release.countDown();
+            assertThat(first.get(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.SUCCESS);
+            assertThat(state(links, "ab").tail()).isEqualTo(1);
+        }
+    }
+
+    /// The queue's weight bound refuses a message that would take it past the bound, under the queue's count; a
+    /// message heavier than the bound on its own is taken when nothing else waits.
+    @Test
+    void theQueuesWeightBoundRefusesPastItAndTakesAHeavyMessageAlone() throws Exception {
+        final long weight = message("t/x", 100).weight();
+        final LinkOptions options = new LinkOptions(QUEUE_MAX, WINDOW_MAX, 64L << 20, Duration.ofDays(1),
+                3 * weight, Duration.ofDays(1));
+        try (Gateway a = gateway(0); Links links = new Links(a, "A", dir, LOG, options)) {
+            links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 4));
+            final ScheduledThreadPoolExecutor strand = strandOf(links, "ab");
+            final CountDownLatch release = new CountDownLatch(1);
+            strand.execute(() -> hold(release, new AtomicBoolean()));
+            final List<CompletableFuture<Integer>> waiting = new ArrayList<>();
+            for (int i = 0; i < 3; i++) {
+                waiting.add(a.publish(message("t/x", 100), "test"));
+            }
+            assertThat(a.publish(message("t/x", 100), "test")).succeedsWithin(Duration.ofSeconds(5))
+                    .isEqualTo(Packet.QUOTA_EXCEEDED);
+            release.countDown();
+            for (final CompletableFuture<Integer> w : waiting) {
+                assertThat(w.get(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.SUCCESS);
+            }
+            await().atMost(WAIT).until(() -> state(links, "ab").queuedDeliveries() == 0);
+            final CountDownLatch again = new CountDownLatch(1);
+            strand.execute(() -> hold(again, new AtomicBoolean()));
+            final CompletableFuture<Integer> heavy = a.publish(message("t/x", (int) (4 * weight)), "test");
+            again.countDown();
+            assertThat(heavy.get(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(Packet.SUCCESS);
+            assertThat(state(links, "ab").tail()).isEqualTo(4);
+        }
+    }
+
     /// The peer's QoS 0 messages wait for the link's strand within the link's queue bound: with the strand busy, that
     /// many wait, the rest are dropped and counted in the link's `dropped`, and once the strand is free the ones that
     /// waited are published locally, in order, and no others.
@@ -435,7 +499,7 @@ class LinksTest {
         final int queueMax = 10;
         final int count = 10 * queueMax;
         try (FakeGateway peer = new FakeGateway(); Gateway a = gateway(0);
-                Links links = new Links(a, "A", dir, LOG, new LinkOptions(queueMax, QUEUE_MAX))) {
+                Links links = new Links(a, "A", dir, LOG, new LinkOptions(queueMax, WINDOW_MAX))) {
             final Probe onA = Probe.on(a, "in/#");
             links.put(new LinkSpec("ab", HOST, peer.port(), Set.of(), Set.of("in/#"), 4));
             await().atMost(WAIT).until(() -> peer.received(Packet.Subscribe.class).size() == 1);

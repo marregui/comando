@@ -11,8 +11,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// The codec allocates what it hands out and little more: a PUBLISH encodes into the one array it returns, sized
 /// before it is written, where a buffer grown by doubling and copied out cost several times the packet; and a
 /// PUBLISH record reads in place, copying only its payload out, where reading it through a stream copied the whole
-/// record first.
+/// record first; and a packet's checks build their messages only on a refusal.
 class CodecAllocationTest {
+
+    /// Where a measured call leaves its packet, so the compiler cannot drop the allocation it measures.
+    private static Packet.Publish kept;
+    private static Packet.PubAck keptAck;
 
     /// Enough calls for C2 to compile encode and decode, so the rounds measure compiled code.
     private static final int WARM_UP_CALLS = 20_000;
@@ -43,6 +47,26 @@ class CodecAllocationTest {
         System.out.println("decode [recordBytes=" + record.length + ", allocatedBytes=" + bytes + ']');
         // 1.5x: the payload's copy and the packet stay under it; a second copy of the record would make it 2x or more
         assertThat(bytes).isLessThan(65_536L * 3 / 2);
+    }
+
+    /// A PUBLISH and its acknowledgement allocate only themselves: their checks build no message while the values
+    /// hold, where an eager message cost each about 300 B, three strings, on every message a link carried.
+    @Test
+    void aPacketsChecksAllocateNothingWhileItsValuesHold() throws Exception {
+        final Packet.Publish p = new Packet.Publish("comando/v1/local/instance/bob/reply", payload(128), 1, false,
+                false, 0, "comando/v1/local/instance/alice/reply", payload(16));
+        final long publish = leastBytesPerCall(() -> {
+            kept = p.withPacketId(7);
+            return kept.packetId();
+        });
+        final long ack = leastBytesPerCall(() -> {
+            keptAck = new Packet.PubAck(7, Packet.SUCCESS, null);
+            return keptAck.packetId();
+        });
+        System.out.println("checks [publishBytes=" + publish + ", pubAckBytes=" + ack + ']');
+        // 64 B: the record itself, ten fields; one message string and its array is more than that alone
+        assertThat(publish).isLessThanOrEqualTo(64L);
+        assertThat(ack).isLessThanOrEqualTo(32L);
     }
 
     /// The fewest bytes one call of `call` allocated on this thread, over [#ROUNDS] rounds after a warm-up, so a

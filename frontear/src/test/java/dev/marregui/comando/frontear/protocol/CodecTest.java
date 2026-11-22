@@ -307,6 +307,17 @@ class CodecTest {
                         e -> assertThat(e.reasonCode()).isEqualTo(Packet.PROTOCOL_ERROR));
     }
 
+    /// A PUBLISH whose property section is empty reads back with the one shared empty set of properties, not a set of
+    /// its own; one with properties reads back with them.
+    @Test
+    void aPublishWithoutPropertiesReadsBackWithTheSharedEmptyMeta() throws Exception {
+        final Packet.Publish bare = new Packet.Publish("a/b", bytes("x"), 1, false, false, 3, null, null);
+        assertThat(((Packet.Publish) read(Codec.encode(bare))).meta()).isSameAs(Packet.Meta.NONE);
+        final Packet.Publish dressed = new Packet.Publish("a/b", bytes("x"), 1, false, false, 3, "r/s", bytes("c"),
+                new Packet.Meta(1, 60, "text/plain", List.of(new Packet.UserProperty("k", "v"))));
+        assertThat(read(Codec.encode(dressed))).isEqualTo(dressed);
+    }
+
     private static void roundTrip(final Packet p) throws Exception {
         assertThat(read(Codec.encode(p))).isEqualTo(p);
     }
