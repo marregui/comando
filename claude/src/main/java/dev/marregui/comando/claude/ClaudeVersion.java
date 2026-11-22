@@ -17,8 +17,8 @@ import dev.marregui.comando.core.loop.Processes;
 public record ClaudeVersion(int major, int minor, int patch) implements Comparable<ClaudeVersion> {
 
     /**
-     * The release's minimum: the latest Claude Code at the release date, 2.1.316 on 2026-11-01 (Miguel's decision D4 of
-     * the first-release review; later trouble comes as issues on comando's repository).
+     * The release's minimum: the latest Claude Code at the release date, 2.1.316 on 2026-11-01; later trouble comes as
+     * issues on comando's repository.
      */
     public static final ClaudeVersion TESTED_FROM = new ClaudeVersion(2, 1, 316);
     /** The first version after the tested range. */

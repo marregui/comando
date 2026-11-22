@@ -98,7 +98,7 @@ public final class KitJson {
 
     /**
      * The manifest's {@code brain} when it names a folder (absolute, {@code ~/…} or relative to the kit, outside it too:
-     * the brain is a folder of its own, D10), empty when it names none; throws when it is no path.
+     * the brain is a folder of its own, record 80), empty when it names none; throws when it is no path.
      */
     private static String brain(final String path) throws IOException {
         if (path.isEmpty()) {

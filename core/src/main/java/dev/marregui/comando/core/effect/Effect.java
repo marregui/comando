@@ -25,8 +25,6 @@ import dev.marregui.comando.core.view.ViewSpec;
  */
 public sealed interface Effect {
 
-    // ---- database
-
     record OpenDb(ConnectionSpec spec) implements Effect {
     }
 
@@ -57,8 +55,6 @@ public sealed interface Effect {
     /** The run was superseded; its rows can be freed. */
     record ReleaseResult(long requestId) implements Effect {
     }
-
-    // ---- Claude Code
 
     record StartClaude(SessionSpec spec) implements Effect {
     }
@@ -99,12 +95,8 @@ public sealed interface Effect {
     record ShowSubagent(String name, String claudeSessionId, String toolUseId) implements Effect {
     }
 
-    // ---- approvals
-
     record ResolveApproval(Approval approval, ApprovalDecision decision) implements Effect {
     }
-
-    // ---- UI
 
     record EditPanelText(PanelId panel, String text, EditMode mode) implements Effect {
     }
@@ -125,8 +117,6 @@ public sealed interface Effect {
     /** Reads a file off the EDT and shows it; {@code baseDir} resolves a relative path. */
     record ShowFile(String session, String path, String baseDir, int line) implements Effect {
     }
-
-    // ---- development tools
 
     record RunGradle(long runId, String workDir, String tasks) implements Effect {
     }
@@ -228,8 +218,6 @@ public sealed interface Effect {
     /** Shows the plan's usage limits in the status bar. */
     record ShowPlanUsage(PlanUsage usage) implements Effect {
     }
-
-    // ---- persistence
 
     record SaveConnections(List<ConnectionSpec> specs) implements Effect {
         public SaveConnections {

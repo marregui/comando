@@ -273,7 +273,6 @@ public final class Theme {
         return ground.color;
     }
 
-    /** The ground chosen. */
     public static Ground groundChosen() {
         return ground;
     }

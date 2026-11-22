@@ -50,13 +50,11 @@ public final class Queues {
             this.size = size;
         }
 
-        /** An element joined the queue. */
         public void added() {
             final int d = depth.incrementAndGet();
             peak.accumulateAndGet(d, Math::max);
         }
 
-        /** An element left the queue. */
         public void removed() {
             depth.decrementAndGet();
         }
@@ -66,7 +64,6 @@ public final class Queues {
             peak.accumulateAndGet(depth(), Math::max);
         }
 
-        /** What the queue holds now. */
         public int depth() {
             return size == null ? depth.get() : size.getAsInt();
         }

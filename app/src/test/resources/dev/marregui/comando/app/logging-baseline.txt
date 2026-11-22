@@ -1,0 +1,19 @@
+# The log calls of main code that broke LoggingRulesTest's checks when it was written, one
+# path:check:message line each (the message's whitespace collapsed, no line number). A fixed site
+# leaves this file in the same change; a new site is fixed, not added here.
+app/src/main/java/dev/marregui/comando/app/Logging.java:shape:"uncaught in thread " + t.getName()
+app/src/main/java/dev/marregui/comando/app/MachineCdb.java:shape:"cdb did not stop within " + STOP_WAIT.toSeconds() + " s; killing it [pid=" + h.pid() + ']'
+app/src/main/java/dev/marregui/comando/app/Machines.java:shape:"machine named " + UNNAMED + ": the host's name does not read [cause=" + e.getMessage() + ']'
+app/src/main/java/dev/marregui/comando/app/Secrets.java:shape:"the keychain did not answer within " + TIMEOUT_SECONDS + " s [command=" + cmd.get(1) + ']'
+app/src/main/java/dev/marregui/comando/app/Secrets.java:shape:"the keychain did not delete the password of " + name + " [exit=" + r.exit() + ']'
+app/src/main/java/dev/marregui/comando/app/Secrets.java:shape:"the keychain refused the password of " + name + " [exit=" + r.exit() + ']'
+core/src/main/java/dev/marregui/comando/core/loop/StateLoop.java:shape:"the reducer did not stop within " + CLOSE_MILLIS + " ms; its effects are dropped from now on:\n" + format(thread.getStackTrace())
+core/src/main/java/dev/marregui/comando/core/loop/StateLoop.java:shape:"the reducer finished an intent after " + stall.millis() + " ms [part=" + stall.part() + ']'
+core/src/main/java/dev/marregui/comando/core/loop/StateLoop.java:shape:"the reducer has not finished an intent for " + stall.millis() + " ms [part=" + stall.part() + "]:\n" + stall.stack()
+core/src/main/java/dev/marregui/comando/core/loop/StateLoop.java:shape:"the reducer was busy for " + stall.millis() + " ms [part=" + stall.part() + ']'
+frontear/src/main/java/dev/marregui/comando/frontear/alexander/ControlPlane.java:shape:"cannot publish control " + what + " [node=" + node + ", topic=" + message.topic() + ']'
+mcp/src/main/java/dev/marregui/comando/mcp/Peers.java:shape:"a question from another machine, dropped: " + why + " [origin=" + origin + ", from=" + from + ", topic=" + m.topic() + ", responseTopic=" + m.responseTopic() + ']'
+ui/src/main/java/dev/marregui/comando/ui/kit/text/MermaidDiagrams.java:shape:"Mermaid diagram not drawn [key=" + key + "]: " + failed
+ui/src/main/java/dev/marregui/comando/ui/kit/text/MermaidDiagrams.java:shape:"Mermaid diagram not shown [key=" + key + "]: " + why
+ui/src/main/java/dev/marregui/comando/ui/shell/ComandoUi.java:shape:"the EDT has not answered [millis=" + stall.millis() + ", " + fields(stall) + "]:\n" + stall.stack()
+ui/src/main/java/dev/marregui/comando/ui/widgets/terminal/Pty.java:shape:"pty4j preload skipped: " + e

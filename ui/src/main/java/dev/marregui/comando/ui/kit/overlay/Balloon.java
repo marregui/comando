@@ -58,7 +58,6 @@ public final class Balloon {
         Toolkit.getDefaultToolkit().addAWTEventListener(dismiss, AWTEvent.MOUSE_EVENT_MASK | AWTEvent.KEY_EVENT_MASK);
     }
 
-    /** Whether a balloon shows. */
     public static boolean showing() {
         return shown != null;
     }

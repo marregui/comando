@@ -66,7 +66,7 @@ final class Machines implements MachinesPort {
     private static final String UNNAMED = "machine";
     /** {@code hostname -s} reads a kernel value and answers at once; this only bounds a hung one. */
     private static final Duration HOSTNAME_WITHIN = Duration.ofSeconds(2);
-    /** A host's name is at most 255 bytes (POSIX {@code HOST_NAME_MAX}). */
+    /** A host's name is at most 255 bytes (POSIX {@code HOST_NAME_MAX}); {@code hostname} ends it with a newline. */
     private static final int HOSTNAME_BYTES = 256;
 
     private final Path folder;

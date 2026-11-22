@@ -121,8 +121,6 @@ public final class PermissionRules {
         return new Rules(List.of(rule), false);
     }
 
-    // ---- Bash
-
     /**
      * The rule contents for a command: one per subcommand of {@code &&}, {@code ||}, {@code ;}, {@code |},
      * {@code |&}, {@code &} and newlines, as Claude Code matches them, each {@code prefix:*} or the subcommand's exact
@@ -360,8 +358,6 @@ public final class PermissionRules {
         }
         return true;
     }
-
-    // ---- paths
 
     /**
      * {@code Tool(//abs/dir/**)} for an absolute file, {@code Tool(./dir/**)} for a relative one, the whole tool for

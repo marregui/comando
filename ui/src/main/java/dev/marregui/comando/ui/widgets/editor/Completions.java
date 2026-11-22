@@ -59,7 +59,6 @@ final class Completions {
         sorted = Collections.unmodifiableList(copy);
     }
 
-    /** How many words there are. */
     int size() {
         return sorted.size();
     }

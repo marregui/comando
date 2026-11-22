@@ -586,9 +586,9 @@ connection aborted; the lane reconnects on the next run. How lanes are built is 
 
 The grid and the plot read the rows while the fetch continues.
 
-**The grid** fills the Results tab. A header click sorts (up to 5,000,000 rows) off the event thread, so the window
-stays live while it runs; a second click before it ends wins, and new rows drop the sort. Columns drag. ⌘F finds in
-the cells.
+**The grid** fills the Results tab. A header click sorts (up to 5,000,000 rows; on a larger result it says why not)
+off the event thread, so the window stays live while it runs; a second click before it ends wins, and new rows drop
+the sort. Columns drag. ⌘F finds in the cells.
 A SQL NULL reads `null` in muted italics, told apart from the text `null`. A one-column `EXPLAIN` result shows as a
 tree, with a toggle back to rows.
 

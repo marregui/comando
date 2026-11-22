@@ -88,13 +88,11 @@ public record FolderRoot(String name, String path, String index, List<String> ex
         return List.of(new FolderRoot("Claude", claudeDir.toString(), "CLAUDE.md", CLAUDE_STATE));
     }
 
-    /** Whether an entry called {@code entry} is left out of the tree. */
     public boolean excludes(final String entry) {
         final String lower = entry.toLowerCase(Locale.ROOT);
         return ALWAYS_EXCLUDED.contains(lower) || excludes.stream().anyMatch(e -> e.toLowerCase(Locale.ROOT).equals(lower));
     }
 
-    /** The index file, when one is set. */
     public Optional<Path> indexFile() {
         return index.isEmpty() ? Optional.empty() : Optional.of(Path.of(path).resolve(index));
     }

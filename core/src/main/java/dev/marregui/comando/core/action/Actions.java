@@ -338,7 +338,6 @@ public final class Actions {
         return Map.copyOf(m);
     }
 
-    /** The action offered as {@code tool}. */
     public static Optional<Action> byTool(final String tool) {
         return ALL.stream().filter(a -> a.tool().equals(tool)).findFirst();
     }

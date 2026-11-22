@@ -66,7 +66,6 @@ public record KitJob(String name, String description, List<String> days, String 
         this(name, description, days, time, command, env, log, enabled, service, false);
     }
 
-    /** Whether it runs every day. */
     public boolean daily() {
         return days.size() == WEEKDAYS.size();
     }
@@ -114,7 +113,6 @@ public record KitJob(String name, String description, List<String> days, String 
         return command.isEmpty() ? "" : command.getFirst();
     }
 
-    /** The arguments after the program. */
     public List<String> arguments() {
         return command.size() <= 1 ? List.of() : command.subList(1, command.size());
     }

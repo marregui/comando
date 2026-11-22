@@ -789,7 +789,6 @@ final class FilesTab {
         return Path.of(repo.root()).toAbsolutePath().normalize().relativize(folder).toString().replace('\\', '/');
     }
 
-    /** Whether {@code n} is a top-level row. */
     private static boolean isTop(final DefaultMutableTreeNode n) {
         return isTop(n.getPath());
     }
@@ -1041,7 +1040,6 @@ final class FilesTab {
         return head.isEmpty() ? newer : newer.isEmpty() ? head : head + " · " + newer;
     }
 
-    /** Whether {@code n} is a group's row. */
     static boolean isGroupRow(final ViewSpec.TreeNode n) {
         return n.link().startsWith(GROUP_LINK);
     }

@@ -35,6 +35,23 @@ import static org.awaitility.Awaitility.await;
 ///   descending as the exact reverse
 class GridTableTest {
 
+    /// A result over the rows a sort takes says why a header click does not sort it, with both counts; one at the
+    /// bound sorts, and says nothing.
+    @Test
+    void aResultTooLargeToSortSaysWhy() throws Exception {
+        final GridTable grid = new GridTable();
+        final AtomicReference<String> over = new AtomicReference<>();
+        final AtomicReference<String> at = new AtomicReference<>("unset");
+        SwingUtilities.invokeAndWait(() -> {
+            grid.setSource(new Rows(GridTable.MAX_SORT_ROWS + 1), "t.csv");
+            over.set(grid.model.sortRefusal());
+            grid.setSource(new Rows(GridTable.MAX_SORT_ROWS), "t.csv");
+            at.set(grid.model.sortRefusal());
+        });
+        assertThat(over.get()).isEqualTo("Not sorted: 5,000,001 rows, over the 5,000,000 a sort takes");
+        assertThat(at.get()).isNull();
+    }
+
     /// A click on a header returns while the sort still reads its keys, blocked on a latch: the event thread is
     /// free and the grid keeps its order; once the latch opens, the sorted order shows, on the event thread.
     @Test
@@ -403,6 +420,50 @@ class GridTableTest {
         @Override
         public double numeric(final int row, final int column) {
             return Double.NaN;
+        }
+    }
+
+    /** {@code rows} rows of one numeric column, every cell 0, with no storage behind them. */
+    private record Rows(int rows) implements TableSource {
+
+        @Override
+        public int rowCount() {
+            return rows;
+        }
+
+        @Override
+        public int columnCount() {
+            return 1;
+        }
+
+        @Override
+        public String columnName(final int column) {
+            return "n";
+        }
+
+        @Override
+        public String typeName(final int column) {
+            return "LONG";
+        }
+
+        @Override
+        public boolean isNumeric(final int column) {
+            return true;
+        }
+
+        @Override
+        public boolean isNull(final int row, final int column) {
+            return false;
+        }
+
+        @Override
+        public void format(final int row, final int column, final StringBuilder sink) {
+            sink.append('0');
+        }
+
+        @Override
+        public double numeric(final int row, final int column) {
+            return 0;
         }
     }
 

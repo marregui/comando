@@ -95,7 +95,6 @@ public final class Mapped implements AutoCloseable {
                 .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
     }
 
-    /** The whole of {@code file}. */
     public static byte[] bytes(final Path file) throws IOException {
         return read(file, m -> bytes(m.segment));
     }

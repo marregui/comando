@@ -266,7 +266,7 @@ final class SessionRules {
         final String previous = x.spec().claudeSessionId();
         // a new conversation has nothing to reflect on yet
         final SessionState fresh = x.withSpec(x.spec().restarted()).withStatus(Status.OPENING, "").withReflection(Reflection.FRESH)
-                // a new conversation: due and the automatic checkpoint arm together (D3)
+                // a new conversation: due and the automatic checkpoint arm together (record 129)
                 .withCheckpointArmed(true);
         AppState next = s.withSession(fresh);
         if (!previous.isEmpty()) {
@@ -552,7 +552,7 @@ final class SessionRules {
         return Transition.of(s.withSession(i.name(), x -> {
             final SessionState known = x.withContext(i.tokens(), i.window());
             // a checkpoint command's own calls start below the threshold and may cross it: that crossing is the
-            // command's, so they arm nothing and the turn's end runs no second checkpoint (Miguel, 2026-11-20)
+            // command's, so they arm nothing and the turn's end runs no second checkpoint (record 129)
             final boolean below = i.tokens() > 0 && !x.isCheckpointing()
                     && Reflection.below(known.contextTokens(), known.contextWindow(), percent);
             return below ? known.withCheckpointArmed(true).withCarriedOn(false) : known;

@@ -111,7 +111,6 @@ final class ActionTools {
         pages.port(port);
     }
 
-    /** The servers, for the state's {@code servers}. */
     List<ServerSwitch> servers() {
         return servers;
     }
@@ -360,7 +359,7 @@ final class ActionTools {
             return "refused: card " + id + " was raised by " + card.session() + relation + "; someone other than the asker decides (record 121, rule 1)";
         }
         if (card.kind() == ApprovalKind.CONNECTION) {
-            // clearing production or lowering TLS guards the user's data against agents: no agent allows it (D2)
+            // clearing production or lowering TLS guards the user's data against agents: no agent allows it
             return "refused: card " + id + " weakens connection guards; only the user answers it, in the window (record 23)";
         }
         if (card.kind() == ApprovalKind.TERMINAL) {

@@ -63,7 +63,6 @@ final class InputGate {
         pending.clear();
     }
 
-    /** How many texts wait. */
     int waiting() {
         return pending.size();
     }

@@ -127,7 +127,6 @@ public final class Processes {
         p.waitFor(END_MILLIS, TimeUnit.MILLISECONDS);
     }
 
-    /** The first {@code max} bytes of {@code file}. */
     private static byte[] head(final Path file, final int max) throws IOException {
         return Mapped.head(file, max);
     }

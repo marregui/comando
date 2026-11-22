@@ -142,8 +142,6 @@ final class QueryRules {
                 .orElse(Transition.of(s));
     }
 
-    // ---- SQL events
-
     static Transition sqlStarted(final Clock clock, final AppState s, final Intent.SqlStarted i) {
         return onRun(s, i.requestId(), r -> r.started(clock.millis()));
     }
@@ -269,8 +267,6 @@ final class QueryRules {
         final AppState next = s.withRun(run.get().withNote(i.text(), i.failed()));
         return Transition.of(notice(clock, next, i.failed() ? Notice.Level.ERROR : Notice.Level.WARN, i.text(), Notice.panel(run.get().panel().value())));
     }
-
-    // ---- connections
 
     static Transition saveConnection(final Clock clock, final AppState s, final Intent.SaveConnection i) {
         ConnectionSpec spec = i.spec();

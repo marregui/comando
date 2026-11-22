@@ -258,8 +258,6 @@ public final class ColumnarResult implements ResultView {
         return cells;
     }
 
-    // ---- ResultView
-
     @Override
     public long requestId() {
         return requestId;

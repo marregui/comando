@@ -573,7 +573,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      * kit's folders replace it, since its one folder is the kit's own root and would otherwise count as the kit already
      * shown. At every start, a kit folder that still shows where the kit put it last follows the kit and the brain to
      * where they put it now ({@link #follow}): a brain moved by {@code COMANDO_BRAIN} or the manifest, or another kit,
-     * takes its folders with it (Miguel's decision D10 of the first-release review).
+     * takes its folders with it (record 80).
      */
     List<FolderRoot> withKitFolders(final List<FolderRoot> loaded, final KitRoot root) {
         final List<FolderRoot> kit = root.folders();
@@ -770,8 +770,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     /**
      * Where saving the folders creates a missing index file: the kit's folder and its brain, which may lie anywhere
-     * (D10); nowhere without a kit, so a user's own Claude Code folder never gains a {@code CLAUDE.md} that every session
-     * of theirs would then load.
+     * (record 80); nowhere without a kit, so a user's own Claude Code folder never gains a {@code CLAUDE.md} that every
+     * session of theirs would then load.
      */
     static List<Path> indexRoots(final KitRoot root) {
         if (root.kit().isEmpty()) {

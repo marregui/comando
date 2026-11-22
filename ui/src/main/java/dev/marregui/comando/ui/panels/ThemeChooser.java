@@ -160,7 +160,6 @@ public final class ThemeChooser {
         return dialog;
     }
 
-    /** Whether the chooser is open. */
     boolean open() {
         return dialog.isShowing();
     }

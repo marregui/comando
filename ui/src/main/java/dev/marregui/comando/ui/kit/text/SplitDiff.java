@@ -136,7 +136,6 @@ public final class SplitDiff {
         return chunks;
     }
 
-    /** The comparison shown. */
     public Model model() {
         return model;
     }

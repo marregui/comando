@@ -104,7 +104,6 @@ final class DiffWindow {
         return editor;
     }
 
-    /** Whether {@code c} is in this window. */
     boolean holds(final Component c) {
         return dialog != null && SwingUtilities.getWindowAncestor(c) == dialog;
     }

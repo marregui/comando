@@ -34,7 +34,6 @@ public final class Watchdog {
     private Watchdog() {
     }
 
-    /** The application's watchdog. */
     public static Watchdog shared() {
         return SHARED;
     }

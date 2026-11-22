@@ -117,7 +117,6 @@ public final class FindBar extends JPanel {
         return root == null || root.isDisplayable();
     }
 
-    /** Whether the bar is open on a view. */
     public boolean isOpen() {
         return target != null;
     }

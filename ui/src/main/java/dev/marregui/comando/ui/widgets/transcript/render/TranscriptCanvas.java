@@ -502,7 +502,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return card == null ? "" : card.lastTool();
     }
 
-    /** Whether the card {@code toolUseId} is open. */
     public boolean isCardOpen(final String toolUseId) {
         final Items.ToolItem card = agents.card(toolUseId);
         return card != null && card.isOpen();

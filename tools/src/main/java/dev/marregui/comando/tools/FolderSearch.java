@@ -146,7 +146,6 @@ public final class FolderSearch implements SearchPort.Source {
             this.ended = ended;
         }
 
-        /** Whether the search should go no further. */
         boolean stopped() {
             return refused || ended.getAsBoolean();
         }

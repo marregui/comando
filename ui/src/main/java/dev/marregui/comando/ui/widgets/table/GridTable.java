@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import javax.swing.JComponent;
@@ -24,6 +25,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
 
 import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.overlay.Balloon;
 import dev.marregui.comando.ui.kit.text.CaseFold;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
@@ -34,12 +36,12 @@ import dev.marregui.comando.ui.widget.capability.Exportable;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 
 /**
- * A grid over a {@link TableSource}. JTable paints only the visible rows; cells format into one reused
- * buffer. Sorting keeps a permutation of row indices instead of a sorter over boxed values. A sort runs off the event
- * thread over the rows shown when the header was clicked, bounded to {@link #MAX_SORT_ROWS} rows (a larger result is
- * not sorted); the event thread shows its order only if nothing changed since: a newer click, another source or new
- * rows drop it, so the latest click wins. A find runs on the event thread; its cost is rows times columns, so it looks
- * at the first rows that fit {@link #MAX_EDT_ROWS} rows and {@link #MAX_EDT_CELLS} cells. A copy takes at most
+ * A grid over a {@link TableSource}. JTable paints only the visible rows; cells format into one reused buffer. Sorting
+ * keeps a permutation of row indices instead of a sorter over boxed values. A sort runs off the event thread over the
+ * rows shown when the header was clicked, bounded to {@link #MAX_SORT_ROWS} rows (a click on a larger result says why
+ * it does not sort); the event thread shows its order only if nothing changed since: a newer click, another source or
+ * new rows drop it, so the latest click wins. A find runs on the event thread; its cost is rows times columns, so it
+ * looks at the first rows that fit {@link #MAX_EDT_ROWS} rows and {@link #MAX_EDT_CELLS} cells. A copy takes at most
  * {@link #MAX_COPY_ROWS} rows, selected or not. A growing source adds rows without rebuilding the columns, and drops
  * the sort.
  */
@@ -81,8 +83,15 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             @Override
             public void mouseClicked(final MouseEvent e) {
                 final int view = table.columnAtPoint(e.getPoint());
-                if (view >= 0 && e.getClickCount() == 1) {
-                    model.toggleSort(table.convertColumnIndexToModel(view));
+                if (view < 0 || e.getClickCount() != 1) {
+                    return;
+                }
+                final int column = table.convertColumnIndexToModel(view);
+                final String refusal = column == 0 ? null : model.sortRefusal(); // the row numbers never sort
+                if (refusal != null) {
+                    Balloon.show(table.getTableHeader(), e.getPoint(), refusal);
+                } else {
+                    model.toggleSort(column);
                 }
             }
         });
@@ -209,6 +218,14 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             cell.setLength(0);
             source.format(sourceRow(row), column - 1, cell);
             return cell.toString();
+        }
+
+        /** Why a click on a header does not sort, or null when it does. */
+        String sortRefusal() {
+            if (source == null || rows <= MAX_SORT_ROWS) {
+                return null;
+            }
+            return String.format(Locale.ROOT, "Not sorted: %,d rows, over the %,d a sort takes", rows, MAX_SORT_ROWS);
         }
 
         /**

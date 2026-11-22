@@ -61,7 +61,6 @@ public final class ShownTimer {
         return wanted;
     }
 
-    /** Whether the timer runs now. */
     public boolean running() {
         return running;
     }

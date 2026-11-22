@@ -211,7 +211,7 @@ final class SubagentFiles {
         private final ArrayDeque<Step> steps = new ArrayDeque<>();
         /** The tool calls kept that wait for their result, by id. */
         private final Map<String, Step> waiting = new HashMap<>();
-        /** Every tool call read, and those kept. */
+        /** Every tool call read, kept or not. */
         private int tools;
         private int toolsKept;
 
@@ -238,12 +238,10 @@ final class SubagentFiles {
             lines = listener;
         }
 
-        /** Whether the first read started after the file's start: it was longer than the bytes scanned. */
         boolean cut() {
             return cut;
         }
 
-        /** Every tool call read, kept or not. */
         int tools() {
             return tools;
         }

@@ -9,7 +9,6 @@ public final class ResultText {
     private ResultText() {
     }
 
-    /** The column names, in order. */
     public static List<String> columns(final ResultView r) {
         final List<String> columns = new ArrayList<>(r.columnCount());
         for (int c = 0; c < r.columnCount(); c++) {

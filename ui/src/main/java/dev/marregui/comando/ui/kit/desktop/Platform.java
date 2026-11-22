@@ -22,7 +22,6 @@ public final class Platform {
     private Platform() {
     }
 
-    /** True on macOS. */
     public static boolean isMac() {
         return MAC;
     }

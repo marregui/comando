@@ -1286,7 +1286,7 @@ public final class McpTools {
         return String.join(", ", s.connections().stream().map(ConnectionState::name).toList());
     }
 
-    /** The rows as a table view shows them: a SQL NULL stays a null cell, told apart from the text "null" (FUI-11). */
+    /** The rows as a table view shows them: a SQL NULL stays a null cell, told apart from the text "null". */
     private static List<List<String>> viewRows(final QueryPort.Rows rows) {
         return rows.rows(); // ViewSpec.Table copies each row and keeps its null cells
     }

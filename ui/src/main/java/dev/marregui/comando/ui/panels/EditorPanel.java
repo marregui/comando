@@ -657,7 +657,6 @@ public final class EditorPanel extends JPanel {
         }
     }
 
-    /** Takes every hit's mark off. */
     public void clearHits() {
         if (hitTags.isEmpty() && hitCaret < 0) {
             return;

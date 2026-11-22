@@ -95,8 +95,6 @@ public record AppState(
                 LowerTab.SESSION, Map.of(), Notice.NONE, List.of(), InstancesState.NONE, 1L);
     }
 
-    // ---- lookups
-
     public Optional<PanelState> panel(final PanelId id) {
         return find(panels, p -> p.id().equals(id));
     }
@@ -210,8 +208,6 @@ public record AppState(
         return n;
     }
 
-    // ---- copies
-
     public AppState withPanels(final List<PanelState> newPanels, final PanelId newFocused) {
         final Map<String, LowerTab> tabs = new HashMap<>();
         for (final PanelState p : newPanels) {
@@ -307,7 +303,6 @@ public record AppState(
         return new AppState(panels, closed, focused, connections, sessions, folders, newRuns, approvals, logbook, views, lowerTab, panelTabs, notice, notices, instances, nextId);
     }
 
-    /** Puts {@code run} as the panel's run, replacing the previous one. */
     public AppState withRun(final SqlRun run) {
         final List<SqlRun> next = new ArrayList<>(runs.size() + 1);
         for (final SqlRun r : runs) {
@@ -374,8 +369,6 @@ public record AppState(
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, logbook, views, lowerTab, panelTabs, notice, notices, newInstances,
                 nextId);
     }
-
-    // ---- list helpers
 
     static <T> Optional<T> find(final List<T> list, final Predicate<T> match) {
         for (final T t : list) {

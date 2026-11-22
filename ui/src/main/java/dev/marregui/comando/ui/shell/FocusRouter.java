@@ -70,7 +70,6 @@ final class FocusRouter {
         }
     }
 
-    /** The lower tab the last render showed. */
     LowerTab renderedLowerTab() {
         return renderedLowerTab;
     }

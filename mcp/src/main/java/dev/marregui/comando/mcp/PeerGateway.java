@@ -24,7 +24,6 @@ public interface PeerGateway {
         }
     }
 
-    /** Whether the gateway is connected now. */
     boolean connected();
 
     /** Runs {@code listener} at each connect, a reconnect included, before the subscriptions are renewed. */

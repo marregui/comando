@@ -107,7 +107,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
 
     /**
      * Whether comando runs the sessions' checkpoints (record 129): false, the default, for tests and tools, whose
-     * reducer never checkpoints; the window's threshold is always on (10 % or more, D3).
+     * reducer never checkpoints; the window's threshold is always on (10 % or more).
      */
     private volatile boolean checkpointByComando;
 

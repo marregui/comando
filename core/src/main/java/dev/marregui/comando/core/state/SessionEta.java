@@ -58,7 +58,6 @@ public record SessionEta(String step, long stepAtMillis, String goal, long goalA
         this(step, stepAtMillis, goal, goalAtMillis, boxMinutes, boxGivenAtMillis, setAtMillis, Run.NONE, List.of());
     }
 
-    /** This estimate with {@code newRun}. */
     public SessionEta withRun(final Run newRun) {
         return new SessionEta(step, stepAtMillis, goal, goalAtMillis, boxMinutes, boxGivenAtMillis, setAtMillis, newRun, turnMillis);
     }
@@ -115,12 +114,10 @@ public record SessionEta(String step, long stepAtMillis, String goal, long goalA
             }
         }
 
-        /** Whether there is a run at all. */
         public boolean exists() {
             return startedMillis > 0L;
         }
 
-        /** Whether it runs now. */
         public boolean running() {
             return startedMillis > 0L && endedMillis == 0L;
         }
@@ -130,7 +127,6 @@ public record SessionEta(String step, long stepAtMillis, String goal, long goalA
             return new Run(startedMillis, deadlineMillis, source, newPercent, atMillis, endedMillis);
         }
 
-        /** This run ended at {@code atMillis}. */
         public Run endedAt(final long atMillis) {
             return new Run(startedMillis, deadlineMillis, source, percent, percentAtMillis, atMillis);
         }

@@ -121,7 +121,6 @@ public interface MachinesPort {
             long lastConnectedMillis) {
     }
 
-    /** This machine. */
     Self self();
 
     /** The paired machines, by id. */

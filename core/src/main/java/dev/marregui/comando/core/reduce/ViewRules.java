@@ -208,8 +208,6 @@ final class ViewRules {
         return new Transition(s, List.of(new Effect.ShowPlanUsage(i.usage())));
     }
 
-    // ---- development tools
-
     static Transition runGradle(final Clock clock, final AppState s, final Intent.RunGradle i) {
         final PanelId panel = i.panel() != null ? i.panel() : s.focused();
         final String tasks = i.tasks().strip();
@@ -270,8 +268,6 @@ final class ViewRules {
     static Transition cancelCommand(final AppState s, final Intent.CancelCommand i) {
         return new Transition(s, List.of(new Effect.CancelCommand(i.runId())));
     }
-
-    // ---- notices
 
     static Transition showNotice(final Clock clock, final AppState s, final Intent.Notify i) {
         return new Transition(notice(clock, s, i.level(), i.text(), i.subject()),

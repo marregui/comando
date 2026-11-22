@@ -7,6 +7,8 @@ logs/
 *.iml
 *.ipr
 *.txt
+# the rules tests' baselines are sources
+!app/src/test/resources/dev/marregui/comando/app/*-baseline.txt
 logs
 test-report.xml
 __pycache__/

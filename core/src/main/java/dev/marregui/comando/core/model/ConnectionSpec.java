@@ -91,7 +91,6 @@ public record ConnectionSpec(String name, String host, int port, String database
      */
     public static final List<String> SSL_STRENGTH = List.of("disable", "allow", "prefer", "require", "verify-ca", "verify-full");
 
-    /** Whether this connection's TLS mode is weaker than {@code other}'s. */
     public boolean weakerTls(final ConnectionSpec other) {
         return SSL_STRENGTH.indexOf(sslMode) < SSL_STRENGTH.indexOf(other.sslMode);
     }

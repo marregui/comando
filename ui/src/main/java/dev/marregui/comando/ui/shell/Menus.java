@@ -41,7 +41,7 @@ final class Menus {
             Map.entry("edit.copy", "copy"),
             Map.entry("edit.paste", "paste"),
             Map.entry("edit.selectAll", "select-all"),
-            // Help
+            // Find and Help
             Map.entry("view.find", "search"),
             Map.entry("view.findNext", "search"),
             Map.entry("view.findPrevious", "search"),

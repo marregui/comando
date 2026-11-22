@@ -59,7 +59,6 @@ public final class SidePane {
         return views.size() > 0;
     }
 
-    /** Whether the partition holds a side panel. */
     public boolean hasPanels() {
         for (int i = 0; i < tabs.getTabCount(); i++) {
             if (tabs.getComponentAt(i) instanceof EditorPanel) {
