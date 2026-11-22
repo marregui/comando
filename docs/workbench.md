@@ -747,10 +747,8 @@ Each view says above its table what a row is, and each column's header says in i
 
 | View | A row | Columns |
 |---|---|---|
-| Overview | a peer | **link state**: connected, or backoff (waiting to try again); **msg/s** and **bytes/s**: what the peer acknowledged over the last 5 s; **queued**: in its log, not yet acknowledged. Above the table: the node, its port, the broker's sessions, connections, retained messages and drops, and the watch's own losses |
-| Traffic | a packet event on this node | **kind** (below); **origin / link**: the client that published, or the peer of the step's link; **hops**: 0 published here, 1 came over a link; **correlation**: hex, pairs a question with its reply |
-| Octopus | a link to a peer | **queued**: from **cursor** (the next to deliver) to **tail** (the next append); **sent**: acknowledged by the peer; **dropped**: refused for good, expired, past the hop limit, or QoS 0 over the bound; **reordered**: taken after a later one once the peer had refused it for a while; **waiting to append**: the broker's messages not yet in the log, of the limit; the last connect and disconnect with the reason given |
-| Store | one durable log per peer: the messages this node keeps until that peer acknowledges them | **delivered / written**: the records acknowledged, of those written; **bytes**: the size on disk, where a 64 MiB segment stays until all of it is delivered; **segments**: its files; **rounds/s**, **last records**, **last bytes**: the fsync rounds; **last force ms**, **force p50 ms**, **force p99 ms**: the force time of the last round, and the median and 99th percentile of the last 200 |
+| Health | a link to a peer, the worst first | **status**: down (for how long), log full (the broker's messages wait at the limit), backing up (the queue grew over 5 s while up), dropping (a message given up within the last minute), slow disk (the 99th percentile force over 50 ms), or ok; red when it is not ok; **msg/s**: what the peer acknowledged over the last 5 s; **queued**: in its log, not yet acknowledged; **delivered / written**: the log's records acknowledged, of those written; **last change**: the last connect or disconnect. Above the table: the node, its port, the broker's sessions, connections and retained messages, then only the faults it counts (the broker's drops and refusals, the packets the watch missed, the rows cdb dropped), else "no faults". Beside it: the selected link's every figure (cursor, tail, sent, dropped, reordered, waiting to append, the log's size, segments and force times), its last reason, and the step that resolves its status |
+| Traffic | a packet event on this node | **kind** (below); **origin / link**: the client that published, or the peer of the step's link; **hops**: 0 published here, 1 came over a link; **correlation**: hex, pairs a question with its reply. One row is selected at a time; beside the log: what the packet is (a presence, a question or a reply, with the instance it names), a publish's steps on the links with how long after it each came, and the payload, indented when it is JSON |
 
 The kinds of a packet are Published (a client published it on this node), Appended (written to a peer's log, at an
 offset), Sent (the peer acknowledged it), Arrived (it came in from a peer), Dropped (with the reason), Connected and
@@ -771,7 +769,7 @@ JSON, when it is whole and one JSON document, else to `payload_text`. A table ma
 `payload` keeps it, and its JSON payloads land there as text. A DROPPED packet's `code` names the reason as a number: 1
 the link's queue was full, 2 past the hop limit, 3 the link's log was full, 4 the peer refused it, 5 expired in the log,
 6 larger than the peer accepts, 7 unreadable; 0 for any other. The writer never waits: rows that come while cdb is down
-or slow are dropped, and Overview counts them. A session reads the same views with `frontear_read`
+or slow are dropped, and Health counts them as faults. A session reads the node with `frontear_read`
 ([Claude Code](claude-code.md)).
 
 ## 5. Development tools

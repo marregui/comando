@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-21 | accepted; built in task 220; amended in task 221 (§2.1 a peer down, §2.2 the events, §2.3 persistence and agents); supersedes the one shared node of [record 185](0185-frontear-is-the-only-fabric.md) §2; amended by [record 189](0189-frontear-across-machines.md) (links to other machines) | Miguel and Claude |
+| 2026-11-21 | accepted; built in task 220; amended in task 221 (§2.1 a peer down, §2.2 the events, §2.3 persistence and agents); supersedes the one shared node of [record 185](0185-frontear-is-the-only-fabric.md) §2; amended by [record 189](0189-frontear-across-machines.md) (links to other machines); amended in task 228 (see Amendments: the Health view) | Miguel and Claude |
 
 ## 1. Context
 
@@ -65,3 +65,16 @@ a memory ring and in cdb; bridge queue semantics shown first (Overview, Traffic,
 - A port a peer kept, taken meanwhile by another frontear node, does not take that peer's messages: a node started
   with the guard refuses a link client `<a>~<b>` whose `<b>` is not its name (CONNACK 0x85), and the link backs off.
   A process that speaks MQTT but is not frontear is not guarded.
+
+## Amendments
+
+2026-11-22 (task 228): the tab has two views, Health and Traffic. Health folds Overview, Octopus and Store into one
+table, a row per link, the worst first, with a status (down for how long, log full, backing up when the queue grew
+over 5 s while up, dropping when a message was given up within a minute, slow disk when the 99th percentile force is
+over 50 ms, else ok) in the theme's danger colour when it is not ok; above it the node and only the faults it counts;
+beside it the selected link's every figure and the step that resolves its status. Traffic selects one row at a time:
+a publish's steps on the links are listed beside the log, joined per link by topic and size to the first APPENDED and
+then exactly by log offset to its SENT and DROPPED, under a line saying what the packet is (a presence, a question or
+a reply of a named instance), above the payload. Before, a click selected the publish and every step with its topic
+within 5 s, and a range could stay selected. Miguel asked; tested in `HealthRowsTest`, `TrafficRowsTest`,
+`FrontearTabTest` and `FrontearThemeUiTest`. `frontear_read` keeps its four views.

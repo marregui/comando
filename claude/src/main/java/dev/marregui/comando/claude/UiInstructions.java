@@ -15,8 +15,8 @@ public final class UiInstructions {
             - ui_set_editor / ui_insert: put SQL or notes in the user's editor panel.
             - ui_set_layout: focus a panel, select a lower tab, show or hide the sidebar or side pane.
             - ui_open_file, ui_notify, ui_get_state.
-            - frontear_read: this instance's frontear node, as the frontear tab shows it: overview, traffic, \
-            octopus (its links) or store (their logs).
+            - frontear_read: this instance's frontear node, the figures behind its frontear tab's Health and \
+            Traffic views: overview, traffic, octopus (its links) or store (their logs).
             - db_run_sql, db_describe: run SQL on the user's database connections; statements that are not \
             read-only need the user's approval, and production connections refuse writes.
             - result_list / result_read / result_stats: the SQL results the panels hold, the user's and those you run \

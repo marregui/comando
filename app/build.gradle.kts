@@ -144,6 +144,7 @@ val uiTestClasses = listOf(
     "JobsEditorThemeUiTest",
     "SessionsMultiSelectUiTest",
     "SessionBarButtonsUiTest",
+    "FrontearThemeUiTest",
 )
 
 fun uiShard(spec: String, seconds: String, mac: Boolean): List<String> {

@@ -19,7 +19,8 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * A read-only table of the frontear tab: named columns, each header with a tooltip saying what the column means, rows
- * replaced whole, every cell shown as plain text but a {@link Bar}, drawn as a log's progress. EDT only.
+ * replaced whole, every cell shown as plain text but a {@link Bar}, drawn as a log's progress, and a {@link Flag},
+ * coloured when it is a fault. EDT only.
  */
 public final class LabTable {
 
@@ -36,6 +37,7 @@ public final class LabTable {
         table.getTableHeader().setReorderingAllowed(false);
         table.setDefaultRenderer(Object.class, new TextCell());
         table.setDefaultRenderer(Bar.class, new BarCell());
+        table.setDefaultRenderer(Flag.class, new FlagCell());
     }
 
     /** A column: the header's {@code title}, and the one line its tooltip gives as its meaning. */
@@ -53,6 +55,15 @@ public final class LabTable {
         @Override
         public String toString() {
             return cursor + " / " + tail;
+        }
+    }
+
+    /** A cell's text, drawn in the theme's danger colour when {@code fault}: a link's status. */
+    public record Flag(String text, boolean fault) {
+
+        @Override
+        public String toString() {
+            return text;
         }
     }
 
@@ -101,7 +112,14 @@ public final class LabTable {
 
         @Override
         public Class<?> getColumnClass(final int column) {
-            return !rows.isEmpty() && rows.getFirst()[column] instanceof Bar ? Bar.class : Object.class;
+            if (rows.isEmpty()) {
+                return Object.class;
+            }
+            return switch (rows.getFirst()[column]) {
+                case Bar _ -> Bar.class;
+                case Flag _ -> Flag.class;
+                case null, default -> Object.class;
+            };
         }
 
         @Override
@@ -128,7 +146,7 @@ public final class LabTable {
     }
 
     /** A cell's value as text, never as HTML: topics, origins and reasons come from the peers (rule 6). */
-    private static final class TextCell extends DefaultTableCellRenderer {
+    private static class TextCell extends DefaultTableCellRenderer {
 
         TextCell() {
             Plain.only(this);
@@ -137,6 +155,25 @@ public final class LabTable {
         @Override
         protected void setValue(final Object value) {
             setText(value == null ? "" : Plain.text(value.toString()));
+        }
+    }
+
+    /** A {@link Flag}: its text, in the danger colour when it is a fault and its row is not selected. */
+    private static final class FlagCell extends TextCell {
+
+        @Override
+        public Component getTableCellRendererComponent(
+                final JTable table,
+                final Object value,
+                final boolean selected,
+                final boolean focused,
+                final int row,
+                final int column
+        ) {
+            super.getTableCellRendererComponent(table, value, selected, focused, row, column);
+            final boolean fault = value instanceof final Flag f && f.fault();
+            setForeground(selected ? table.getSelectionForeground() : fault ? Theme.DANGER : table.getForeground());
+            return this;
         }
     }
 

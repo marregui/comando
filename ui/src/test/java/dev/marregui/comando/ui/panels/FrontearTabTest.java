@@ -42,18 +42,21 @@ import dev.marregui.comando.ui.widget.WidgetRegistry;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [FrontearTab], off screen, from a fake [LabPort], and its place in [LowerPanel].
-/// - the tab opens its port only once shown; then each of the four views is filled
-/// - every column header of the four views says what its column means, and each view says what a row is
+/// - the tab opens its port only once shown; then Health and Traffic are filled
+/// - Health puts the worst link first, names the node's faults, and shows the selected link's figures beside it,
+///   keeping the selection across refreshes
+/// - every column header says what its column means, and each view says what a row is
 /// - the packet log hides frontear's control traffic until asked, collapses presences, filters by topic and kind,
-///   names each kind in a word, selects a publish's path and shows its payload, indented when it is JSON
+///   names each kind in a word; one row is selected at a time, and beside it what the packet is, a publish's steps
+///   on the links and its payload, indented when it is JSON
 /// - paused, the log stays as it is; the packets lost are counted beside it
 /// - the frontear tab is a lower tab of the state: rendered, it comes to the front; chosen, it is selected
 class FrontearTabTest {
 
-    /// Set on the port, the tab opens nothing until shown; shown, it opens the port once and fills Overview, Octopus
-    /// and Store with a row per link, Traffic with the packets, and the labels with the node and its counts.
+    /// Set on the port, the tab opens nothing until shown; shown, it opens the port once and fills Health with a row
+    /// per link, the link in backoff first, the node's line and its faults, and Traffic with the packets.
     @Test
-    void shownItOpensThePortOnceAndFillsTheFourViews() throws Exception {
+    void shownItOpensThePortOnceAndFillsBothViews() throws Exception {
         final FakeLab lab = new FakeLab();
         final FrontearTab tab = onEdt(FrontearTab::new);
         SwingUtilities.invokeAndWait(() -> tab.lab(lab));
@@ -66,19 +69,41 @@ class FrontearTabTest {
         assertThat(lab.opened).isEqualTo(1);
         SwingUtilities.invokeAndWait(() -> {
             final JTabbedPane views = (JTabbedPane) tab.component();
-            assertThat(views.getTabCount()).isEqualTo(4);
-            assertThat(views.getTitleAt(0)).isEqualTo("Overview");
-            assertThat(views.getTitleAt(3)).isEqualTo("Store");
-            assertThat(table(tab, "frontear.overview").getRowCount()).isEqualTo(2);
-            assertThat(table(tab, "frontear.overview").getValueAt(1, 1)).isEqualTo("backoff");
-            assertThat(table(tab, "frontear.octopus").getRowCount()).isEqualTo(2);
-            assertThat(table(tab, "frontear.octopus").getValueAt(0, 8)).isEqualTo("3 / 64");
-            assertThat(table(tab, "frontear.store").getRowCount()).isEqualTo(2);
-            assertThat(String.valueOf(table(tab, "frontear.store").getValueAt(0, 1))).isEqualTo("40 / 50");
+            assertThat(views.getTabCount()).isEqualTo(2);
+            assertThat(views.getTitleAt(0)).isEqualTo("Health");
+            assertThat(views.getTitleAt(1)).isEqualTo("Traffic");
+            final JTable health = table(tab, "frontear.health");
+            assertThat(health.getRowCount()).isEqualTo(2);
+            assertThat(health.getValueAt(0, 0)).as("the link in backoff first").isEqualTo("gamma");
+            assertThat(String.valueOf(health.getValueAt(0, 1))).isEqualTo("down 9s");
+            assertThat(String.valueOf(health.getValueAt(1, 1))).isEqualTo("ok");
+            assertThat(String.valueOf(health.getValueAt(1, 4))).isEqualTo("40 / 50");
             assertThat(table(tab, "frontear.traffic").getRowCount()).as("five presences in one row").isEqualTo(4);
             assertThat(find(tab, "frontear.node", JLabel.class).getText()).startsWith("node alpha on port 1883");
-            assertThat(find(tab, "frontear.counts", JLabel.class).getText()).contains("dropped full 6");
+            final JLabel faults = find(tab, "frontear.faults", JLabel.class);
+            assertThat(faults.getText()).isEqualTo("faults: dropped full 1 · packets missed 4 · cdb dropped full 6");
+            assertThat(faults.getForeground()).isEqualTo(Theme.DANGER);
             assertThat(find(tab, "frontear.missed", JLabel.class).getText()).isEqualTo("missed 4");
+        });
+    }
+
+    /// Selecting a link shows its status, the step that resolves it and its figures beside the table; a refresh keeps
+    /// it selected, by its peer.
+    @Test
+    void aSelectedLinkShowsItsFiguresAndStaysSelected() throws Exception {
+        final FrontearTab tab = shown(new FakeLab());
+        SwingUtilities.invokeAndWait(() -> {
+            final JTable health = table(tab, "frontear.health");
+            final JTextArea detail = find(tab, "frontear.health.detail", JTextArea.class);
+            assertThat(detail.getText()).isEqualTo("Select a link to see its figures.");
+            health.setRowSelectionInterval(0, 0);
+            assertThat(detail.getText().lines().toList()).startsWith("gamma · down 9s",
+                    "To resolve: instance gamma is not running, or its frontear is off: start it",
+                    "Last disconnect: refused");
+            assertThat(detail.getText()).contains("delivered 0 / written 5");
+            tab.refresh();
+            assertThat(health.getSelectedRows()).containsExactly(0);
+            assertThat(detail.getText()).startsWith("gamma · down 9s");
         });
     }
 
@@ -102,19 +127,77 @@ class FrontearTabTest {
         });
     }
 
-    /// Selecting a publish selects its steps on the links with it and shows its JSON payload beside the log, indented
-    /// by two spaces, one field per line.
+    /// Selecting a publish selects that row alone, and beside the log says what it is, lists its steps on the links
+    /// with how long after the publish each came, and shows its JSON payload under a heading, indented by two spaces.
     @Test
-    void selectingAPublishSelectsItsPathAndShowsItsPayloadIndented() throws Exception {
+    void selectingAPublishSelectsItAloneAndListsItsPathAndPayload() throws Exception {
         final FrontearTab tab = shown(new FakeLab());
         SwingUtilities.invokeAndWait(() -> {
             final JTable t = table(tab, "frontear.traffic");
             t.setRowSelectionInterval(1, 1);
-            assertThat(t.getSelectedRows()).containsExactly(1, 2, 3);
+            assertThat(t.getSelectedRows()).containsExactly(1);
             final JTextArea head = find(tab, "frontear.head", JTextArea.class);
-            assertThat(head.getText().lines().toList()).containsExactly("{", "  \"n\" : 1", "}");
+            assertThat(head.getText().lines().toList()).containsExactly("Published on work/a, published by alpha", "",
+                    "On the links:", "  +1 ms  appended to the log for beta at offset 70",
+                    "  +2 ms  sent to beta, acknowledged", "", "Payload:", "{", "  \"n\" : 1", "}");
             assertThat(head.getLineWrap()).as("long lines wrap").isTrue();
             assertThat(head.getFont().getFamily()).isEqualTo(Theme.mono().getFamily());
+        });
+    }
+
+    /// The log holds one selected row at a time: a range a drag or a shift-click would make, as a refresh during a
+    /// press left it before, selects only the row the gesture ended on.
+    @Test
+    void theLogNeverHoldsARangeOfRows() throws Exception {
+        final FakeLab lab = new FakeLab();
+        final FrontearTab tab = shown(lab);
+        SwingUtilities.invokeAndWait(() -> {
+            final JTable t = table(tab, "frontear.traffic");
+            t.getSelectionModel().setValueIsAdjusting(true);
+            t.changeSelection(1, 0, false, false);
+            lab.packets.add(FakeLab.published(9, 9_000L, "alpha", "work/z", ""));
+            tab.refresh();
+            t.changeSelection(3, 0, false, true);
+            t.getSelectionModel().setValueIsAdjusting(false);
+            assertThat(t.getSelectedRows()).containsExactly(3);
+            t.getSelectionModel().addSelectionInterval(0, 1);
+            assertThat(t.getSelectedRows()).as("a publish, its steps not selected").containsExactly(1);
+        });
+    }
+
+    /// A refresh that comes while the mouse is down on the log does not undo the click: on release the row clicked is
+    /// the one selected and described, and the packets the refresh brought are shown then.
+    @Test
+    void aRefreshDuringAClickInTheLogDoesNotUndoIt() throws Exception {
+        final FakeLab lab = new FakeLab();
+        final FrontearTab tab = shown(lab);
+        SwingUtilities.invokeAndWait(() -> {
+            final JTable t = table(tab, "frontear.traffic");
+            t.setRowSelectionInterval(0, 0);
+            t.getSelectionModel().setValueIsAdjusting(true);
+            t.changeSelection(1, 0, false, false);
+            lab.packets.add(FakeLab.published(9, 9_000L, "alpha", "work/z", ""));
+            tab.refresh();
+            t.getSelectionModel().setValueIsAdjusting(false);
+            assertThat(t.getSelectedRows()).containsExactly(1);
+            assertThat(find(tab, "frontear.head", JTextArea.class).getText()).startsWith("Published on work/a");
+            assertThat(t.getRowCount()).as("the held packet shown on release").isEqualTo(5);
+        });
+    }
+
+    /// A refresh that comes while the mouse is down on the Health table does not undo the click either.
+    @Test
+    void aRefreshDuringAClickInHealthDoesNotUndoIt() throws Exception {
+        final FrontearTab tab = shown(new FakeLab());
+        SwingUtilities.invokeAndWait(() -> {
+            final JTable t = table(tab, "frontear.health");
+            t.setRowSelectionInterval(0, 0);
+            t.getSelectionModel().setValueIsAdjusting(true);
+            t.changeSelection(1, 0, false, false);
+            tab.refresh();
+            t.getSelectionModel().setValueIsAdjusting(false);
+            assertThat(t.getSelectedRows()).containsExactly(1);
+            assertThat(find(tab, "frontear.health.detail", JTextArea.class).getText()).startsWith("beta · ok");
         });
     }
 
@@ -129,9 +212,9 @@ class FrontearTabTest {
             final JTable t = table(tab, "frontear.traffic");
             final JTextArea head = find(tab, "frontear.head", JTextArea.class);
             t.setRowSelectionInterval(4, 4);
-            assertThat(head.getText()).isEqualTo("temperature 21.5 {not json");
+            assertThat(head.getText()).endsWith("\n\nPayload:\ntemperature 21.5 {not json");
             t.setRowSelectionInterval(5, 5);
-            assertThat(head.getText()).isEqualTo("{\"cut\": [1, 2");
+            assertThat(head.getText()).endsWith("\n\nPayload:\n{\"cut\": [1, 2");
         });
     }
 
@@ -146,10 +229,9 @@ class FrontearTabTest {
             final JTable t = table(tab, "frontear.traffic");
             final JTextArea head = find(tab, "frontear.head", JTextArea.class);
             t.setRowSelectionInterval(4, 4);
-            assertThat(head.getText().lines().toList())
-                    .containsExactly("{", "  \"n\" : 1,", "  \"tags\" : [ \"a\", \"b\" ]", "}");
+            assertThat(payload(head)).containsExactly("{", "  \"n\" : 1,", "  \"tags\" : [ \"a\", \"b\" ]", "}");
             t.setRowSelectionInterval(1, 1);
-            assertThat(head.getText().lines().toList()).as("head only").containsExactly("{", "  \"n\" : 1", "}");
+            assertThat(payload(head)).as("head only").containsExactly("{", "  \"n\" : 1", "}");
         });
     }
 
@@ -177,14 +259,13 @@ class FrontearTabTest {
         });
     }
 
-    /// Each column of Overview, Traffic, Octopus and Store has a header tooltip saying what it means, one short line
-    /// without a closing period, and the renamed headers read as the store and the octopus mean them.
+    /// Each column of Health and Traffic has a header tooltip saying what it means, one short line without a closing
+    /// period.
     @Test
     void everyColumnHeaderSaysWhatItsColumnMeans() throws Exception {
         final FrontearTab tab = shown(new FakeLab());
         SwingUtilities.invokeAndWait(() -> {
-            for (final String name : List.of("frontear.overview", "frontear.traffic", "frontear.octopus",
-                    "frontear.store")) {
+            for (final String name : List.of("frontear.health", "frontear.traffic")) {
                 final JTable t = table(tab, name);
                 final JTableHeader header = t.getTableHeader();
                 assertThat(t.getColumnCount()).as(name).isPositive();
@@ -197,25 +278,20 @@ class FrontearTabTest {
                     assertThat(tip).as(column).doesNotEndWith(".");
                 }
             }
-            assertThat(columns(table(tab, "frontear.store"))).startsWith("to peer", "delivered / written")
-                    .contains("last force ms", "force p50 ms", "force p99 ms")
-                    .doesNotContain("read", "link", "last ms", "p50 ms", "p99 ms");
-            assertThat(columns(table(tab, "frontear.octopus"))).startsWith("to peer").contains("waiting to append")
-                    .doesNotContain("link", "deliveries");
+            assertThat(columns(table(tab, "frontear.health"))).containsExactly("peer", "status", "msg/s", "queued",
+                    "delivered / written", "last change");
         });
     }
 
-    /// Each view says in one line above its table what a row is; the store's is that a row is a peer's durable log.
+    /// Each view says in one line above its table what a row is.
     @Test
     void eachViewSaysWhatARowIs() throws Exception {
         final FrontearTab tab = shown(new FakeLab());
         SwingUtilities.invokeAndWait(() -> {
-            for (final String view : List.of("overview", "traffic", "octopus", "store")) {
+            for (final String view : List.of("health", "traffic")) {
                 final String caption = find(tab, "frontear.caption." + view, JLabel.class).getText();
                 assertThat(caption).as(view).startsWith("One ").doesNotContain("\n");
             }
-            assertThat(find(tab, "frontear.caption.store", JLabel.class).getText()).isEqualTo(
-                    "One durable log per peer: the messages this node keeps until that peer acknowledges them");
         });
     }
 
@@ -274,6 +350,12 @@ class FrontearTabTest {
             tab.shown();
         });
         return tab;
+    }
+
+    /// The lines of the detail pane after its `Payload:` heading.
+    private static List<String> payload(final JTextArea head) {
+        final List<String> lines = head.getText().lines().toList();
+        return lines.subList(lines.indexOf("Payload:") + 1, lines.size());
     }
 
     private static List<String> columns(final JTable t) {
