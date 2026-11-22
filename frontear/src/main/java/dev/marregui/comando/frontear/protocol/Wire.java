@@ -63,14 +63,14 @@ final class Wire {
      * surrogate), holds no U+0000 and takes at most {@link #MAX_LENGTH} bytes (§1.5.4).
      */
     static int utf8Length(final String s) throws MqttException {
-        if (s.indexOf(0) >= 0) {
-            throw new MqttException(Packet.MALFORMED, "string holds U+0000");
-        }
         final int chars = s.length();
         long bytes = 0;
+        // one pass: U+0000 is refused here, not by a scan of its own before
         for (int i = 0; i < chars; i++) {
             final char c = s.charAt(i);
-            if (c < 0x80) {
+            if (c == 0) {
+                throw new MqttException(Packet.MALFORMED, "string holds U+0000");
+            } else if (c < 0x80) {
                 bytes += 1;
             } else if (c < 0x800) {
                 bytes += 2;
@@ -300,7 +300,11 @@ final class Wire {
             final int length = utf8Length(s);
             u16(length);
             if (room(length)) {
-                utf8(s);
+                if (length == s.length()) {
+                    copyAscii(s);
+                } else {
+                    utf8(s);
+                }
             }
             return this;
         }
@@ -344,6 +348,17 @@ final class Wire {
                 bytes = Arrays.copyOf(bytes, Math.max(bytes.length * 2, size + n));
             }
             return true;
+        }
+
+        /**
+         * {@code s}, all of it below U+0080, into room already made for it: such a string's UTF-8 is its characters'
+         * low bytes, which the JDK copies as one array copy, where {@link #utf8} takes a character at a time (30% of
+         * a link's strand at 80,000 messages a second went to encoding strings).
+         */
+        @SuppressWarnings("deprecation") // getBytes(int, int, byte[], int) drops each char's high byte, here all zero
+        private void copyAscii(final String s) {
+            s.getBytes(0, s.length(), bytes, size);
+            size += s.length();
         }
 
         /** {@code s}, checked by {@link #utf8Length}, in UTF-8, into room already made for it. */

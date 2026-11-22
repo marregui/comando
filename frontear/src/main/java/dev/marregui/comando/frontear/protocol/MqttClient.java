@@ -1,6 +1,7 @@
 package dev.marregui.comando.frontear.protocol;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -49,7 +50,9 @@ import dev.marregui.comando.frontear.tls.Tls;
  * <p>Threads. One reader, a timed strand named {@code mqtt-<client id>}, opens each connection, reads it with no
  * read timeout once the gateway accepted it, and runs the reconnects the handler schedules; it never writes once the
  * connection is up, so a gateway that stops reading cannot stall it. Every later write runs on the writer strand,
- * {@code mqtt-writer-<client id>}, in the order the client queued it, and takes the connection's write lock. The
+ * {@code mqtt-writer-<client id>}, in the order the client queued it, and takes the connection's write lock; the
+ * writes go through a 64 KiB buffer, flushed when no other queued write waits, so a burst leaves in as few writes as
+ * the buffer allows, not one a packet. The
  * watcher, a timed strand named {@code mqtt-watch-<client id>}, keeps the connection alive: it pings, and ends the
  * connection by closing its socket when a ping goes unanswered or a write lasts longer than {@link #WRITE_WITHIN};
  * the reader's read then fails and the connection ends with the watcher's cause. The handler's {@code connected} and
@@ -98,10 +101,12 @@ public final class MqttClient implements AutoCloseable {
      * with {@link Packet#QUOTA_EXCEEDED}. Unmeasured: a peer publishes a handful of messages at a time.
      */
     public static final int QUEUE_MAX = 1_000;
+    /** The write buffer of a connection: the gateway's connection buffer, a burst of small packets in one write. */
+    private static final int BUFFER_BYTES = 64 * 1024;
     private static final int MAX_PACKET_ID = 65_535;
     /** A reason code is one byte (§2.4). */
     private static final int MAX_REASON_CODE = 0xFF;
-    /** What a QoS 0 publish completes with once written. */
+    /** What a QoS 0 publish completes with once written into the connection's buffer, at most once as QoS 0 is. */
     private static final Ack WRITTEN = new Ack(Packet.SUCCESS, null);
 
     private final Options options;
@@ -806,9 +811,10 @@ public final class MqttClient implements AutoCloseable {
     /** Queues the PUBACK of the message {@code packetId} on the writer. */
     private void acknowledge(final Connection c, final int packetId, final int reasonCode) {
         try {
+            c.queuedWrites.incrementAndGet();
             writer.execute(() -> {
                 try {
-                    c.write(Codec.encode(new Packet.PubAck(packetId, reasonCode, null)));
+                    c.writeQueued(Codec.encode(new Packet.PubAck(packetId, reasonCode, null)));
                     c.unacked.decrementAndGet();
                 } catch (final IOException e) {
                     c.close();
@@ -818,6 +824,7 @@ public final class MqttClient implements AutoCloseable {
                 }
             });
         } catch (final RejectedExecutionException _) {
+            c.queuedWrites.decrementAndGet();
             c.close();
         }
     }
@@ -899,10 +906,11 @@ public final class MqttClient implements AutoCloseable {
      */
     private void send(final Connection c, final byte[] bytes, final CompletableFuture<Ack> written)
             throws MqttException {
+        c.queuedWrites.incrementAndGet();
         try {
             writer.execute(() -> {
                 try {
-                    c.write(bytes);
+                    c.writeQueued(bytes);
                     if (written != null) {
                         settle(written, WRITTEN, null);
                     }
@@ -920,6 +928,7 @@ public final class MqttClient implements AutoCloseable {
                 }
             });
         } catch (final RejectedExecutionException e) {
+            c.queuedWrites.decrementAndGet();
             throw new MqttException(Packet.UNSPECIFIED, "client closed [client=" + options.clientId() + ']', e);
         }
     }
@@ -1175,6 +1184,13 @@ public final class MqttClient implements AutoCloseable {
         /** QoS 1 messages in not acknowledged yet; incremented by the reader, decremented by the writer. */
         private final AtomicInteger unacked = new AtomicInteger();
         /**
+         * The packets queued on the writer and not written yet: incremented where one is queued, decremented as the
+         * writer writes it (or when the writer refused it). The writer flushes the buffered stream when it reaches 0,
+         * so the packets of a burst leave in one write, not one each: at 80,000 messages a second one write per
+         * packet held a link's sends to about that rate.
+         */
+        private final AtomicInteger queuedWrites = new AtomicInteger();
+        /**
          * The QoS 1 messages in whose PUBACK is not queued yet, in arrival order; guarded by the client's lock. At
          * most the client's Receive Maximum, which {@link #unacked} enforces.
          */
@@ -1230,7 +1246,7 @@ public final class MqttClient implements AutoCloseable {
         void open(final Socket wire) throws IOException {
             readerThread = Thread.currentThread();
             in = new BufferedInputStream(wire.getInputStream());
-            out = wire.getOutputStream();
+            out = new BufferedOutputStream(wire.getOutputStream(), BUFFER_BYTES);
         }
 
         /** Takes the gateway's CONNACK: its limits, and the keep alive that holds. On the reader. */
@@ -1256,14 +1272,32 @@ public final class MqttClient implements AutoCloseable {
          * is ended by the watcher closing the socket.
          */
         void write(final byte[] bytes) throws IOException, InterruptedException {
+            write(bytes, false);
+        }
+
+        /** As {@link #write}, for a packet counted in {@link #queuedWrites}: flushed with the last of a burst. */
+        void writeQueued(final byte[] bytes) throws IOException, InterruptedException {
+            write(bytes, true);
+        }
+
+        private void write(final byte[] bytes, final boolean queued) throws IOException, InterruptedException {
             if (!writeLock.tryLock(WRITE_WITHIN.toMillis(), TimeUnit.MILLISECONDS)) {
+                if (queued) {
+                    queuedWrites.decrementAndGet();
+                }
                 throw new MqttException(Packet.UNSPECIFIED, "write lock not free in time [waitMillis="
                         + WRITE_WITHIN.toMillis() + ']');
             }
             try {
                 writeStartedNanos = System.nanoTime();
                 writing = true;
+                // counted down before the write: a packet queued after it is written by a later task, which flushes;
+                // a packet not counted (CONNECT, DISCONNECT) is flushed at once, with whatever the buffer holds
+                final int left = queued ? queuedWrites.decrementAndGet() : 0;
                 out.write(bytes);
+                if (left <= 0) {
+                    out.flush();
+                }
                 lastWriteNanos = System.nanoTime();
             } finally {
                 writing = false;

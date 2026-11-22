@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-22 | accepted; built in task 234; changes the link queue bound of [record 184](0184-frontear-comandos-own-mqtt-octopus-network.md) | Miguel and Claude |
+| 2026-11-22 | accepted; built in task 234, §3 extended in task 236; changes the link queue bound of [record 184](0184-frontear-comandos-own-mqtt-octopus-network.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -42,9 +42,16 @@ M2 Max with 12 cores, during other sessions' builds. Back to back, before and af
 | queue peak, per 10 s | 1,000 (the bound) in every interval | 1,121 to 1,942 |
 
 A second run after the change, at a load average of 14 on 12 cores, refused 8,128 messages in the warm-up: a strand
-starved of CPU passes the wait bound too, as it passed the count bound before. Above about 75,000 msg/s the strand
-itself is the limit on this machine: neither run kept up at 80,000 under that load, nor did either refuse anything
-after the warm-up.
+starved of CPU passes the wait bound too, as it passed the count bound before. Above about 80,000 msg/s the link then fell behind. The strand was not the cause: it used about a third of a
+core, and the link's whole encode work per message took 580 ns, single-threaded. The link's client wrote every
+packet as its own write to the socket, and its writer's queue stood at the window, 1,000, in every interval. Task
+236 buffered the client's writes, flushed when no queued write waits, as the gateway's connections already did:
+`FrontearStress --rate 60000,80000,100000,120000,150000`, same shape, at a load average of 6 to 19 on 12 cores, kept
+up to 120,000 msg/s (p50 8.3 ms and p99 47.7 ms at 80,000, against 216 to 289 ms and 537 to 646 ms before) and fell
+behind at 150,000 (121,712 delivered). The same task made string encoding one pass and an all-ASCII string one array copy: the link's
+per-message encode work, timed single-threaded over 2,000,000 messages a round, went from 579 to 557 ns (4%). The
+buffered writes are pinned by the client's tests: a ping, a PUBACK and a QoS 0 publish each reach a gateway on a
+quiet connection, so the last write of a burst is flushed.
 
 The same task cut the link path's allocation (task 232's R2: alice's link to bob allocated 151 MB/s at 60,000
 msg/s). JFR (`settings=profile`) over the same three `FrontearStress` runs, read with `jfrq alloc`; bytes divided by

@@ -289,7 +289,7 @@ What the protocol does: [frontear §2.8](../frontear.md#28-the-protocol).
 | `Packet` | The MQTT 5 control packets, one record each. |
 | `Codec` | Writes and reads every packet. Refuses a protocol level other than 5, a user name or password, an authentication method, topic aliases and subscription identifiers, each with the reason code that says so. |
 | `Wire` | MQTT 5's integers, variable byte integers (at most 268,435,455), UTF-8 strings and binary data; a value that breaks its form is malformed. |
-| `MqttClient` | An MQTT 5 client over a blocking socket, optionally TLS 1.3: QoS 0 and 1 both ways, subscriptions, keep alive, a will, reconnection when its handler asks. Connects within 10 s, cuts a write that takes longer than 10 s, and queues at most 1,000 messages. |
+| `MqttClient` | An MQTT 5 client over a blocking socket, optionally TLS 1.3: QoS 0 and 1 both ways, subscriptions, keep alive, a will, reconnection when its handler asks. Connects within 10 s, cuts a write that takes longer than 10 s, and queues at most 1,000 messages. Its writes go through a 64 KiB buffer, flushed when no other queued write waits, so a burst leaves in a few writes, not one a packet. |
 | `MqttException` | A failure with its MQTT 5 reason code. |
 | `Names` | What frontear reserves: `$frontear/`, its `presence/`, `state/` and `control/` topics, the content type `application/json`, the user property `frontear-origin`. |
 | `Topics` | Which topic names and filters are valid, and which names a filter matches. |
