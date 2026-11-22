@@ -35,6 +35,16 @@ class AppConfigTest {
         assertThat(AppConfig.dataRoot("rel/~x", null)).as("a tilde inside a path is a name").isEqualTo(Path.of("rel/~x"));
     }
 
+    /// The machine root is the home folder unless `-Dcomando.machineRoot` names another, a leading `~` expanded and
+    /// the path made absolute; a blank value is the home folder.
+    @Test
+    void theMachineRootIsTheHomeFolderUnlessThePropertyNamesAnother() {
+        assertThat(AppConfig.machineRoot(null)).isEqualTo(Path.of(HOME));
+        assertThat(AppConfig.machineRoot("  ")).isEqualTo(Path.of(HOME));
+        assertThat(AppConfig.machineRoot("/tmp/laptop2/../laptop2")).isEqualTo(Path.of("/tmp/laptop2"));
+        assertThat(AppConfig.machineRoot("~/laptop2")).isEqualTo(Path.of(HOME, "laptop2"));
+    }
+
     /// The keychain is on for the standard data root only; `-Dcomando.keychain` decides when set, and an empty value
     /// is no.
     @Test

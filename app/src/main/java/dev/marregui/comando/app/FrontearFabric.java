@@ -80,9 +80,9 @@ import dev.marregui.comando.ui.shell.ServerToggle;
 /**
  * frontear, comando's fabric between instances (records 184, 185, 187): every instance hosts a node of its own in this
  * process, named after its slug, on a port of its own on {@code 127.0.0.1}, and its peer link connects to that node
- * alone. A registry file in the user's home ({@code ~/.comando-fabric.json}, versioned as record 133 says) holds every
- * slug's node: its port, kept for good so a peer that restarts is found where it was, and the process that runs it,
- * pid 0 once it is down.
+ * alone. A registry file in the machine root ({@code ~/.comando-fabric.json} unless {@code -Dcomando.machineRoot}
+ * names another folder; versioned as record 133 says) holds every slug's node: its port, kept for good so a peer that
+ * restarts is found where it was, and the process that runs it, pid 0 once it is down.
  * <p>
  * Node X keeps one link per other slug Y in the registry, id {@code Y}, to Y's port: it forwards what Y reads (Y's
  * inbox and reply topics and X's presence) and, with a hop limit of 1, nothing it got from a link. The links are put
@@ -116,7 +116,7 @@ final class FrontearFabric implements ServerToggle, ServerSwitch, AutoCloseable 
      */
     static final int REGISTRY_VERSION = 2;
     /** The registry every comando instance on this machine reads. */
-    static final Path REGISTRY = Path.of(System.getProperty("user.home"), ".comando-fabric.json");
+    static final Path REGISTRY = AppConfig.machineRoot().resolve(".comando-fabric.json");
     /**
      * The lowest MQTT port a node takes on the machine: the one the instances' broker has had since record 123. Each
      * slug takes the lowest from here that no other slug holds and no process listens on (record 187).

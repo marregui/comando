@@ -37,6 +37,22 @@ public record AppConfig(Path home, String claudeExecutable, KitRoot root, boolea
         return chosen != null ? Path.of(HomeDir.expand(chosen.strip())) : Path.of(System.getProperty("user.home"), ".comando");
     }
 
+    /**
+     * The folder of the files one machine's instances share (record 189): the frontear registry, the machine's key
+     * and its pairings. {@code -Dcomando.machineRoot}, a leading {@code ~} the home folder, else the home folder; a
+     * second comando started with another one is another machine on this host, which pairs with the first over
+     * loopback. The machine's cdb stays in the home folder, shared.
+     */
+    static Path machineRoot(final String prop) {
+        return prop != null && !prop.isBlank() ? Path.of(HomeDir.expand(prop.strip())).toAbsolutePath().normalize()
+                : Path.of(System.getProperty("user.home"));
+    }
+
+    /** {@link #machineRoot(String)} of this process's {@code -Dcomando.machineRoot}. */
+    static Path machineRoot() {
+        return machineRoot(System.getProperty("comando.machineRoot"));
+    }
+
     public static AppConfig fromEnvironment() {
         final Path chosen = dataRoot(System.getProperty("comando.home"), System.getenv("COMANDO_HOME"));
         final String claude = System.getenv("COMANDO_CLAUDE");

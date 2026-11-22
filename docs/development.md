@@ -186,6 +186,7 @@ The wrapper pins Gradle 9.9.1 and the distribution's SHA-256.
 | `COMANDO_CODEX` | environment | the search in [§1](#1-prerequisites) | the Codex executable, read for the status bar's usage |
 | `CLAUDE_CONFIG_DIR` | environment | unset | the root comando's sessions run on, in place of the folders it looks in (`~/.claude`, `~/comando-kit`, `~/.claude/comando-kit`) ([The kit](kit.md)) |
 | `COMANDO_BRAIN` | environment | unset | the brain's folder, over the manifest's `brain`; used only with a kit ([The kit](kit.md)) |
+| `comando.machineRoot` | system property | the home folder | the folder of the files one machine's instances share (the frontear registry, `.comando-machine/`, `.comando-remotes.json`); another one makes a second comando on this host another machine, paired over loopback |
 | `comando.keychain` | system property | `true` for `~/.comando`, else `false` | keep connection passwords in the login keychain (macOS); elsewhere they stay in `connections.json` |
 | `comando.metrics` | system property | `true` | `false` keeps no metrics, as the tests do ([Claude Code](claude-code.md)) |
 | `comando.recordIntents` | system property | `false` | write the intent log to `logs/` in the data root |

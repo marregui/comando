@@ -32,7 +32,8 @@ import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.frontear.tls.MachineKey;
 
 /**
- * This machine and the machines paired with it (record 189), kept in two files of the user's home. The folder
+ * This machine and the machines paired with it (record 189), kept in two files of the machine root (the user's home
+ * unless {@code -Dcomando.machineRoot} names another folder). The folder
  * {@code ~/.comando-machine/}, owner-only, holds the machine's key ({@link MachineKey}) and {@code machine.json},
  * {@code {"version":1,"machine":"<id>","host":"<listen address or empty>","port":18893}}, written at the first
  * {@link #self} with the host's short name as the id. {@code ~/.comando-remotes.json}, owner-only, holds the pairings,
@@ -56,9 +57,9 @@ final class Machines implements MachinesPort {
     /** The gateway's remote port while {@code port} of {@code machine.json} names none (ADR 0189 §2.1). */
     static final int PORT = 18_893;
     /** This machine's folder: its key and {@code machine.json}. */
-    static final Path FOLDER = Path.of(System.getProperty("user.home"), ".comando-machine");
+    static final Path FOLDER = AppConfig.machineRoot().resolve(".comando-machine");
     /** The machines paired with this one. */
-    static final Path REMOTES = Path.of(System.getProperty("user.home"), ".comando-remotes.json");
+    static final Path REMOTES = AppConfig.machineRoot().resolve(".comando-remotes.json");
     /** The machine file's name in {@link #FOLDER}. */
     static final String MACHINE_FILE = "machine.json";
     /** The id when the host's name gives none. */
@@ -108,7 +109,7 @@ final class Machines implements MachinesPort {
         this.clock = clock;
     }
 
-    /** The machine of the user's home: {@link #FOLDER}, {@link #REMOTES}, {@link #PORT}, the host's short name. */
+    /** The machine of the machine root: {@link #FOLDER}, {@link #REMOTES}, {@link #PORT}, the host's short name. */
     static Machines of() {
         return new Machines(FOLDER, REMOTES, PORT, Machines::hostId, InstantSource.system());
     }
