@@ -1238,13 +1238,6 @@ public final class Workspace {
         return new ArrayList<>(panels.values());
     }
 
-    /** Selects the main tab at {@code index} (0-based); ⌘1…⌘9 go through {@link #numbered}, which counts the side's. */
-    public void select(final int index) {
-        if (index >= 0 && index < tabs.getTabCount()) {
-            tabs.setSelectedIndex(index);
-        }
-    }
-
     public void selectRelative(final int delta) {
         final int n = tabs.getTabCount();
         if (n > 0) {
