@@ -246,7 +246,7 @@ class CdbWriterTest {
         up.set(false);
         try (CdbWriter writer = new CdbWriter(endpoint)) {
             assertThatThrownBy(() -> writer.write(List.of("frontear_packet,node=a 1")))
-                    .isInstanceOf(IOException.class).hasMessage("cdb is not running");
+                    .isInstanceOf(PacketSink.NotRunning.class);
         }
         server.stop(0);
         up.set(true);

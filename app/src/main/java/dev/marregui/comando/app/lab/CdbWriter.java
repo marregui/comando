@@ -87,7 +87,7 @@ public final class CdbWriter implements PacketSink.Writer {
 
     @Override
     public int write(final List<String> lines) throws IOException, InterruptedException {
-        final URI base = cdb.live().orElseThrow(() -> new IOException("cdb is not running"));
+        final URI base = cdb.live().orElseThrow(PacketSink.NotRunning::new);
         final Optional<String> secret = cdb.secret();
         if (!base.equals(madeOn)) {
             make(base, secret);

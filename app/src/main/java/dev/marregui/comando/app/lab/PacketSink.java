@@ -103,6 +103,17 @@ public final class PacketSink implements AutoCloseable {
         }
     }
 
+    /**
+     * cdb has no live server to write to: it is starting, as at comando's launch, or it stopped. A state, not a
+     * fault, so the sink logs it without a stack trace.
+     */
+    public static final class NotRunning extends IOException {
+
+        public NotRunning() {
+            super("cdb is not running");
+        }
+    }
+
     /** A packet of {@code node}, queued until the errand makes it a line. */
     private record Entry(String node, Packet packet) {
     }
@@ -376,9 +387,14 @@ public final class PacketSink implements AutoCloseable {
             backoffNanos = down ? Math.min(backoffNanos * 2, BACKOFF_MOST.toNanos()) : BACKOFF_FIRST.toNanos();
             retryAtNanos = nowNanos + backoffNanos;
             if (!down) {
-                LOG.log(System.Logger.Level.WARNING, "cannot write frontear packets to cdb, dropping them until it"
-                        + " answers [lines=" + batch.size() + ", retryInMillis="
-                        + TimeUnit.NANOSECONDS.toMillis(backoffNanos) + ']', e);
+                final long retryInMillis = TimeUnit.NANOSECONDS.toMillis(backoffNanos);
+                if (e instanceof NotRunning) {
+                    LOG.log(System.Logger.Level.INFO, "cdb is not running, frontear packets are dropped until it"
+                            + " answers [lines=" + batch.size() + ", retryInMillis=" + retryInMillis + ']');
+                } else {
+                    LOG.log(System.Logger.Level.WARNING, "cannot write frontear packets to cdb, dropping them until it"
+                            + " answers [lines=" + batch.size() + ", retryInMillis=" + retryInMillis + ']', e);
+                }
             }
             down = true;
         } catch (final InterruptedException _) {

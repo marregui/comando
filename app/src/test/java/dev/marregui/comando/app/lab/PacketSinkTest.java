@@ -12,6 +12,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import jdk.jfr.Recording;
@@ -105,6 +109,53 @@ class PacketSinkTest {
             assertThat(calls.get()).isEqualTo(1);
             assertThat(sink.written()).isZero();
         }
+    }
+
+    /// A writer with no cdb to write to, as at comando's launch before cdb starts: the sink says so at INFO with no
+    /// stack trace; any other failure is a WARNING that carries its cause.
+    @Test
+    void cdbNotRunningIsSaidWithoutAStackTraceAndOtherFailuresWithTheirCause() {
+        final Logger log = Logger.getLogger(PacketSink.class.getName());
+        final List<LogRecord> records = new CopyOnWriteArrayList<>();
+        final Handler handler = new Handler() {
+            @Override
+            public void publish(final LogRecord r) {
+                if (r.getMessage().contains("frontear packets")) {
+                    records.add(r);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        final IOException refused = new IOException("connection refused");
+        log.addHandler(handler);
+        try {
+            try (PacketSink sink = new PacketSink(_ -> {
+                throw new PacketSink.NotRunning();
+            })) {
+                sink.offer("a", published(1));
+                await().atMost(WAIT).until(() -> records.size() == 1);
+            }
+            try (PacketSink sink = new PacketSink(_ -> {
+                throw refused;
+            })) {
+                sink.offer("a", published(1));
+                await().atMost(WAIT).until(() -> records.size() == 2);
+            }
+        } finally {
+            log.removeHandler(handler);
+        }
+        assertThat(records.get(0).getLevel()).isEqualTo(Level.INFO);
+        assertThat(records.get(0).getThrown()).isNull();
+        assertThat(records.get(0).getMessage()).startsWith("cdb is not running");
+        assertThat(records.get(1).getLevel()).isEqualTo(Level.WARNING);
+        assertThat(records.get(1).getThrown()).isSameAs(refused);
     }
 
     /// A writer that fails once, then answers: after the backoff the lines are written again.
