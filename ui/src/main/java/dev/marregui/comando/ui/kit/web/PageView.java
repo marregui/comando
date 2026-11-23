@@ -18,8 +18,8 @@ public interface PageView extends AutoCloseable {
 
     /**
      * Shows {@code file}, a local HTML page; its relative links and images resolve against its folder. Its scripts run
-     * only when {@code scripts}: a script on a {@code file:} page can read any file on this machine, so only pages from
-     * folders the user trusts run them.
+     * only when {@code scripts}: a script on a {@code file:} page can read any file on this machine, so only pages
+     * comando's own work made or keeps run them.
      */
     void load(Path file, boolean scripts);
 

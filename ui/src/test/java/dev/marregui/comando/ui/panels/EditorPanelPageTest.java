@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
+import com.sun.security.auth.module.UnixSystem;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,9 +18,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.web.FakePageView;
@@ -79,6 +82,42 @@ class EditorPanelPageTest {
         assertThat(scriptsOf(report, s, "/kit/root/maps/a.html")).containsExactly(true);
         assertThat(scriptsOf(report, s, "/tmp/a.html")).containsExactly(false);
         assertThat(scriptsOf(report, s, "/kit/rootless/a.html")).containsExactly(false);
+    }
+
+    /// A page comando's own work made runs its scripts wherever it was made: in a session's working directory, or in
+    /// Claude Code's temporary folder of this user; a page beside that folder, or another user's, does not.
+    @Test
+    void pagesInASessionsWorkingDirectoryOrClaudeCodesTemporaryFolderRunTheirScripts() throws Exception {
+        final PanelState report = new PanelState(new PanelId("report"), "report", "", "");
+        final AppState s = AppState.initial(List.of(report), List.of(),
+                List.of(SessionState.closed(SessionSpec.fresh("work", "/clones/t7-edge"))));
+        final String uid = String.valueOf(new UnixSystem().getUid());
+        assertThat(scriptsOf(report, s, "/clones/t7-edge/docs/map.html")).containsExactly(true);
+        assertThat(scriptsOf(report, s, "/tmp/claude-" + uid + "/session/scratchpad/a.html")).containsExactly(true);
+        assertThat(scriptsOf(report, s, "/private/tmp/claude-" + uid + "/a.html")).containsExactly(true);
+        assertThat(scriptsOf(report, s, "/tmp/claude-" + uid + "0/a.html")).containsExactly(false);
+        assertThat(scriptsOf(report, s, "/tmp/a.html")).containsExactly(false);
+    }
+
+    /// A panel is given its file before its first state, as the workspace opens one: the page loads with its scripts
+    /// off, since no folder is known yet, and loads again with them on once the state names the page's folder; a
+    /// later state that changes nothing loads it no more.
+    @Test
+    void aPageOpenedBeforeThePanelsFirstStateRunsItsScriptsOnceTheStateNamesItsFolder() throws Exception {
+        final PanelState report = new PanelState(new PanelId("report"), "report", "", "");
+        final AppState s = AppState.initial(List.of(report), List.of(), List.of())
+                .withFolders(List.of(new FolderRoot("Scratchpad", "/brain/scratchpad", "", List.of())));
+        final FakePageView page = new FakePageView();
+        final EditorPanel panel = panel(() -> page, x -> {
+            x.editor().load(HTML);
+            x.file(Path.of("/brain/scratchpad/edg/map.html"), true);
+        });
+        settle();
+        SwingUtilities.invokeAndWait(() -> panel.render(report, s));
+        settle();
+        SwingUtilities.invokeAndWait(() -> panel.render(report, s));
+        settle();
+        assertThat(page.scripts()).containsExactly(false, true);
     }
 
     /// Whether the loads of a panel rendered with `s` and opened on the HTML file `file` ran the page's scripts.

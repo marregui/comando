@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-22 | accepted; built in task 229; takes up the WebView fallback named in [record 2](0002-swing-and-flatlaf-as-the-ui-toolkit.md) §2; a library [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) admits | Miguel and Claude |
+| 2026-11-22 | accepted; built in task 229; the pages that run their scripts widened on 2026-11-23 (task 244) to every page comando's own work makes; takes up the WebView fallback named in [record 2](0002-swing-and-flatlaf-as-the-ui-toolkit.md) §2; a library [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) admits | Miguel and Claude |
 
 ## 1. Context
 
@@ -30,7 +30,7 @@ only". The candidates compared on 2026-11-22:
 | Renderer | OpenJFX 25 `javafx-web` in a `JFXPanel`, behind `ui.kit.web.PageView` | WebKit quality in the process, a few jars, the fallback record 2 already named |
 | Where | an editor panel's rendered view, as Markdown's: HTML opens rendered, the mode switch shows its text | the panel and its session already exist; no new kind of panel |
 | Links | a web address opens in the browser; a local file opens as the sidebar opens it; an anchor scrolls the page | the page never navigates away from its file |
-| JavaScript | on for a page inside a folder the Files tab lists (the kit's, the brain's, the user's own), off elsewhere; no Java object exposed to it | a script on a `file:` page reads any local file: measured on OpenJFX 25.0.5.1, a page's `XMLHttpRequest` read a file beside it and `/etc/hosts`; with scripts off it read nothing, and comando still reads the page's text. The kit's pages need their scripts; a page from anywhere else does not get them. A bridge would let a page call comando |
+| JavaScript | on for a page comando's own work makes or keeps: inside a folder the Files tab lists (the kit's, the brain's, the user's own), a session's working directory, or Claude Code's temporary folder of this user (`/tmp/claude-<uid>`); off elsewhere; no Java object exposed to it | a script on a `file:` page reads any local file: measured on OpenJFX 25.0.5.1, a page's `XMLHttpRequest` read a file beside it and `/etc/hosts`; with scripts off it read nothing, and comando still reads the page's text. The kit's pages need their scripts; a page from anywhere else does not get them. A bridge would let a page call comando |
 | Agents | `page_list`, `page_snapshot` (a PNG of what the user sees, by path) and `page_read` (title, selection, visible text) through `core.port.PagePort` | the session attached to the panel works on the page as the user sees it |
 | Threads | FX calls on the FX thread, Swing calls on the EDT; agents wait off both, with a timeout; `Platform.setImplicitExit(false)` | neither UI thread blocks the other; closing the last page does not end JavaFX |
 | Colours | a page with no style sheet of its own takes the theme's: the look of rendered Markdown in the theme and tint chosen (`PageTheme`), given again at a theme change; a page with any style sheet keeps its own look whole | Miguel, 2026-11-22, on a report that looked like comando's but ignored the theme. Filling only what a styled page leaves unset was rejected: a report that sets its ground but not its cells would get the theme's cells on its own ground |
@@ -47,7 +47,7 @@ only". The candidates compared on 2026-11-22:
 - JavaFX starts its own threads (the JavaFX application thread, its renderer, WebKit's), owned by the toolkit, not by
   comando's thread kit; they live until the process exits. `ThreadRulesTest` reads comando's classes and passes
   unchanged; `ThreadBudgetTest` passes with no page opened.
-- A page with its scripts on can read any file the user can, under WebKit's rules for `file:` pages; only pages in the listed folders get them. A page outside them that needs its scripts opens in the browser (its header button).
+- A page with its scripts on can read any file the user can, under WebKit's rules for `file:` pages; only pages in those places get them, decided again whenever the panel's state changes, since a panel is given its file before its first state (Miguel, 2026-11-23: anything comando makes, comando opens). A page elsewhere that needs its scripts opens in the browser (its header button).
 - Every load a page schedules is checked, not the address: the same link followed twice changes no address the second time.
 - `page_snapshot` writes into one folder per process (`comando-pages-*` in the system's temporary folder), which keeps the newest 20 pictures and is deleted when comando exits.
 - Markdown keeps `HtmlPane`; moving it to WebView is a later decision.

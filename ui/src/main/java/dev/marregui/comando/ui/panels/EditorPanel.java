@@ -51,7 +51,6 @@ import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.schema.Schema;
@@ -208,6 +207,8 @@ public final class EditorPanel extends JPanel {
     private PageView page;
     /** The file {@link #page} loaded last; null before it loads one. EDT only. */
     private Path pageFile;
+    /** Whether {@link #pageFile} was loaded with its scripts on. EDT only. */
+    private boolean pageScripts;
     /** No view could be made for this panel: its HTML file shows as text, with no switch. EDT only. */
     private boolean noRenderer;
     /** The log said once that HTML files show as text for want of a renderer. EDT only. */
@@ -988,29 +989,35 @@ public final class EditorPanel extends JPanel {
 
     /** The page loads the panel's file, or reads it again when it has it already. */
     private void loadPage() {
-        if (file.equals(pageFile)) {
+        final boolean scripts = trusted(file);
+        if (file.equals(pageFile) && scripts == pageScripts) {
             page.reload();
         } else {
             pageFile = file;
-            page.load(file, trusted(file));
+            pageScripts = scripts;
+            page.load(file, scripts);
         }
     }
 
     /**
-     * Whether {@code file} lies in one of the folders the Files tab lists, the kit's and the user's own: only such
-     * pages run their scripts, since a script on a {@code file:} page can read any file on this machine (record 190).
+     * Loads the page again when whether it may run its scripts changed since it loaded: a panel opened on a page is
+     * given its file before its first state, which has no folders yet, so the page first loads with its scripts off.
+     */
+    private void reloadWhenTrustChanged() {
+        if (page != null && pageFile != null && trusted(pageFile) != pageScripts) {
+            pageScripts = !pageScripts;
+            page.load(pageFile, pageScripts);
+        }
+    }
+
+    /**
+     * Whether {@code file} is a page comando's own work made or keeps: in a folder the Files tab lists (the kit's,
+     * the brain's, the user's own), in a session's working directory, or in Claude Code's temporary folder of this
+     * user. Only such pages run their scripts, since a script on a {@code file:} page can read any file on this
+     * machine (record 190).
      */
     private boolean trusted(final Path file) {
-        if (state == null) {
-            return false;
-        }
-        final Path f = file.toAbsolutePath().normalize();
-        for (final FolderRoot root : state.folders()) {
-            if (!root.path().isBlank() && f.startsWith(Path.of(root.path()).toAbsolutePath().normalize())) {
-                return true;
-            }
-        }
-        return false;
+        return state != null && PageTrust.trusted(file, state);
     }
 
     /** Takes the page view out of the panel, then closes it; nothing when there is none. */
@@ -1021,6 +1028,7 @@ public final class EditorPanel extends JPanel {
         }
         page = null;
         pageFile = null;
+        pageScripts = false;
         center.remove(v.component());
         v.close();
     }
@@ -1350,6 +1358,7 @@ public final class EditorPanel extends JPanel {
                 editor.markError(r.sql(), position);
             }
         });
+        reloadWhenTrustChanged();
     }
 
     /**

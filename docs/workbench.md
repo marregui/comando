@@ -128,8 +128,8 @@ failure bounces the Dock while the window is not active. Resting the pointer on 
 
 **Documents.** A Markdown file renders with its pictures (PNG, JPEG, GIF or SVG on this machine), its code blocks in
 the theme's colours and its front matter as a table. Mermaid diagrams draw when `mmdc` is installed. An HTML file
-opens rendered as a page, by JavaFX's WebView ([record 190](adr/0190-html-pages-render-in-a-panel-through-javafx-webview.md)); ⌘⇧M switches to its text and back, and the session of its panel reads it with the page tools ([Claude Code](claude-code.md)). Its scripts run only when it
-lies in a folder the Files tab lists. A page with no style sheet of its own takes the theme's colours; one with its own keeps its look. Without a display it opens as text. A `.log` file is read-only and follows its end as the file grows. A file edited outside
+opens rendered as a page, by JavaFX's WebView ([record 190](adr/0190-html-pages-render-in-a-panel-through-javafx-webview.md)); ⌘⇧M switches to its text and back, and the session of its panel reads it with the page tools ([Claude Code](claude-code.md)). Its scripts run only when comando's own work made
+or keeps it: in a folder the Files tab lists, a session's working directory, or Claude Code's temporary folder. A page with no style sheet of its own takes the theme's colours; one with its own keeps its look. Without a display it opens as text. A `.log` file is read-only and follows its end as the file grows. A file edited outside
 comando reloads into its panel ([§7.4](#74-panel-files)).
 
 **Links** are followed at a double click, wherever text shows: a page, a panel, the transcript and its cards.
