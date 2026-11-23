@@ -102,7 +102,7 @@ public final class Binder {
 
     /**
      * The value of {@code type} that {@code node} holds. A {@code null}, missing or JSON null node gives a primitive's
-     * default and {@code null} for any other class.
+     * default, an empty {@link Optional} for {@code Optional}, and {@code null} for any other class.
      *
      * @throws JsonException when the node does not hold a value of {@code type}
      */

@@ -25,7 +25,6 @@ public abstract class TypeRef<T> {
         this.type = p.getActualTypeArguments()[0];
     }
 
-    /** The captured type. */
     public final Type type() {
         return type;
     }

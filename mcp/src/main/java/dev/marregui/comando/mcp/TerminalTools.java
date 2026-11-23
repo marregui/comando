@@ -172,9 +172,10 @@ final class TerminalTools {
 
     /**
      * A page of a panel's Terminal, then its closing line. With {@code wait_seconds}, looks every
-     * {@link #POLL_MILLIS} and reads again while the page may miss output ({@link #stale}), until the first of: {@code until} matches a line of the page, no output for
-     * {@code quiet_ms} since the later of the last output and the read's start, the shell no longer runs, the page is
-     * full (what it leaves out cannot enter it), or the wait's end.
+     * {@link #POLL_MILLIS} and reads again while the page may miss output ({@link #stale}), until the first of:
+     * {@code until} matches a line of the page, no output for {@code quiet_ms} since the later of the last output and
+     * the read's start, the shell no longer runs, the page is full (what it leaves out cannot enter it), or the wait's
+     * end.
      */
     String read(final AppState s, final JsonNode args) {
         final TerminalPort p = port;

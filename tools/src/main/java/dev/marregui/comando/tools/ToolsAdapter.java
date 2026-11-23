@@ -517,10 +517,9 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
     /**
      * Reads {@code folder}, as deep as {@code open} asks, and sends its tree when it changed since the last send, or
-     * always when {@code force}. A
-     * folder that cannot be read becomes a tree that says so, logged once per change rather than at every read. The
-     * read takes a ticket first: when a newer read of the same folder has already sent, this one sends nothing; nor
-     * does a poll's read of a folder closed or edited since the poll began.
+     * always when {@code force}. A folder that cannot be read becomes a tree that says so, logged once per change
+     * rather than at every read. The read takes a ticket first: when a newer read of the same folder has already
+     * sent, this one sends nothing; nor does a poll's read of a folder closed or edited since the poll began.
      */
     private void readFolder(final FolderRoot folder, final boolean force, final Predicate<Path> open) {
         final long ticket = readTickets.incrementAndGet();

@@ -18,10 +18,9 @@ import dev.marregui.comando.core.port.LabPort.Totals;
 /**
  * The {@code frontear_read} tool (record 187): one of four views of this instance's node, as JSON, the figures the
  * frontear tab's Health and Traffic show, read from the {@link LabPort} the application sets; nothing is asked of the
- * user. The watch is on within 250 ms
- * of the node's start (the application opens the port at launch), so {@code traffic} holds what came after that. A
- * packet's payload, whole up to 8 KiB, else its first 8 KiB, is in the answer only when {@code args.payload} is
- * true, so an answer stays small: its head is there always.
+ * user. The watch is on within 250 ms of the node's start (the application opens the port at launch), so
+ * {@code traffic} holds what came after that. A packet's payload, whole up to 8 KiB, else its first 8 KiB, is in the
+ * answer only when {@code args.payload} is true, so an answer stays small: its head is there always.
  */
 final class LabTools {
 

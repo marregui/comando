@@ -234,8 +234,6 @@ final class AgentTracker {
         return out;
     }
 
-    // ---- approvals
-
     /** The approval cards that hold up this session's tool calls. */
     void setWaiting(final List<Approval> approvals) {
         waitingFor = List.copyOf(approvals);

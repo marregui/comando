@@ -5,12 +5,10 @@ final class FloatNode extends FloatingNode {
 
     private final float value;
 
-    /** The node for {@code value}. */
     FloatNode(final float value) {
         this.value = value;
     }
 
-    /** The value. */
     float value() {
         return value;
     }

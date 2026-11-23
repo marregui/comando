@@ -114,8 +114,6 @@ class ResourceDialogTest {
         assertThat(ResourceDialog.merge(Map.of("sessionId", "C"), filled, Map.of("sessionId", "B"))).containsEntry("sessionId", "C");
     }
 
-    // ---- layout
-
     /// Under FlatLaf, a fresh session, an imported session and a connection show all their action buttons at the
     /// default size, and the dialog has no add, clone, remove or import buttons and no resource list.
     @Test
@@ -137,8 +135,6 @@ class ResourceDialogTest {
         connections.prepare(States.twoPanels(), "local");
         assertEveryButtonVisible(connections.content(), "Test", "Connect", "Assign to panel", "Save");
     }
-
-    // ---- keys
 
     /// The default button is Save, and comando registers only Escape and the menu-shortcut Enter on the root pane.
     @Test
@@ -181,8 +177,6 @@ class ResourceDialogTest {
         assertThat(d.isDirty()).isFalse();
         assertThat(sink.intents()).isEmpty();
     }
-
-    // ---- unsaved changes on every path that replaces the form
 
     private static AppState twoSessions() {
         return AppState.initial(List.of(new PanelState(States.P1, "one", "", "eden")), List.of(),
@@ -295,8 +289,6 @@ class ResourceDialogTest {
         assertThat(confirmRow(d).isVisible()).isFalse();
         assertThat(text(d, "checkpoint").getText()).isEqualTo("/compact");
     }
-
-    // ---- save, assign, open
 
     /// Open its panel on a new form sends SaveSession with no previous name, then BindSession to the focused panel, and
     /// says `Saved and opened …`.
@@ -426,8 +418,6 @@ class ResourceDialogTest {
         assertThat(message(d).getText()).isEqualTo("Saved and starting");
     }
 
-    // ---- outcome of Test, Connect, Start
-
     /// After Connect, a notice older than the click is ignored, a later error about this connection shows in the danger
     /// colour despite a newer notice about another, and a later info replaces it in the muted colour.
     @Test
@@ -456,8 +446,6 @@ class ResourceDialogTest {
         assertThat(message(d).getForeground()).isEqualTo(Theme.MUTED);
     }
 
-    // ---- choices and advice
-
     /// Only the model combo is editable; the conversation shows for every session, and choosing a new one on an
     /// imported one says the next start begins a new conversation, choosing its own again clearing that.
     @Test
@@ -478,8 +466,6 @@ class ResourceDialogTest {
         picker(d).setSelectedIndex(1);
         assertThat(message(d).getText()).isBlank();
     }
-
-    // ---- new session directory
 
     /// A new session starts in the kit's folder, as the user's sessions do, with More folded (record 125). The form
     /// asks the name first; each empty choice shows the default it stands for, the kit's or Claude Code's model once a
@@ -679,8 +665,6 @@ class ResourceDialogTest {
         final Component drawn = r.getListCellRendererComponent(new JList<>(), c.getSelectedItem(), -1, false, false);
         return ((JLabel) drawn).getText();
     }
-
-    // ---- helpers
 
     private static ResourceDialog<SessionSpec> sessions(final RecordingSink sink) {
         return new ResourceDialog<>(null, new ResourceDialog.Config<>(

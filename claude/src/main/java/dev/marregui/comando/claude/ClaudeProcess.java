@@ -40,7 +40,6 @@ final class ClaudeProcess {
     private static final System.Logger LOG = System.getLogger(ClaudeProcess.class.getName());
     private static final String END = new String("end-of-input");
     private static final int STDERR_LINES = 40;
-    /** How much of the end of stderr is read for its last lines. */
     private static final int STDERR_TAIL_BYTES = 64 * 1024;
     /** How long the exit waits for the rest of stdout after the process exited. */
     static final long DRAIN_MILLIS = 2_000;
@@ -276,10 +275,9 @@ final class ClaudeProcess {
     }
 
     /**
-     * SIGKILL to what is left of the recorded tree, to every descendant now, then to Claude Code. Safe
-     * after Claude Code has exited: the recorded handles carry their start time, and the
-     * descendants are read only while Claude Code is alive, since the JDK reads them by pid and an ended process's pid
-     * may already belong to another process.
+     * SIGKILL to what is left of the recorded tree, to every descendant now, then to Claude Code. Safe after Claude
+     * Code has exited: the recorded handles carry their start time, and the descendants are read only while Claude
+     * Code is alive, since the JDK reads them by pid and an ended process's pid may already belong to another process.
      */
     void kill() {
         for (final ProcessHandle h : recordTree()) {

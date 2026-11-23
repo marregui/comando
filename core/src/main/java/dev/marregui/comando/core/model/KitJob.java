@@ -221,7 +221,10 @@ public record KitJob(String name, String description, List<String> days, String 
         return out;
     }
 
-    /** {@code args} as one line {@link #words} reads back: a word with a space, a quote or nothing in it is quoted. */
+    /**
+     * {@code args} as one line {@link #words} reads back: a word with a space, a quote, a backslash or nothing in it is
+     * quoted.
+     */
     public static String line(final List<String> args) {
         final List<String> out = new ArrayList<>(args.size());
         for (final String a : args) {

@@ -203,8 +203,6 @@ class TranscriptWidgetTest {
         assertThat(widget.canvas().zoom()).isZero();
     }
 
-    // ---- sub-agents
-
     private static Block.ToolCall agent(final String id, final String description) {
         return new Block.ToolCall(id, "Agent", "{\"description\":\"" + description + "\",\"prompt\":\"Do it.\"}", "",
                 Block.ToolStatus.RUNNING, "");

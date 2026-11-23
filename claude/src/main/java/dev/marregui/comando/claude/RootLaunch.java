@@ -31,9 +31,8 @@ import dev.marregui.comando.core.model.KitRoot;
  * instance is isolated, so a kit's hook that reads comando's files (its sessions, the folder tabs' folders) reads this
  * instance's, whatever data root comando was started with ({@code -Dcomando.home}, {@code COMANDO_HOME} or
  * {@code ~/.comando}). With a kit, every process gets {@code COMANDO_BRAIN=<brain>} too, the brain the instance
- * resolved ({@link KitRoot#brain}, record 80), and {@code autoMemoryDirectory}
- * is its {@code MEMORY}; without a kit there is no brain, whatever {@code COMANDO_BRAIN} comando was started with, and
- * the variable is taken out.
+ * resolved ({@link KitRoot#brain}, record 80), and {@code autoMemoryDirectory} is its {@code MEMORY}; without a kit
+ * there is no brain, whatever {@code COMANDO_BRAIN} comando was started with, and the variable is taken out.
  */
 public final class RootLaunch {
 

@@ -99,10 +99,9 @@ import dev.marregui.comando.ui.shell.ServerToggle;
  * the paired machines' presences, hop limit 3. A look reconciles all of it as it does the local links.
  * <p>
  * The node's data folder is {@code fabric/} in the instance's data root (the links' logs), a legacy name kept so that
- * an existing data root's keys and logs are found. The one control key it
- * trusts is this instance's own, an Ed25519 pair made at the first start and kept beside them ({@code pod.key},
- * readable by the user alone, and {@code pod.pub}, base64 of the X.509 encoding as {@code Frontear.main} reads a key):
- * this comando is the control pod of its node.
+ * an existing data root's keys and logs are found. The one control key it trusts is this instance's own, an Ed25519
+ * pair made at the first start and kept beside them ({@code pod.key}, readable by the user alone, and {@code pod.pub},
+ * base64 of the X.509 encoding as {@code Frontear.main} reads a key): this comando is the control pod of its node.
  * <p>
  * It answers to the name {@code frontear}: the window's toggle and an agent's {@code server_start frontear}, which
  * start and stop this instance's node only.

@@ -66,7 +66,8 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
      */
     static final int GATHER_MILLIS = 100;
     /**
-     * How long after the last keystroke a search starts; set by record 139, unmeasured, as {@code FindBar}'s pause is.
+     * How long after the last keystroke a search starts; set by record 139, unmeasured, as {@code FindBar}'s 250 ms
+     * pause is.
      */
     static final int TYPING_MILLIS = 200;
     /** Rows looked at, at most, for rows to open after a build; as the Changes view. */
@@ -274,8 +275,6 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
         });
     }
 
-    // ---- searching
-
     /** Runs the text in the field, or, with no text or nothing to search, ends the one running and clears the rows. */
     private void search() {
         typing.stop();
@@ -354,8 +353,6 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
         cut = false;
         failed = 0;
     }
-
-    // ---- the rows
 
     /** Builds the rows of the hits heard, keeping the rows the user closed and the hit selected. */
     private void build() {

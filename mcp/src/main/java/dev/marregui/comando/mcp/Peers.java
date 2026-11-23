@@ -284,8 +284,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
      *
      * @param target    the peer's session the question names; empty for the peer's {@code consult-<this instance>}
      * @param sentNanos when it was asked, by {@link System#nanoTime}: it expires {@link #EXPIRE_AFTER} past the
-     * answer's                  bound, so a reply lost with its peer (gone while this instance was off frontear) is not
-     * waited                  for until comando quits
+     *                  answer's bound, so a reply lost with its peer (gone while this instance was off frontear) is
+     *                  not waited for until comando quits
      */
     private record Asked(String peer, String peerName, String target, CompletableFuture<Reply> reply, long sentNanos) {
     }

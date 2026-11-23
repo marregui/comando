@@ -859,8 +859,6 @@ public final class ChangeEditor implements Unmountable {
         return p.endsWith(".md") || p.endsWith(".markdown");
     }
 
-    // ---- the parts
-
     private void build() {
         final JPanel top = new JPanel(new BorderLayout());
         top.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_S));

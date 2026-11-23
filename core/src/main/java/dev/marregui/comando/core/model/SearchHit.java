@@ -82,7 +82,7 @@ public record SearchHit(
                 modifiedMillis, context, contextStart, at, under);
     }
 
-    /** The text that matched, as the source has it. */
+    /** The text that matched, as the source has it, cut at the end of {@link #snippet}. */
     public String match() {
         final int start = Math.min(matchStart, snippet.length());
         return snippet.substring(start, Math.min(start + matchLength, snippet.length()));

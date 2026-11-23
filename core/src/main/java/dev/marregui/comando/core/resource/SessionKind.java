@@ -236,7 +236,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                 s.claudeSessionId(), StartMode.FORK, s.checkpoint(), s.carried());
     }
 
-    /** A new session runs in the kit's folder, as the user's sessions do; the user's home without a root. */
+    /** A new session runs in the root's folder, as the user's sessions do: the kit's, else Claude Code's own. */
     @Override
     public SessionSpec template(final String name) {
         return SessionSpec.fresh(name, KitRoot.current().dir().toString());

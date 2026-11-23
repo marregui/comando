@@ -63,7 +63,8 @@ public final class ExecutorStop {
 
     /**
      * Lets {@code executor} finish its running and queued tasks, a write being written, for at most {@code wait}; then
-     * interrupts what is left and names in the log how many queued tasks were cut. Returns whether it ended in time.
+     * interrupts what is left, names in the log how many queued tasks were cut, and waits at most {@link #WAIT} more.
+     * Returns whether it ended, drained or interrupted.
      */
     public static boolean drain(final String owner, final Duration wait, final ExecutorService executor) {
         return drain(owner, wait, Map.of(owner, executor));

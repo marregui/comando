@@ -98,22 +98,22 @@ import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
  * The left column, seven tabs in one row of icons: Sessions (every session as one row, its state icon and its name,
  * the rest in its card and its menu; under them, the panels of comando's own that belong to no session:
  * {@link PanelsWithoutSession}), Connections, Kit, Brain and Scratchpad (the folders the user chose, as trees, each
- * tab the folders its {@link FilesShelf} holds: {@link FilesTab}; record 152), Logbook
- * (the scratchpad's open tasks: {@link LogbookTab}) and Instances ({@link InstancesTab}). No
- * tab has a bar of buttons: a tab's menu adds (and, for sessions, imports and sorts), and a row's menu edits, clones
- * and removes, through the same {@link ResourceActions}. Double-click on a session opens it in a panel
- * ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. A session row and a connection row are
+ * tab the folders its {@link FilesShelf} holds: {@link FilesTab}; record 152), Logbook (the scratchpad's open tasks:
+ * {@link LogbookTab}) and Instances ({@link InstancesTab}). No tab has a bar of buttons: a tab's menu adds (and, for
+ * sessions, imports and sorts), and a row's menu edits, clones and removes, through the same {@link ResourceActions}.
+ * Double-click on a session opens it in a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused
+ * panel. A session row and a connection row are
  * alike: the state icon, which a click starts or stops (a session) or connects or disconnects (a connection), the name,
  * the ⓘ that shows its card (a connection's has no summary), and everything else in the row's menu. Sessions are
  * grouped by what they want from the user ({@link Attention}, record 136), a heading in the first row of each group
  * that has any; within a group they are listed running first, then by name, until the user drags one: from then on in
  * the order the user left them, until the tab menu's Sort. A drag orders a group: a drop in another group is ignored.
- * Each list's band is on the focused panel's row: its session, its connection, or the panel itself
- * among those without a session, and on no row of a list that has none. The Sessions tab selects several rows as
- * Finder does, ⇧ for a range and ⌘ for one more: a right click inside a selection of several opens the menu that acts
- * on all of them ({@link SessionGroupMenu}), one outside it selects that row alone and opens its own menu, and ⌘C
- * copies the details of every session selected. Hidden, the column collapses to a rail: its
- * first button shows it again at its width, and one button per tab, in the tabs' icons, shows it at that tab.
+ * Each list's band is on the focused panel's row: its session, its connection, or the panel itself among those without
+ * a session, and on no row of a list that has none. The Sessions tab selects several rows as Finder does, ⇧ for a
+ * range and ⌘ for one more: a right click inside a selection of several opens the menu that acts on all of them
+ * ({@link SessionGroupMenu}), one outside it selects that row alone and opens its own menu, and ⌘C copies the details
+ * of every session selected. Hidden, the column collapses to a rail: its first button shows it again at its width,
+ * and one button per tab, in the tabs' icons, shows it at that tab.
  */
 public final class SessionsSidebar {
 
@@ -810,7 +810,9 @@ public final class SessionsSidebar {
     }
 
     private static final String SORT_TIP = "Sort: running first, then by name";
-/** A row's own border, as {@link IconRow} sets it; the renderer puts it back on a row that stops opening a group. */
+    /**
+     * A row's own border, as {@link IconRow} sets it; the renderer puts it back on a row that stops opening a group.
+     */
     static final Border ROW_BORDER = BorderFactory.createEmptyBorder(3, 4, 3, 4);
 
     /** Whether the order a drag set stands, not running first, then by name; the owner keeps it across restarts. */

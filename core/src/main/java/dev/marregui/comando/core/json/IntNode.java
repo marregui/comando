@@ -12,12 +12,10 @@ final class IntNode extends NumericNode {
         this.value = value;
     }
 
-    /** The node for {@code value}. */
     static IntNode valueOf(final int value) {
         return value >= MIN_SHARED && value <= MAX_SHARED ? SHARED[value - MIN_SHARED] : new IntNode(value);
     }
 
-    /** The value. */
     int value() {
         return value;
     }

@@ -154,9 +154,10 @@ final class TurnRules {
 
     /**
      * Whether {@code i} acts on a session whose checkpoint runs (record 130): a run from one of its panels, the
-     * checkpoint or another command, a fresh start, its settings, model or effort, removing it or its own panel,
-     * clearing its Session tab. Refused without a notice: the window offers none of them meanwhile. An interrupt, a
-     * stop and a prompt another session sends ({@link Intent.PromptSession}, which queues) go through.
+     * checkpoint or a command other than {@code /compact} (held for the checkpoint's end, see {@link #holdCompaction}),
+     * a fresh start, its settings, model or effort, removing it or its own panel, clearing its Session tab. Refused
+     * without a notice: the window offers none of them meanwhile. An interrupt, a stop and a prompt another session
+     * sends ({@link Intent.PromptSession}, which queues) go through.
      */
     static boolean refused(final AppState s, final Intent i) {
         return switch (i) {

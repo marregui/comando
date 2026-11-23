@@ -430,8 +430,9 @@ public final class EditorPanel extends JPanel {
 
     /**
      * The panel's file, once it has one, and whether it is a {@code document}: a file opened in the panel rather than
-     * the panel's own. A document is coloured as its language and, when Markdown, shows rendered first; the panel's
-     * own text stays SQL and prompts, in the editor. A Markdown file offers the Edit switch, any other file does not.
+     * the panel's own. A document is coloured as its language and, when Markdown or HTML, shows rendered first; the
+     * panel's own text stays SQL and prompts, in the editor. A Markdown or HTML file offers the Edit switch (an HTML
+     * one only where a page can be rendered), any other file does not.
      */
     public void file(final Path file, final boolean document) {
         if (Objects.equals(file, this.file) && document == this.document) {
@@ -1127,7 +1128,7 @@ public final class EditorPanel extends JPanel {
         }
     }
 
-    /** Switches between the text to edit and the Markdown rendered; a file that is not Markdown stays as text. */
+    /** Switches between the text to edit and the rendered page; a file that renders as no page stays as text. */
     public void togglePreview() {
         if (mode.isVisible()) {
             showPreview(!previewing());

@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.widgets.table;
 import java.awt.Component;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Point;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.BufferedWriter;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.concurrent.Executor;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -65,6 +67,8 @@ public final class GridTable implements Searchable, Copyable, Exportable {
     private final JTable table = new JTable(model);
     private final JScrollPane scroll = new JScrollPane(table);
     private final StringBuilder cell = new StringBuilder(64);
+    /** Shows why a header click does not sort, at the click in the header; package-visible for tests. */
+    BiConsumer<Point, String> refusals = (at, why) -> Balloon.show(table.getTableHeader(), at, why);
     private String exportName = "result.csv";
 
     public GridTable() {
@@ -89,7 +93,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
                 final int column = table.convertColumnIndexToModel(view);
                 final String refusal = column == 0 ? null : model.sortRefusal(); // the row numbers never sort
                 if (refusal != null) {
-                    Balloon.show(table.getTableHeader(), e.getPoint(), refusal);
+                    refusals.accept(e.getPoint(), refusal);
                 } else {
                     model.toggleSort(column);
                 }
@@ -167,8 +171,6 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             col.setPreferredWidth(width);
         }
     }
-
-    // ---- model
 
     final class Model extends AbstractTableModel {
         TableSource source;
@@ -404,8 +406,6 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             return l;
         }
     }
-
-    // ---- capabilities
 
     private int findRow = -1;
     private int findColumn = -1;

@@ -16,7 +16,6 @@ final class DecimalNode extends FloatingNode {
         this.value = value;
     }
 
-    /** The value. */
     BigDecimal value() {
         return value;
     }

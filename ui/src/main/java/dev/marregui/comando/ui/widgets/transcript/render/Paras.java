@@ -102,8 +102,6 @@ final class Paras {
         b.paint(g, x, y, clip.y - y, clip.y + clip.height - y, sel[0], sel[1], marks.finds(b), marks.currentFind(b));
     }
 
-    // ---- text
-
     static final class TextView implements View {
         private final Para.Text para;
         private Style built;
@@ -195,8 +193,6 @@ final class Paras {
         }
     }
 
-    // ---- code
-
     static final class CodeView implements View {
         private static final int INSET = 8;
         private final Para.Code para;
@@ -265,8 +261,6 @@ final class Paras {
             out.add(new Placed(box, x + indent + INSET, y + INSET, owner));
         }
     }
-
-    // ---- table
 
     static final class TableView implements View {
         private static final int CELL = 6;
@@ -370,8 +364,6 @@ final class Paras {
             }
         }
     }
-
-    // ---- rule
 
     static final class RuleView implements View {
         private final Para.Rule para;

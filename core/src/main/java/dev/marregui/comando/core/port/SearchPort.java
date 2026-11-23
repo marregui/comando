@@ -29,10 +29,8 @@ public interface SearchPort {
 
         /**
          * Looks for {@code query}, handing each hit to {@code found} until it answers {@code false}, which ends the
-         * scan.
-         * {@code ended} turns true when the search was cancelled or replaced; a source checks it between files and
-         * every
-         * few thousand lines.
+         * scan. {@code ended} turns true when the search was cancelled or replaced; a source checks it between files
+         * and every few thousand lines.
          *
          * @return how many files or conversations could not be read
          */

@@ -7,7 +7,6 @@ package dev.marregui.comando.core.json;
  */
 final class MissingNode extends JsonNode {
 
-    /** The node. */
     static final MissingNode INSTANCE = new MissingNode();
     /** The hash code jackson-databind 3.2.4 gives: the ordinal of MISSING in its JsonNodeType. */
     private static final int HASH = 3;

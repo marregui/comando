@@ -132,8 +132,6 @@ class ApprovalInboxGroupsTest {
         assertThat(sequence()).containsExactly("§THIS SESSION", "@b", "#6", "§OTHER SESSIONS", "@work", "#2");
     }
 
-    // ---- reading the list
-
     /** The list's rows in order: `§` a group's header, `@` a session's name, `#` a card's id. */
     private List<String> sequence() {
         final List<String> out = new ArrayList<>();

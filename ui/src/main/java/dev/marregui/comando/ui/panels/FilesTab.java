@@ -78,16 +78,14 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
  * capitals (record 118): the folder itself for a group of one, such as KIT, else the folder holding the group's
  * folders, such as BRAIN, with only them inside it (record 152). A group's row is open when it first appears in a
  * tab that has shown and each time the tab shows again: it titles its folders, so a row the user closes opens at the
- * next showing. A hairline parts
- * one group's row from the next. A click selects; a double click (or Enter) opens a file in a panel, and a double
- * click opens or closes a folder; nothing opens a panel but a file asked for. Each kind of file has its icon, and a
- * folder's index file leads it,
- * offered by name in its row's menu. Only the folders whose rows are open are read and kept in sync
- * ({@link Intent.WatchFolders}), so a closed folder costs nothing, and of an open one only as deep as it shows: its
- * entries, and those of each subfolder that shows, so a subfolder inside a closed one is read once it is opened. The
- * tree follows them as the tools adapter reads them, keeping what the user opened and selected, and the newest day
- * folder is open at a folder's first read. A
- * folder's row has the icon it was configured with. In a git repository, what git ignores is left out; every name has
+ * next showing. A hairline parts one group's row from the next. A click selects, and on a folder opens or closes it;
+ * a double click (or Enter) opens a file in a panel; nothing opens a panel but a file asked for. Each kind of file has
+ * its icon, and a folder's index file leads it, offered by name in its row's menu. Only the folders whose rows are
+ * open are read and kept in sync ({@link Intent.WatchFolders}), so a closed folder costs nothing, and of an open one
+ * only as deep as it shows: its entries, and those of each subfolder that shows, so a subfolder inside a closed one is
+ * read once it is opened. The tree follows them as the tools adapter reads them, keeping what the user opened and
+ * selected, and the newest day folder is open at a folder's first read. A folder's row has the icon it was configured
+ * with. In a git repository, what git ignores is left out; every name has
  * one colour, red only for a file in conflict, and how a file differs from {@code HEAD} is said by the marks after the
  * names leading down to it: the rising arrow for a change, the dot for a new file (record 98). A repository's top
  * folder has git's mark on its icon and, while the repository has changes, a rising arrow after its name; hovering it
@@ -225,12 +223,13 @@ final class FilesTab {
     private boolean built;
     /** The kit's jobs as last read; {@link KitJobs#NONE} hides their row. */
     private KitJobs jobs = KitJobs.NONE;
-    /** Opens the kit jobs' window; brings the scheduler to the manifest. */
+    /** Opens the kit jobs' window; set by {@link #onJobs}. */
     private Runnable configureJobs = () -> {
     };
+    /** Brings the scheduler to the manifest: applies what it has not taken yet; set by {@link #onJobs}. */
     private Runnable applyJobs = () -> {
     };
-    /** Adds the window's own items to a folder row's menu: the brain's backup. */
+    /** Adds the window's own items to a folder row's menu: the brain's backup, or the kit's backup and upgrade. */
     private BiConsumer<FolderRoot, JPopupMenu> folderMenu = (f, m) -> {
     };
 
@@ -1465,8 +1464,6 @@ final class FilesTab {
             intents.dispatch(new Intent.DeleteFiles(folder.name(), paths.stream().map(Path::toString).toList()));
         }
     }
-
-    // ---- filter
 
     private boolean searching() {
         return !filter.getText().isBlank();

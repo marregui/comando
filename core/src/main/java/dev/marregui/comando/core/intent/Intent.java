@@ -97,7 +97,7 @@ public sealed interface Intent {
 
     /**
      * Puts an open panel at {@code index} among the open ones, the others keeping their order; an index past either end
-     * is the end.
+     * is that end.
      */
     record MovePanel(PanelId panel, int index) implements Intent {
     }

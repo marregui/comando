@@ -201,8 +201,6 @@ class ApprovalInboxTest {
         return ((Intent.ApprovalAnswered) sent.getFirst()).decision();
     }
 
-    // ---- keys from anywhere in the card
-
     /// Letters typed in the note type and answer nothing; Enter then denies with the note, never allowing the call.
     @Test
     void enterInANoteWithTextDeniesWithItAndALetterThereTypes() {
@@ -303,8 +301,6 @@ class ApprovalInboxTest {
         assertThat(focus.requested).containsExactly(card);
     }
 
-    // ---- focus after a card leaves
-
     /// After an answered card leaves, the focus goes to the card that took its place, or the one above when it was
     /// last; the last card leaving takes no focus.
     @Test
@@ -360,8 +356,6 @@ class ApprovalInboxTest {
         render(inbox, List.of(bash(2, "pwd")));
         assertThat(focus.requested).isEmpty();
     }
-
-    // ---- always: the rule shown, and a second press
 
     /// The card shows the rule Always would save; the first L asks for confirmation, and a second L within
     /// [ApprovalInbox#CONFIRM_MILLIS] allows always.
@@ -502,8 +496,6 @@ class ApprovalInboxTest {
         }
     }
 
-    // ---- questions and plans
-
     /// A question's options start unselected, descriptions that look like HTML show as text, Enter without a choice
     /// asks for one, and with a choice sends the answer.
     @Test
@@ -588,8 +580,6 @@ class ApprovalInboxTest {
         edits.doClick();
         assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION));
     }
-
-    // ---- age
 
     /// A card says when it was asked and its age: "now", then "2 min ago" after 130 s; ticks are wanted only while
     /// cards wait, and the timer itself waits until the inbox shows.

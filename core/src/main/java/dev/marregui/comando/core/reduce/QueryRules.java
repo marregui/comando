@@ -234,7 +234,7 @@ final class QueryRules {
     /**
      * A finished statement clears its panel's earlier error; a block holding a statement that changes the schema
      * reloads the schema behind completion, and the explorer when it shows that connection. A live plot's refresh
-     * finishes without a word.
+     * finishes without a word unless its rows were cut short.
      */
     private static Transition completed(final Clock clock, final AppState s, final Intent.SqlCompleted i) {
         final Optional<SqlRun> run = s.run(i.requestId());

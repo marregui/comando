@@ -213,7 +213,7 @@ final class JobActions {
 
     /**
      * Brings the scheduler to the manifest: the jobs as the manifest holds them now, read again and handed to
-     * {@code kit.py}; nothing when they cannot be read.
+     * {@code kit.py}; when they cannot be read, nothing is handed and a notice says why.
      */
     void apply() {
         UiErrands.start("kit-jobs-apply", () -> {

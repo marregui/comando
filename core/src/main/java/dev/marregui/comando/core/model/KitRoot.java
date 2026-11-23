@@ -191,10 +191,12 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir, String ref
     /**
      * The root for comando as started: {@code configDir} is the {@code CLAUDE_CONFIG_DIR} and {@code brainEnv} the
      * {@code COMANDO_BRAIN} comando was started with (null or blank when none), {@code home} the user's home folder.
-     * The kit is the first of {@code CLAUDE_CONFIG_DIR}; {@code ~/.claude}, {@code ~/comando-kit}, {@code
-     * ~/.claude/comando-kit} that holds a {@code comando-kit.json}; else {@code ~/.claude} without a kit. When the file
-     * of the first that holds one does not read, the root is {@code ~/.claude} without a kit, refused with why: a folder
-     * further down the list is never taken in its place, as its settings, brain and folders are another kit's.
+     * A {@code CLAUDE_CONFIG_DIR} is the root, with its kit when its {@code comando-kit.json} reads, refused with why
+     * when it does not. Else the kit is the first of {@code ~/.claude}, {@code ~/comando-kit},
+     * {@code ~/.claude/comando-kit} that holds a {@code comando-kit.json}; else {@code ~/.claude} without a kit. When
+     * the file of the first that holds one does not read, the root is {@code ~/.claude} without a kit, refused with
+     * why: a folder further down the list is never taken in its place, as its settings, brain and folders are another
+     * kit's.
      */
     public static KitRoot resolve(final String configDir, final String brainEnv, final Path home, final Reader reader) {
         final Path user = home.resolve(".claude");

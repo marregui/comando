@@ -8,8 +8,9 @@ import java.util.Optional;
  * The ground of every panel of the window (record 99): near-black, each a little toward a hue the tints sit well on,
  * the golds on the warm ones, silver and electric blue on the cool, tropical forest on the green. On each, the
  * transcript's ivory reads above 12:1, every tint's body above 7.5:1 and its shade above 4:1; and six pale ones, the
- * light themes', under the transcript's dark ink (records 127, 128). {@link Theme#ground()} is the one chosen. The six named here are the built-in themes' (record 126), read from their files; a theme file of
- * the user's brings its own.
+ * light themes', under the transcript's dark ink (records 127, 128). {@link Theme#ground()} is the one chosen. The
+ * twelve named here, six dark and six light, are the built-in themes' of the plain style (record 126), read from
+ * their files; a theme file of the user's brings its own.
  */
 public final class Ground {
 

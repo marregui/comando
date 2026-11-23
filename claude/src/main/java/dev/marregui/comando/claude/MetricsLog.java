@@ -203,9 +203,9 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
      * peak differs from its entry last written (a queue not written before has none): its last row holds until the
      * next, so a reading that repeats adds nothing, idle or busy (a timed strand always holds its next run, depth 1 or
      * more); a return to idle is written, and its peak falling to 0 after it. With no queue entered, nothing is
-     * written. Called from one strand, the
-     * {@code kit-check} strand of {@code App}. The state moves before the sink takes the event, so an entry the sink
-     * drops (counted there) is not written again. {@link #NONE} keeps nothing and holds no state.
+     * written. Called from one strand, the {@code kit-check} strand of {@code App}. The state moves before the sink
+     * takes the event, so an entry the sink drops (counted there) is not written again. {@link #NONE} keeps nothing
+     * and holds no state.
      */
     public void queues(final List<Queues.Reading> readings) {
         if (sink == null) {

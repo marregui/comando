@@ -39,7 +39,7 @@ import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
  */
 public final class LowerPanel {
 
-    // the session's tabs first; the database's results last
+    // the session's tabs first, then the database's results, then frontear's node
     static final int SESSION = 0;
     static final int APPROVALS = 1;
     static final int TERMINAL = 2;

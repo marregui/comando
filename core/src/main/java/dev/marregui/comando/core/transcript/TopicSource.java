@@ -29,9 +29,10 @@ public final class TopicSource {
     }
 
     /**
-     * The end of {@code session}'s conversation, newest last, at most {@code maxChars}, headed by where the session
-     * works ({@code workDir}, and {@code branch} when known) so the summary can name the repository, and by its panel's
-     * title, {@code panel}, unless blank (a headless session); empty when it has none.
+     * The end of {@code session}'s conversation, newest last, at most {@code maxChars} but for the latest prompt,
+     * which is taken past the budget, headed by where the session works ({@code workDir}, and {@code branch} when
+     * known) so the summary can name the repository, and by its panel's title, {@code panel}, unless blank (a headless
+     * session); empty when it has none.
      */
     public static String ofSession(final String session, final String panel, final String workDir, final String branch, final Transcript t, final int maxChars) {
         final int size = t.size();

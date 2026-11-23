@@ -26,7 +26,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   at depth 0, or a `%s`-style specifier at depth 0 in a literal passed to `formatted` or `String.format`. A
 ///   message that is one non-literal operand (`text`, `e.toString()`) is not read: it may be a message built
 ///   elsewhere; nor is a leading non-literal operand (`what + " again [n=" + n + ']'`): it is the verb phrase,
-///   built elsewhere. A parenthesised choice between two literals counts as text.
+///   built elsewhere. A parenthesised choice between two literals counts as text. Inside a top-level `[...]`, read
+///   as pairs split at its `,`, a value (a non-literal operand, a `{0}` placeholder or a specifier) in a pair with
+///   no `key=` before it is reported, alone or beside keyed pairs (`"opened [" + path + "]"`,
+///   `"opened [" + path + ", n=" + n + ']'`); a non-literal operand followed by a literal that opens with `=` is a
+///   key held in a constant (`"[" + ENV + '=' + value + ']'`). So is a tail that holds a `key=` or a value before
+///   any text (`"[file=" + path + "] opened"`). A tail of plain text (`"[cdb] started"`) is not read.
 /// - `ascii`: a literal of the message holds a character outside ASCII.
 /// - `cause`: a call at `WARNING`, `ERROR` or `SEVERE` inside a `catch` block whose parameter is named (not `_`)
 ///   neither passes the caught exception in an argument after the message (`e`, `e.getCause()`) nor carries it as a
@@ -36,10 +41,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   condition logs its message only. The innermost `catch` is read; a call whose level is not a constant is not.
 ///
 /// Blind spots: a message built in a local or a helper, a value inside a leading phrase, a logger under another name,
-/// a level held in a variable, and a failure whose text uses one of the handled words. Every site that broke a check
-/// when the test was written is in `logging-baseline.txt`, one `path:check:message` line each, the message's
-/// whitespace collapsed and no line number, so an edit elsewhere in the file does not move it. A new site fails its
-/// check, and so does a baseline line no site matches any more: a fixed site leaves the baseline in the same change.
+/// a level held in a variable, and a failure whose text uses one of the handled words; a tail value that holds
+/// `key=value` pairs built elsewhere (`"[" + context + ", times=" + n + ']'`) is reported, as the text cannot show
+/// its keys, and so is a list written across literals (`"[names=" + a + ", " + b + ']'`), its `,` read as a new
+/// pair. Every site that broke a check when the test was written, or when a check was made stricter, is in
+/// `logging-baseline.txt`, one `path:check:message` line each, the message's whitespace collapsed and no line
+/// number, so an edit elsewhere in the file does not move it. A new site fails its check, and so does a baseline line
+/// no site matches any more: a fixed site leaves the baseline in the same change.
 class LoggingRulesTest {
 
     // Gradle runs a module's tests in the module's folder
@@ -134,6 +142,39 @@ class LoggingRulesTest {
                 "Sample.java:cause:\"cannot open [file=\" + path + ']'",
                 "Sample.java:cause:\"cannot open\"");
         assertThat(sites).extracting(Site::line).containsExactly(7, 8, 9, 11, 12, 13, 23, 24);
+    }
+
+    /// A value with no key of its own, in a concatenation or a format, alone in its tail or beside keyed pairs, and a
+    /// tail placed before the text are each reported under `shape`; a keyed tail after the text, one key's value built
+    /// from two parts, a key held in a constant and a tail of plain text pass.
+    @Test
+    void theShapeCheckReadsTheKeysAndThePlaceOfTheTail() {
+        final String source = String.join("\n",
+                "class Sample {",
+                "    void run(final Path path, final String name, final int n) {",
+                "        LOG.log(Level.INFO, \"opened [\" + path + \"]\");",
+                "        LOG.log(Level.INFO, \"[file=\" + path + \"] opened\");",
+                "        LOG.log(Level.INFO, \"opened [%s]\".formatted(path));",
+                "        LOG.log(Level.INFO, \"[file=%s] opened\".formatted(path));",
+                "        LOG.log(Level.INFO, \"opened [file=\" + path + \", \" + name + ']');",
+                "        LOG.log(Level.INFO, \"opened [\" + path + \", n=\" + n + \"]\");",
+                "        LOG.log(Level.INFO, \"opened [%s, n=%d]\".formatted(path, n));",
+                "        LOG.log(Level.INFO, \"opened [file=\" + path + \"/\" + name + ']');",
+                "        LOG.log(Level.INFO, \"[cdb] started\");",
+                "        LOG.log(Level.INFO, \"opened [file=%s, name=%s]\".formatted(path, name));",
+                "        LOG.log(Level.INFO, \"opened [\" + NAME + '=' + path + ']');",
+                "    }",
+                "}");
+        final List<Site> sites = sites("Sample.java", source);
+        assertThat(sites).extracting(Site::key).containsExactly(
+                "Sample.java:shape:\"opened [\" + path + \"]\"",
+                "Sample.java:shape:\"[file=\" + path + \"] opened\"",
+                "Sample.java:shape:\"opened [%s]\".formatted(path)",
+                "Sample.java:shape:\"[file=%s] opened\".formatted(path)",
+                "Sample.java:shape:\"opened [file=\" + path + \", \" + name + ']'",
+                "Sample.java:shape:\"opened [\" + path + \", n=\" + n + \"]\"",
+                "Sample.java:shape:\"opened [%s, n=%d]\".formatted(path, n)");
+        assertThat(sites).extracting(Site::line).containsExactly(3, 4, 5, 6, 7, 8, 9);
     }
 
     private static void assertMatchesBaseline(final String check, final String fix) throws IOException {
@@ -252,32 +293,69 @@ class LoggingRulesTest {
 
     private static boolean shaped(final String text, final String masked, final List<int[]> operands) {
         int depth = 0;
-        for (final int[] op : operands) {
-            if (op == operands.getFirst() && content(text, masked, op) == null) {
+        // a letter, a leading phrase or a choice at depth 0 so far: the text a tail must follow
+        boolean said = false;
+        // the pair of the open top-level tail that a value would join holds its key=
+        boolean keyed = false;
+        for (int j = 0; j < operands.size(); j++) {
+            final int[] op = operands.get(j);
+            final String content = content(text, masked, op);
+            if (j == 0 && content == null) {
+                said = true;
                 continue;
             }
             final String code = masked.substring(op[0], op[1]).strip();
-            final String content = content(text, masked, op);
             if (content != null) {
                 for (int i = 0; i < content.length(); i++) {
                     final char c = content.charAt(i);
+                    final boolean value = c == '{' && PLACEHOLDER.matcher(content).region(i, content.length())
+                            .lookingAt() || c == '%' && formats(code)
+                            && SPECIFIER.matcher(content).region(i, content.length()).lookingAt();
+                    final boolean key = c == '=' && i > 0 && isKeyChar(content.charAt(i - 1));
                     if (c == '[') {
+                        keyed = keyed && depth > 0;
                         depth++;
                     } else if (c == ']') {
                         depth = Math.max(0, depth - 1);
-                    } else if (depth == 0 && c == '{' && PLACEHOLDER.matcher(content).region(i, content.length())
-                            .lookingAt()) {
+                    } else if (depth == 0 && value) {
                         return false;
-                    } else if (depth == 0 && c == '%' && formats(code)
-                            && SPECIFIER.matcher(content).region(i, content.length()).lookingAt()) {
-                        return false;
+                    } else if (depth == 0 && Character.isLetter(c)) {
+                        said = true;
+                    } else if (depth == 1 && c == ',') {
+                        keyed = false;
+                    } else if (depth > 0 && (key || value)) {
+                        if (!said || value && !keyed) {
+                            return false;
+                        }
+                        keyed = true;
                     }
                 }
-            } else if (depth == 0 && !CHOICE.matcher(code).matches()) {
+            } else if (depth == 0) {
+                if (!CHOICE.matcher(code).matches()) {
+                    return false;
+                }
+                said = true;
+            } else if (!said || !keyed && !namesKey(text, masked, operands, j)) {
                 return false;
+            } else {
+                keyed = true;
             }
         }
         return true;
+    }
+
+    /// Whether the non-literal operand at `j` is a key held in a constant: the literal after it opens with `=`
+    /// (`"[" + ENV + '=' + value + ']'`).
+    private static boolean namesKey(final String text, final String masked, final List<int[]> operands, final int j) {
+        if (j + 1 >= operands.size()) {
+            return false;
+        }
+        final String next = content(text, masked, operands.get(j + 1));
+        return next != null && next.startsWith("=");
+    }
+
+    private static boolean isKeyChar(final char c) {
+        return Character.isLetterOrDigit(c) || c == '_';
     }
 
     private static boolean formats(final String code) {

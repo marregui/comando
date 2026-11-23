@@ -54,13 +54,12 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  * The focused panel's session, under the lower panel (record 105). On the left its chip, the session's state icon, name
  * and branch, whose menu binds, attaches or detaches it; the plug that starts or stops it; the new conversation; then
  * its run's ETA ("16:02 UTC ▸ 12 min 00 s ▸ due 16:30 UTC ▸ 60%"), always shown, last, so that its changing width
- * moves nothing. On the right its model and effort,
- * each a menu that changes it, then its context and, beside it, Reflect, Compact and Clear: Reflect sends the session's
- * checkpoint command alone, its bookmark turning from grey to purple as the context fills towards the checkpoint
- * threshold and blinking from two points below it until the command is sent; Compact and Clear send {@code /compact}
- * and {@code /clear} to the running session. A panel without a session shows the chip that binds one, and nothing
- * else. While the session runs its checkpoint every control but the plug is off and the ETA, purple, ends with how to
- * carry on (record 130).
+ * moves nothing. On the right its model and effort, each a menu that changes it, then its context and, beside it,
+ * Reflect, Compact and Clear: Reflect sends the session's checkpoint command alone, its bookmark turning from grey to
+ * purple as the context fills towards the checkpoint threshold and blinking from two points below it until the command
+ * is sent; Compact and Clear send {@code /compact} and {@code /clear} to the session, a stopped one started first. A
+ * panel without a session shows the chip that binds one, and nothing else. While the session runs its checkpoint every
+ * control but the plug is off and the ETA, purple, ends with how to carry on (record 130).
  */
 public final class SessionBar {
 
@@ -124,9 +123,9 @@ public final class SessionBar {
     private final JButton reflect = EditorPanel.iconButton();
     /** Reflect's bookmark, drawn the share of the way to the checkpoint's purple that the context has filled. */
     private final BlendIcon reflectIcon = new BlendIcon("checkpoint", Theme.THINKING);
-    /** Sends {@code /compact} to the running session. */
+    /** Sends {@code /compact} to the session, starting it first when it is stopped. */
     private final JButton compact = EditorPanel.iconButton();
-    /** Sends {@code /clear} to the running session, which goes on in a new conversation. */
+    /** Sends {@code /clear} to the session, started first when stopped, which goes on in a new conversation. */
     private final JButton clear = EditorPanel.iconButton();
     /**
      * The blink's phase: while Reflect blinks, the shell's one-second tick turns this over and the bookmark is drawn

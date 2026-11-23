@@ -5,12 +5,10 @@ final class LongNode extends NumericNode {
 
     private final long value;
 
-    /** The node for {@code value}. */
     LongNode(final long value) {
         this.value = value;
     }
 
-    /** The value. */
     long value() {
         return value;
     }

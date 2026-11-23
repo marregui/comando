@@ -115,8 +115,8 @@ final class QuitFlow {
     }
 
     /**
-     * What quitting would stop: running queries, sessions in a turn, shells running a job ({@code jobs}, by panel);
-     * empty when nothing.
+     * What quitting would stop: running queries, sessions in a turn or waiting on background work, shells running a
+     * job ({@code jobs}, by panel), Gradle runs still showing as running console views; empty when nothing.
      */
     static List<String> runningWork(final AppState s, final Map<PanelId, String> jobs) {
         final List<String> work = new ArrayList<>();

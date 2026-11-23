@@ -7,10 +7,12 @@ import java.util.Arrays;
 /**
  * The tint of the window: the transcript's headings, list marks and table heads, the bar beside a turn's report and
  * down a tooltip's edge, new files in the folder tabs, the tab card's title and summary heading and About's accents.
- * Three steps each, as polished metal reads: a pale highlight, the body, a darker shade; large type and the report's
- * bar run from one to the next, small text takes the body alone. Each is light on the transcript's ground, its body
- * above 8:1 and its shade above 4.5:1 there. {@link Theme#tint()} is the one chosen (records 83, 96). The six named
- * here are the built-in themes' (record 126), read from their files; a theme file of the user's brings its own.
+ * Three steps each, as polished metal reads: the highlight, the body, the shade; large type and the report's bar run
+ * from one to the next, small text takes the body alone. A dark theme's tint runs pale to deep and is light on the
+ * transcript's ground, its body above 8:1 and its shade above 4.5:1 there; a light theme's runs deep to pale (record
+ * 127). {@link Theme#tint()} is the one chosen (records 83, 96). The twelve named here, six dark and six light, are
+ * the built-in themes' of the plain style (record 126), read from their files; a theme file of the user's brings its
+ * own.
  */
 public final class Tint {
 

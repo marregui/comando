@@ -24,8 +24,7 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
  * Edit (the clipboard and undo), Find (the view's and the files'), and Help, the palette and the help, flat. The
  * theme, the refreshing plots, the embedded server and frontear are buttons at the tab row's right end instead
  * ({@link #corner}); the shell has none (record 114, amended 2026-11-01). Every other command keeps its key, its
- * control and the palette, and is listed by
- * its area ("Session", "Results") in the palette and the keyboard shortcuts.
+ * control and the palette, and is listed by its area ("Session", "Results") in the palette and the keyboard shortcuts.
  * <p>
  * Every item has an icon and a one-line tooltip: what it does, and one fact its label does not say; macOS shows both
  * in its menu bar.

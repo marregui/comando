@@ -6,7 +6,6 @@ package dev.marregui.comando.core.json;
  */
 final class NullNode extends JsonNode {
 
-    /** The node. */
     static final NullNode INSTANCE = new NullNode();
     /** The hash code jackson-databind 3.2.4 gives: the ordinal of NULL in its JsonNodeType. */
     private static final int HASH = 4;

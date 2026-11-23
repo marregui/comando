@@ -5,12 +5,10 @@ final class DoubleNode extends FloatingNode {
 
     private final double value;
 
-    /** The node for {@code value}. */
     DoubleNode(final double value) {
         this.value = value;
     }
 
-    /** The value. */
     double value() {
         return value;
     }

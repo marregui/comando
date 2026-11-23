@@ -449,8 +449,7 @@ class TranscriptFoldTest {
     }
 
     /// A stored turn folds as a live one does and reads its time from its span; the turn's own line stays as it was:
-    /// not
-    /// timed, with no summary.
+    /// not timed, with no summary.
     @Test
     void aStoredTurnFoldsWithTheTimeOfItsSpan() {
         turn();

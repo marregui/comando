@@ -44,10 +44,10 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
  * folder chosen first), remove, move up and down, and the fields of an entry of {@code folders.json}. A folder lies
  * inside one of the roots: Claude Code's folder ({@code ~/.claude}), and with a kit the kit's folder and the brain's,
  * which may lie anywhere (Miguel's decision of 2026-11-01); it is set only by choosing it. Each field is checked as it
- * is typed, with {@link FolderKind}'s
- * rules, a name used once in {@code folders.json} and a folder that exists and can be read; a field that fails says
- * why beside it, the list marks its entry, and the list can be saved only when every entry passes. Whether a folder
- * exists, and the git repository it belongs to, are looked up off the EDT. EDT only.
+ * is typed, with {@link FolderKind}'s rules, a name used once in {@code folders.json} and a folder that exists and
+ * can be read; a field that fails says why beside it, the list marks its entry, and the list can be saved only when
+ * every entry passes. Whether a folder exists, and the git repository it belongs to, are looked up off the EDT.
+ * EDT only.
  */
 public final class FoldersEditor {
 
@@ -264,7 +264,8 @@ public final class FoldersEditor {
     /**
      * Entry {@code i}'s problems by field: a name missing or used twice in {@code folders.json}, a folder not chosen,
      * not a full path, not there, not readable, still being looked up, or outside every root; an index outside
-     * the folder or in a folder that does not exist; a listing file that is no file name.
+     * the folder or in a folder that does not exist; a deletable folder's listing file that is no file name; then
+     * what {@link FolderKind} refuses, under the name.
      */
     Map<String, String> problems(final int i) {
         final Row r = rows.get(i);

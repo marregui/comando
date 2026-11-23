@@ -18,7 +18,7 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.SyntheticSession;
 
 /**
- * The renderer's frame-time gate (plan 4a.4): replays the synthetic session one stream delta per frame, each frame
+ * The renderer's frame-time gate: replays the synthetic session one stream delta per frame, each frame
  * applying the change, laying out and painting a 1200 x 800 viewport at the end, as the widget does while following a
  * live turn. A turn that ends folds, which leaves little above the end, so the session is replayed again with each row
  * opened as it forms. Then streams a long thinking block, which stays open while it streams, and times folding, opening
@@ -206,10 +206,8 @@ public final class TranscriptGate {
     }
 
     /**
-     * A turn of {@value #LONG_TURN_CALLS} calls of the shapes a real turn has, an edit whose card opens by itself, a
-     * file
-     * read and a command with a long result, a text every eight calls, then its report. Each round times one frame for
-     * each of: the end of the turn folding it, a click opening the row, a click closing it.
+     * Call {@code call} of the long turn, in the shapes a real turn has, by {@code call % 3}: an edit whose card opens
+     * by itself, a file read, or a command with a long result.
      */
     private static Block.ToolCall longTurnCall(final int call) {
         final String id = "t" + call;
@@ -225,6 +223,11 @@ public final class TranscriptGate {
         };
     }
 
+    /**
+     * A turn of {@value #LONG_TURN_CALLS} calls ({@link #longTurnCall}), a text every eight calls, then its report.
+     * Each round times one frame for each of: the end of the turn folding it, a click opening the row, a click closing
+     * it.
+     */
     private static long[][] longTurn(final int width, final int height, final BufferedImage img) {
         final long[][] times = new long[3][LONG_TURN_ROUNDS];
         for (int round = 0; round < LONG_TURN_ROUNDS; round++) {

@@ -388,9 +388,9 @@ final class LayoutKeeper {
      * chosen, ⌃1–⌃5); then it shows for that document for the rest of the window's life. A tab that changes as another
      * panel comes to the front is that panel's own, never asked. A request waiting in Approvals shows it while the
      * Approvals tab is the document's and a request waits, and no longer: back from answering it elsewhere, the
-     * document has its whole height again. Any other panel shows it, at the height it had when that panel was last in front. The panel in front is
-     * the main tabs': a panel on the right side, focused or not, sits beside the lower area and leaves it as it is
-     * (record 141).
+     * document has its whole height again. Any other panel shows it, at the height it had when that panel was last in
+     * front. The panel in front is the main tabs': a panel on the right side, focused or not, sits beside the lower
+     * area and leaves it as it is (record 141).
      */
     void lowerFor(final AppState s, final boolean asked) {
         final PanelState focused = s.focusedPanel();

@@ -113,8 +113,6 @@ class TerminalWidgetTest {
         }
     }
 
-    // ---- what the shell runs in front: fails closed
-
     /// Empty `ps` output, or a line without a command, reports [TerminalWidget#UNCHECKED_JOB].
     @Test
     void whenPsFailsOrPrintsWhatCannotBeReadTheJobIsUnchecked() {
@@ -497,8 +495,6 @@ class TerminalWidgetTest {
                 .isBetween(900L, 6_000L);
         assertThat(jobs).containsExactly(Map.entry("slow", TerminalWidget.UNCHECKED_JOB));
     }
-
-    // ---- what an agent types and reads
 
     /// A terminal whose shell never started types nothing and starts nothing; it has no page, no line, no output.
     @Test

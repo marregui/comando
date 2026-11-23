@@ -81,9 +81,8 @@ class TooltipTintTest {
     }
 
     /// On every ground the transcript's text and a card stand off it and every tint of its mode passes its contrast
-    /// floors, [Ground#named]
-    /// falls back to graphite, and choosing a ground moves [Theme#ground] and the table-head band and notifies tint
-    /// listeners.
+    /// floors, [Ground#named] falls back to graphite, and choosing a ground moves [Theme#ground] and the table-head
+    /// band and notifies tint listeners.
     @Test
     void everyTintReadsOnEveryGroundAndAGroundChosenWithoutTheLookIsOnlyKept() {
         for (final Ground g : Ground.values()) {

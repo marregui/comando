@@ -437,8 +437,6 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         updateLatest();
     }
 
-    // ---- capabilities
-
     @Override
     public int find(final String text, final boolean forward) {
         return canvas.find(text, forward);

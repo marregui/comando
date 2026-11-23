@@ -166,8 +166,6 @@ final class Items {
         }
     }
 
-    // ---- prompt
-
     static final class PromptItem extends Item {
         private static final int TOP = 10;
         private static final int BOTTOM = 4;
@@ -380,8 +378,6 @@ final class Items {
         }
     }
 
-    // ---- assistant text
-
     static final class TextItem extends Item {
         /** A report's text starts this far right of its frame's edge, past the bar. */
         private static final int GUTTER = 14;
@@ -485,8 +481,6 @@ final class Items {
             return guessText(text(), w, s);
         }
     }
-
-    // ---- thinking
 
     static final class ThinkingItem extends Item {
         private final Fold fold;
@@ -638,8 +632,6 @@ final class Items {
         }
     }
 
-    // ---- tool call
-
     static final class ToolItem extends ToolCallItem {
         ToolItem(final Block.ToolCall b) {
             super(b);
@@ -649,8 +641,6 @@ final class Items {
             super(b, order, times);
         }
     }
-
-    // ---- notes and turn ends
 
     static final class NoteItem extends Item {
         private static final int TEXT_X = 18;

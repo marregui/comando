@@ -44,8 +44,6 @@ class ApprovalInboxWordsTest {
         opened.forEach(ApprovalInbox::unmount);
     }
 
-    // ---- what a Write shows
-
     /// The text starts at its first line with no diff marks, stops at the transcript's limit and counts all its lines.
     @Test
     void aWriteShowsTheFilesTextClippedWithItsLineCount() {
@@ -83,8 +81,6 @@ class ApprovalInboxWordsTest {
         assertThat(viewer(card).getText()).contains("-x").contains("+y");
         assertThat(named(card, "lines")).isNull();
     }
-
-    // ---- the head
 
     /// A file tool names its path once, under the home folder as `~/…`, outside it whole.
     @Test
@@ -130,8 +126,6 @@ class ApprovalInboxWordsTest {
     void aFileToolWithNoPathKeepsTheSentence() {
         assertThat(title("Write", "{}", "Write")).isEqualTo("wants to use Write");
     }
-
-    // ---- the scope line
 
     /// Files under a folder, a command's start, a site: each in words, with the rule behind them unchanged.
     @Test

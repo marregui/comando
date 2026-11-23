@@ -171,7 +171,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private volatile TopicPort topics = TopicPort.NONE;
     /** The other comando instances, for the sidebar's Instances tab. */
     private volatile InstancesPort instances = InstancesPort.NONE;
-    /** What the frontear tab reads (record 187); null until set, and then the tab shows nothing. */
+    /** What the frontear tab reads (record 187); null until set; a window built without it leaves the tab empty. */
     private volatile LabPort lab;
     /**
      * This machine and the paired ones (record 189): written once through {@link #machines} by the app before the
@@ -199,7 +199,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final WindowLayout windowLayout;
     /** The window's parts; null before the build. */
     private ShellParts parts;
-    /** The panels' Terminals as agents reach them (record 148); both suppliers are read on the EDT, where the build sets the parts. */
+    /**
+     * The panels' Terminals as agents reach them (record 148); both suppliers are read on the EDT, where the build sets
+     * the parts.
+     */
     private final TerminalAccess terminals;
     /** The panels' HTML pages as agents reach them; both suppliers are read on the EDT, where the build sets parts. */
     private final PageAccess pages;
@@ -225,7 +228,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private Transcript watched;
     private final Runnable transcriptListener = transcriptRender::request;
     private EdtWatchdog watchdog;
-    /** When the stack of the EDT's last hang was logged, read just before; the watchdog thread's own. */
+    /**
+     * When the stack of the EDT's last hang was logged, in epoch millis, where the stall's notice points; written by
+     * {@link #hung} and read by {@link #stalled}, both on the watchdog's thread.
+     */
     private long hangLoggedAt;
     private KeyPriority keyPriority;
     /** The watched git repositories as last read, for the Changes view. */
@@ -240,7 +246,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         actions.refresh();
     };
-    /** The requests waiting at the last render: one more is a reason to show the lower area. */
+    /** The requests waiting at the last render: a lower tab that changed as one came or went was not asked for. */
     private int renderedApprovals;
     /** The focused panel at the last render: a tab that changes with the focus is that panel's own, never asked. */
     private PanelId renderedFocused;
@@ -254,7 +260,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     public ComandoUi(final Dependencies deps) {
         this.deps = deps;
-        // the user's themes, read once before anything names a theme: the commands, the swatch, the theme kept (record 126)
+        // the user's themes, read once before anything names a theme: the commands, the swatch, the theme kept
+        // (record 126)
         final ThemeFiles.Read themes = ThemeFiles.read(deps.home() == null ? null : deps.home().resolve(THEMES_FOLDER));
         NamedTheme.offer(themes.themes());
         this.themeProblems = themes.problems();
@@ -722,8 +729,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return m;
     }
 
-    // ---- rendering
-
     private void render() {
         final AppState s = deps.state().get();
         // before the panes change: what just opened remembers where the keyboard was, what just closed gives it back
@@ -799,7 +804,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         landOnFind(deps.state().get());
     }
 
-    /** The session of this instance that holds {@code conversation}. */
     private Optional<String> sessionOf(final String conversation) {
         return deps.state().get().sessions().stream().map(SessionState::spec)
                 .filter(spec -> conversation.equals(spec.claudeSessionId())).map(SessionSpec::name).findFirst();
@@ -832,8 +836,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private void renderTranscript() {
         parts.lower().renderTranscript(parts.lower().transcriptSession());
     }
-
-    // ---- UiPort
 
     @Override
     public void editPanel(final PanelId panel, final String text, final EditMode mode) {
@@ -958,8 +960,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return shown;
     }
 
-    // ---- what the commands open
-
     /**
      * A theme was chosen, from the swatch beside New panel or the palette: kept, and every window takes its ground and
      * its tint in one pass, faded in over the theme before (record 103).
@@ -1074,8 +1074,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return QuitFlow.quitQuestion(work);
     }
 
-    // ---- closing
-
     /** Ends the shells and live plots and closes the window, without quitting the application. */
     @Override
     public void close() {
@@ -1143,8 +1141,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * Saves the layout, then stops what the window runs: its timers and listeners, the shells, the live plots and the
-     * watchdog; once, at quit or at close. No state renders after it, so the closing window keeps its title.
+     * Saves the layout and the comparison window's edits, then stops what the window runs: its timers and listeners,
+     * the shells, the live plots and the watchdog; once, at quit or at close. No state renders after it, so the closing
+     * window keeps its title.
      */
     private void teardown() {
         if (tornDown) {

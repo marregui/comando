@@ -55,9 +55,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// Bands only: the order inside a band (alphabetical, unless an initialiser reads another field or the order carries
 /// meaning) is not checked, as whether an order carries meaning cannot be decided from the source. One exception is
-/// decided: a field whose initialiser reads, by its simple name, a field of a later band above it is not reported,
-/// as moving it up would be an illegal forward reference (a private constant that a public one is built from).
-/// Sources are parsed, not attributed, so the test needs no classpath.
+/// decided: a field is not compared with the members above it that it depends on, as moving it above them would be
+/// an illegal forward reference (a private constant that a public one is built from) or would read a field before an
+/// initialiser fills it. It depends on the fields its initialiser reads by simple name, and on the initialiser blocks
+/// that name one of them (`static { M.put(...); }` above `KEYS = Set.copyOf(M.keySet())`), and on what those read in
+/// turn. It is still compared with every other member above it: one below the last member it depends on is reported
+/// as the place to move it up to; one above that is reported as the member to move down below it, as the field
+/// cannot pass the members it depends on, named with the members between them that read it, directly or in turn, to
+/// move with it (`X`, then `Y = X * 2`, above the `A` that `B = A + 1` reads). A dependency through a method
+/// (`B = a()`, where `a()` reads `A`) is not seen. Sources are parsed, not attributed, so the test needs no classpath.
 ///
 /// - every file keeps the bands or is listed in `member-order-baseline.txt`, the files that broke them when the check
 ///   came; a listed file now in order, or gone, fails too, so the list only shrinks
@@ -90,7 +96,7 @@ class MemberOrderRulesTest {
         final List<String> problems = new ArrayList<>();
         for (final Inversion inversion : first.values()) {
             if (!baseline.contains(inversion.path())) {
-                problems.add(inversion.describe() + ": move it up there, ordering the file with the IDE's arrangement"
+                problems.add(inversion.describe() + ": move it there, ordering the file with the IDE's arrangement"
                         + " rules set to G-10.1's bands");
             }
         }
@@ -234,6 +240,99 @@ class MemberOrderRulesTest {
         }
     }
 
+    /// A field held below the constants it reads, directly or through another one's initialiser, or below the static
+    /// or instance initialiser block that fills what it reads, passes; a method, a nested type or an unread field
+    /// between it and them is still reported, the first of them above it, and a member above them is reported as the
+    /// one to move down below the field, with the fields that read it.
+    @Test
+    void aFieldHeldByWhatItReadsIsComparedWithTheMembersItCanPass() throws IOException {
+        final String held = """
+                package p;
+
+                class Held {
+                    private static final int A = 1;
+                    static final int C = A * 2;
+                    public static final int B = C + 1;
+                }
+
+                class Filled {
+                    private static final Map<String, Integer> M = new HashMap<>();
+
+                    static {
+                        M.put("a", 1);
+                    }
+
+                    public static final Set<String> KEYS = Set.copyOf(M.keySet());
+                }
+
+                class Counted {
+                    private final Map<String, Integer> m = new HashMap<>();
+
+                    {
+                        m.put("a", 1);
+                    }
+
+                    final int size = m.size();
+                }
+                """;
+        final String passable = """
+                package p;
+
+                class Passable {
+                    private static final int A = 1;
+
+                    private static int m() {
+                        return A;
+                    }
+
+                    public static final int B = A + 1;
+                }
+
+                class Unread {
+                    private static final int A = 1;
+                    private static final int Z = 2;
+                    public static final int B = A + 1;
+                }
+
+                class Nested {
+                    private static final int A = 1;
+
+                    interface Shape {
+                    }
+
+                    public static final int B = A + 1;
+                }
+
+                class Before {
+                    private static final int X = 2;
+                    private static final int A = 1;
+                    public static final int B = A + 1;
+                }
+
+                class Read {
+                    private static final int X = 2;
+                    private static final int Y = X * 2;
+                    private static final int A = 1;
+                    public static final int B = A + 1;
+                }
+                """;
+        final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        try (final StandardJavaFileManager manager = compiler.getStandardFileManager(null, Locale.ROOT,
+                StandardCharsets.UTF_8)) {
+            assertThat(inversions(compiler, manager, List.of(source("Held.java", held)))).isEmpty();
+            assertThat(inversions(compiler, manager, List.of(source("Passable.java", passable))).stream()
+                    .map(Inversion::describe)).containsExactly(
+                    "Passable.java:10: B (public static final field) belongs above m (private static method, line 6)",
+                    "Passable.java:16: B (public static final field) belongs above Z (private static final field,"
+                            + " line 15)",
+                    "Passable.java:25: B (public static final field) belongs above Shape (nested type, line 22)",
+                    "Passable.java:29: X (private static final field) belongs below B (public static final field,"
+                            + " line 31)",
+                    "Passable.java:35: X (private static final field) belongs below B (public static final field,"
+                            + " line 38), with what reads it: Y (private static final field, line 36)");
+        }
+    }
+
     /** Every `.java` file under a module's `src/main/java` and `src/test/java`, relative to the root, in path order. */
     private static List<Path> sourceFiles() throws IOException {
         final List<Path> roots;
@@ -278,7 +377,7 @@ class MemberOrderRulesTest {
         for (final CompilationUnitTree unit : units) {
             new BodyScanner(name(unit.getSourceFile()), unit, positions, found).scan(unit, null);
         }
-        found.sort(Comparator.comparing(Inversion::path).thenComparingLong(i -> i.member().line()));
+        found.sort(Comparator.comparing(Inversion::path).thenComparingLong(i -> i.moved().line()));
         return found;
     }
 
@@ -369,12 +468,18 @@ class MemberOrderRulesTest {
     private record Member(Tree tree, String name, Place place, long line) {
     }
 
-    /** A member below one of a later band: the fix moves it above that one. */
-    private record Inversion(String path, Member member, Member later) {
+    /**
+     * A member out of its band: the fix moves `moved` above `anchor`, or below it where `below` is set, together with
+     * `readers`, the members between them that read it, in their order.
+     */
+    private record Inversion(String path, Member moved, Member anchor, boolean below, List<Member> readers) {
 
         String describe() {
-            return path + ":" + member.line() + ": " + member.name() + " (" + member.place().label()
-                    + ") belongs above " + later.name() + " (" + later.place().label() + ", line " + later.line() + ")";
+            return path + ":" + moved.line() + ": " + moved.name() + " (" + moved.place().label() + ") belongs "
+                    + (below ? "below " : "above ") + anchor.name() + " (" + anchor.place().label() + ", line "
+                    + anchor.line() + ")" + (readers.isEmpty() ? "" : ", with what reads it: " + readers.stream()
+                    .map(m -> m.name() + " (" + m.place().label() + ", line " + m.line() + ")")
+                    .collect(Collectors.joining(", ")));
         }
     }
 
@@ -405,9 +510,23 @@ class MemberOrderRulesTest {
                 }
                 final Member member = new Member(tree, memberName(type, tree), place.get(),
                         lines.getLineNumber(positions.getStartPosition(unit, tree)));
-                above.stream().filter(m -> m.place().rank() > member.place().rank()).findFirst()
-                        .filter(later -> !forcedBy(member, above))
-                        .ifPresent(later -> found.add(new Inversion(path, member, later)));
+                final Set<Member> pinned = pins(member, above);
+                int floor = -1;
+                for (int i = 0; i < above.size(); i++) {
+                    if (pinned.contains(above.get(i))) {
+                        floor = i;
+                    }
+                }
+                for (int i = 0; i < above.size(); i++) {
+                    final Member later = above.get(i);
+                    if (later.place().rank() > member.place().rank() && !pinned.contains(later)) {
+                        found.add(i < floor
+                                ? new Inversion(path, later, member, true, readers(later, above.subList(i + 1,
+                                        above.size())))
+                                : new Inversion(path, member, later, false, List.of()));
+                        break;
+                    }
+                }
                 above.add(member);
             }
             return super.visitClass(type, unused);
@@ -476,23 +595,79 @@ class MemberOrderRulesTest {
         }
 
         /**
-         * Whether the member is a field whose initialiser reads, by simple name, a field of a later band above it:
-         * moving it up would be a forward reference javac refuses.
+         * The members above a field that it depends on: the fields its initialiser reads by simple name, the
+         * initialiser blocks that name one of them, and what those read in turn. Moving the field above one of them
+         * would be a forward reference javac refuses, or would read a field before the block that fills it. Empty for
+         * a member that is not a field with an initialiser.
          */
-        private static boolean forcedBy(final Member member, final List<Member> above) {
-            if (!(member.tree() instanceof VariableTree field) || field.getInitializer() == null) {
-                return false;
+        private static Set<Member> pins(final Member member, final List<Member> above) {
+            final Set<Member> pinned = new HashSet<>();
+            if (!(member.tree() instanceof VariableTree)) {
+                return pinned;
             }
+            final Set<String> names = reads(member.tree());
+            boolean grew = !names.isEmpty();
+            while (grew) {
+                grew = false;
+                for (final Member m : above) {
+                    final boolean depends = switch (m.tree()) {
+                        case VariableTree _ -> names.contains(m.name());
+                        case BlockTree block -> reads(block).stream().anyMatch(names::contains);
+                        default -> false;
+                    };
+                    if (depends && pinned.add(m)) {
+                        names.addAll(reads(m.tree()));
+                        grew = true;
+                    }
+                }
+            }
+            return pinned;
+        }
+
+        /**
+         * The members of `between`, those below `moved`, that read it, directly or in turn: an initialiser or a block
+         * that names `moved`, a field among them, or a name that `moved` or a block among them names, when a block.
+         * Moving `moved` down without them
+         * would be a forward reference javac refuses, or would run a block before or after what it reads. Empty for
+         * a method or a nested type, which any member can name from anywhere.
+         */
+        private static List<Member> readers(final Member moved, final List<Member> between) {
+            final Set<String> names = switch (moved.tree()) {
+                case VariableTree _ -> new HashSet<>(Set.of(moved.name()));
+                case BlockTree block -> reads(block);
+                default -> new HashSet<>();
+            };
+            final List<Member> readers = new ArrayList<>();
+            boolean grew = !names.isEmpty();
+            while (grew) {
+                grew = false;
+                for (final Member m : between) {
+                    if (!readers.contains(m) && reads(m.tree()).stream().anyMatch(names::contains)) {
+                        readers.add(m);
+                        names.addAll(m.tree() instanceof VariableTree ? Set.of(m.name()) : reads(m.tree()));
+                        grew = true;
+                    }
+                }
+            }
+            readers.sort(Comparator.comparingLong(Member::line));
+            return readers;
+        }
+
+        /** The simple names a field's initialiser or an initialiser block reads; empty for any other member. */
+        private static Set<String> reads(final Tree tree) {
+            final Tree body = tree instanceof VariableTree field ? field.getInitializer() : tree;
             final Set<String> read = new HashSet<>();
+            if (body == null || !(tree instanceof VariableTree || tree instanceof BlockTree)) {
+                return read;
+            }
             new TreeScanner<Void, Void>() {
                 @Override
                 public Void visitIdentifier(final IdentifierTree id, final Void unused) {
                     read.add(id.getName().toString());
                     return null;
                 }
-            }.scan(field.getInitializer(), null);
-            return above.stream().anyMatch(m -> m.tree() instanceof VariableTree
-                    && m.place().rank() > member.place().rank() && read.contains(m.name()));
+            }.scan(body, null);
+            return read;
         }
     }
 }

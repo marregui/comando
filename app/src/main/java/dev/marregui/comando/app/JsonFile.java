@@ -110,7 +110,9 @@ final class JsonFile<T> {
             return content(Mapped.read(path, m -> Json.readFirst(m.stream())));
         } catch (final LaterVersion e) {
             refused = e.getMessage();
-            LOG.log(System.Logger.Level.WARNING, "a store file of a later version, kept and not written [file=" + path + ", " + e.getMessage() + ']');
+            LOG.log(System.Logger.Level.WARNING,
+                    "a store file of a later version, kept and not written [file=" + path + ", reason=" + e.getMessage()
+                            + ']');
             return null;
         } catch (final JsonException | IOException e) {
             final Path aside = path.resolveSibling(path.getFileName() + ".corrupt-" + Instant.now().toEpochMilli());

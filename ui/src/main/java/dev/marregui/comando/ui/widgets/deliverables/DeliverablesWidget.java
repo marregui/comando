@@ -148,8 +148,6 @@ public final class DeliverablesWidget implements Widget<ViewSpec.Deliverables>, 
         });
     }
 
-    // ---- following the session
-
     /** Watches the transcript of the session with the keyboard; a panel that is no session's keeps the one shown. */
     private void follow() {
         if (closed) {
@@ -214,8 +212,6 @@ public final class DeliverablesWidget implements Widget<ViewSpec.Deliverables>, 
             read();
         }
     }
-
-    // ---- the rows
 
     /** Shows {@code found} as the rows, keeping the file selected. */
     private void show(final List<WrittenFiles.Written> found) {

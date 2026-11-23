@@ -160,8 +160,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     /**
-     * The keys a shell reads with Ctrl: the letters, {@code [ \ ]} and space ({@code ^A}…{@code ^Z}, {@code ^[ ^\ ^]},
-     * {@code ^@}).
+     * The modifiers {@link #keepsKey} reads: a key the shell keeps has Ctrl alone among them, or ⌘ alone for ⌘K on
+     * macOS.
      */
     static final int MODIFIERS = InputEvent.SHIFT_DOWN_MASK | InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK
             | InputEvent.META_DOWN_MASK | InputEvent.ALT_GRAPH_DOWN_MASK;
@@ -658,8 +658,6 @@ public final class TerminalWidget implements Zoomable, Searchable {
         return term == null ? null : term.getTerminalTextBuffer();
     }
 
-    // ---- zoom
-
     @Override
     public void zoom(final int steps) {
         setFontSize(fontSize + steps);
@@ -684,8 +682,6 @@ public final class TerminalWidget implements Zoomable, Searchable {
             term.refont();
         }
     }
-
-    // ---- find
 
     /** Finds {@code text} in the scrollback and the screen, ignoring case; the first find selects the latest match. */
     @Override

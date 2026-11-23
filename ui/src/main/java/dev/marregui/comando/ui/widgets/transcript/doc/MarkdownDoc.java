@@ -140,8 +140,6 @@ public final class MarkdownDoc {
         return new Para.Table(rows, depth);
     }
 
-    // ---- inlines
-
     private static List<Span> inlines(final Node parent, final boolean links) {
         final List<Span> out = new ArrayList<>();
         inline(parent, 0, "", links, out);

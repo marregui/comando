@@ -629,8 +629,8 @@ final class Commands {
     }
 
     /**
-     * The percentage typed as {@code answer}, digits with a {@code %} after them allowed; one past 999 reads as the
-     * largest {@code int}, so that it is outside every range.
+     * The percentage typed as {@code answer}, digits with a {@code %} after them allowed; more than three digits read
+     * as the largest {@code int}, so that it is outside every range.
      */
     static int thresholdOf(final String answer) {
         final Matcher m = PERCENT.matcher(answer.strip());

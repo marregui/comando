@@ -214,8 +214,6 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
         context.intents().dispatch(new Intent.RunText(panel, sb.toString(), Target.CLAUDE));
     }
 
-    // ---- capabilities
-
     @Override
     public int find(final String text, final boolean forward) {
         return search.find(text, forward);

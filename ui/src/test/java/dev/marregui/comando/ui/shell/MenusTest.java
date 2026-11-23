@@ -16,8 +16,8 @@ import dev.marregui.comando.ui.panels.SessionsSidebar;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [Menus] declares the menu bar, the corner buttons, their icons, tooltips and the areas of commands in no menu.
-/// - The bar is Edit then Help, flat, the palette then the help items.
-/// - The corner holds the shell, the plots, and the server and frontear only when there are.
+/// - The bar is Edit, Find, then Help, flat, the palette then the help items.
+/// - The corner holds the plots, and the server and frontear only when there are; the shell has no button.
 /// - Every item and button has an icon that exists and a tooltip of at most 80 characters; no tooltip outlives its
 ///   item.
 /// - A command is in a menu or in an area, never both.

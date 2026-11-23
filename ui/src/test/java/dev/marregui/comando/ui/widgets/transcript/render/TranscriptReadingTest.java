@@ -72,8 +72,6 @@ class TranscriptReadingTest {
         return new Approval(1, "s", ApprovalKind.TOOL, toolName, "{}", "run it", 0L, toolUseId);
     }
 
-    // ---- hook notes
-
     /// Three hook notes in a row become one closed group titled with their distinct events and count, a later hook
     /// after another block starts a new group, every block keeps its item, and the hook text is selectable only once
     /// opened.
@@ -129,8 +127,6 @@ class TranscriptReadingTest {
         assertThat(group.isOpen()).as("find opens the group holding the match").isTrue();
     }
 
-    // ---- notes
-
     /// A long info note starts closed showing its first line, an error note starts open showing all of it, a one-line
     /// note cannot toggle, and the export always holds the full text.
     @Test
@@ -167,8 +163,6 @@ class TranscriptReadingTest {
         assertThat(canvas.find("needle", true)).isEqualTo(1);
         assertThat(((Items.NoteItem) canvas.itemAt(info)).isOpen()).isTrue();
     }
-
-    // ---- automatic opening
 
     /// A sub-agent card open while running stays open when it finishes; a closed tool card opens when it fails.
     @Test
@@ -214,8 +208,6 @@ class TranscriptReadingTest {
         final int history = add(new Block.Thinking("m3", 0, "Old reasoning", 10, false, ""));
         assertThat(((Items.ThinkingItem) canvas.itemAt(history)).isOpen()).isFalse();
     }
-
-    // ---- find
 
     /// Find opens every closed card holding a match; clearing it closes them again except the card of the current match
     /// and one the user toggled during the find.
@@ -264,8 +256,6 @@ class TranscriptReadingTest {
         assertThat(((Items.ToolItem) canvas.itemAt(ib)).isOpen()).isTrue();
     }
 
-    // ---- copy
-
     /// The export quotes prompts, shows commands as code, clips long results with a count of the lines left out,
     /// renders edits as diffs and other inputs as JSON, ends turns with their time, and leaves out thinking.
     @Test
@@ -310,8 +300,6 @@ class TranscriptReadingTest {
         assertThat(Items.fence("bash", "ls")).isEqualTo("```bash\nls\n```");
     }
 
-    // ---- turn ends
-
     /// An interrupted turn reads "interrupted" with its time in the transcript text colour; a failed turn is in danger.
     @Test
     void anInterruptedTurnReadsLikeAnyTextNotAsAFailure() {
@@ -324,8 +312,6 @@ class TranscriptReadingTest {
         assertThat(interrupted.color(s)).isEqualTo(Theme.TRANSCRIPT_TEXT);
         assertThat(failure.color(s)).isEqualTo(Theme.DANGER);
     }
-
-    // ---- running calls
 
     /// An approval naming a call marks that call as waiting; one naming no call marks the last running call of its
     /// tool; clearing approvals restores "running".

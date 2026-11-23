@@ -16,7 +16,6 @@ final class BigIntegerNode extends NumericNode {
         this.value = value;
     }
 
-    /** The value. */
     BigInteger value() {
         return value;
     }

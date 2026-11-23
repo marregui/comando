@@ -3,9 +3,7 @@ package dev.marregui.comando.core.json;
 /** A JSON boolean: one shared node per value. */
 final class BooleanNode extends JsonNode {
 
-    /** {@code true}. */
     static final BooleanNode TRUE = new BooleanNode(true);
-    /** {@code false}. */
     static final BooleanNode FALSE = new BooleanNode(false);
     /** The hash codes jackson-databind 3.2.4's BooleanNode gives. */
     private static final int TRUE_HASH = 3;
@@ -16,12 +14,10 @@ final class BooleanNode extends JsonNode {
         this.value = value;
     }
 
-    /** The node for {@code value}. */
     static BooleanNode valueOf(final boolean value) {
         return value ? TRUE : FALSE;
     }
 
-    /** The value. */
     boolean value() {
         return value;
     }

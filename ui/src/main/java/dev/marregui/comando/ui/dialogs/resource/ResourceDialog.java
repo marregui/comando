@@ -79,11 +79,11 @@ import dev.marregui.comando.ui.panels.TabCard;
  * Test, Open/Close, Assign and Save. It edits the resource the caller names, or a new one, or an unsaved copy of one;
  * the sidebar's lists add, pick, clone and remove resources. Connections and sessions are configurations of it.
  *
- * <p>⏎ saves, ⌘⏎ saves and assigns to the focused panel, Esc or the window's close button closes and asks
- * first when the form has unsaved changes, so a closed dialog never holds an edit that was not saved. Opening the
- * dialog on another resource while the form has unsaved changes asks the same question first; keeping the edits
- * cancels the opening. Questions are asked in a row inside the dialog. The outcome of Test, Connect and Start is the
- * latest notice about the resource, shown on the line above the buttons.</p>
+ * <p>⏎ saves, ⌘⏎ saves when changed and assigns (a connection to the focused panel, a session to its own panel), Esc
+ * or the window's close button closes and asks first when the form has unsaved changes, so a closed dialog never
+ * holds an edit that was not saved. Opening the dialog on another resource while the form has unsaved changes asks the
+ * same question first; keeping the edits cancels the opening. Questions are asked in a row inside the dialog. The
+ * outcome of Test, Connect and Start is the latest notice about the resource, shown on the line above the buttons.</p>
  *
  * @param <S> the spec record
  */
@@ -690,7 +690,10 @@ public final class ResourceDialog<S> {
         say(Theme.MUTED, saved ? "Saved and " + verb : Character.toUpperCase(verb.charAt(0)) + verb.substring(1) + " " + editing);
     }
 
-    /** Binds the resource to the focused panel, saving the form first when it is new or changed. */
+    /**
+     * Binds a connection to the focused panel, or opens a session in its own panel, saving the form first when it is
+     * new or changed.
+     */
     private void assign() {
         if (state == null || config.assign() == null) {
             return;

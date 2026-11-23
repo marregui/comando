@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.widgets.table;
 
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -11,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.SwingUtilities;
+import javax.swing.table.JTableHeader;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,6 +33,7 @@ import static org.awaitility.Awaitility.await;
 /// - CSV and copy tell SQL NULL from empty text and from the text `null`
 /// - find folds case as the transcript's find does, Greek and Turkish letters included
 /// - ⌘⇧C is disabled on an empty grid
+/// - a header click on a result over the rows a sort takes says why and sorts nothing; one at the bound sorts
 /// - a sort runs off the event thread; the latest click wins, and a new source drops a sort still running
 /// - a sort orders numbers as `Double.compare` does, text as `String.compareTo` does, equal keys stably, and
 ///   descending as the exact reverse
@@ -50,6 +54,58 @@ class GridTableTest {
         });
         assertThat(over.get()).isEqualTo("Not sorted: 5,000,001 rows, over the 5,000,000 a sort takes");
         assertThat(at.get()).isNull();
+    }
+
+    /// A header click on a result over the rows a sort takes hands the refusal to the notice and starts no sort: the
+    /// grid keeps its order.
+    @Test
+    void aHeaderClickOverTheBoundSaysWhyAndDoesNotSort() throws Exception {
+        final GridTable grid = new GridTable();
+        final List<String> refused = new ArrayList<>();
+        final List<Runnable> sorts = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            grid.setSource(new Rows(GridTable.MAX_SORT_ROWS + 1), "t.csv");
+            grid.refusals = (at, why) -> refused.add(why);
+            grid.model.sorts = sorts::add;
+            clickHeader(grid, 1);
+        });
+        assertThat(refused).containsExactly("Not sorted: 5,000,001 rows, over the 5,000,000 a sort takes");
+        assertThat(sorts).as("no sort starts").isEmpty();
+        assertThat(order(grid)).isNull();
+        assertThat(sortColumn(grid)).isEqualTo(-1);
+    }
+
+    /// A header click on a result of exactly the rows a sort takes shows no notice and sorts it off the event
+    /// thread: the order of all its rows shows once the sort ends.
+    @Test
+    void aHeaderClickAtTheBoundSorts() throws Exception {
+        final GridTable grid = new GridTable();
+        final List<String> refused = new ArrayList<>();
+        final CountDownLatch sorted = new CountDownLatch(1);
+        SwingUtilities.invokeAndWait(() -> {
+            grid.setSource(new Rows(GridTable.MAX_SORT_ROWS), "t.csv");
+            grid.refusals = (at, why) -> refused.add(why);
+            grid.model.addTableModelListener(e -> {
+                if (grid.model.order != null) {
+                    sorted.countDown();
+                }
+            });
+            clickHeader(grid, 1);
+        });
+        assertThat(sorted.await(30, TimeUnit.SECONDS)).as("the sort ends").isTrue();
+        assertThat(refused).as("no notice").isEmpty();
+        assertThat(order(grid)).hasSize(GridTable.MAX_SORT_ROWS);
+        assertThat(sortColumn(grid)).isZero();
+    }
+
+    /** Lays the table out and clicks once the middle of the header of view column {@code view}; on the event thread. */
+    private static void clickHeader(final GridTable grid, final int view) {
+        grid.table().setSize(800, 400);
+        grid.table().doLayout();
+        final JTableHeader header = grid.table().getTableHeader();
+        final Rectangle r = header.getHeaderRect(view);
+        header.dispatchEvent(new MouseEvent(header, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0,
+                (int) r.getCenterX(), (int) r.getCenterY(), 1, false, MouseEvent.BUTTON1));
     }
 
     /// A click on a header returns while the sort still reads its keys, blocked on a latch: the event thread is

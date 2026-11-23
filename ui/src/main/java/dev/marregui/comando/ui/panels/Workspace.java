@@ -188,7 +188,10 @@ public final class Workspace {
     static final String SESSION_KEY = "session:";
     /** The key of a connection's card, which has facts alone (record 92). */
     static final String CONNECTION_KEY = "connection:";
-    /** A card of facts not this window's own (record 124), an instance's or one of its sessions': its owner keeps it current. */
+    /**
+     * A card of facts not this window's own (record 124), an instance's or one of its sessions': its owner keeps it
+     * current.
+     */
     static final String OTHER_KEY = "other:";
     private final TabCard card = new TabCard(key -> readTopic(key, true));
     /** The tab the pointer rests on, whose card shows when the hover timer fires; -1 when none. */
@@ -1235,7 +1238,7 @@ public final class Workspace {
         return new ArrayList<>(panels.values());
     }
 
-    /** Selects the panel at {@code index} (0-based), for ⌘1…⌘9. */
+    /** Selects the main tab at {@code index} (0-based); ⌘1…⌘9 go through {@link #numbered}, which counts the side's. */
     public void select(final int index) {
         if (index >= 0 && index < tabs.getTabCount()) {
             tabs.setSelectedIndex(index);

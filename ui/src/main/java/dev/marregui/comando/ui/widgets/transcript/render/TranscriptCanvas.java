@@ -105,7 +105,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private int endKeptAt = -1;
     /**
      * How long a slice of layout may hold the event thread: 8 ms, the slice the idle pass ({@link #refine}) uses.
-     * Unmeasured as a bound of its own; the gate's frames (`TranscriptGate`, 16 ms p99) are what it must keep.
+     * Unmeasured as a bound of its own; the gate's frames ({@code TranscriptGate}, 16 ms p99) are what it must keep.
      */
     private static final long SLICE_NANOS = 8_000_000L;
     private final Timer refiner = new Timer(1, e -> refine());
@@ -196,8 +196,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             }
         });
     }
-
-    // ---- content
 
     public void clear() {
         refiner.stop();
@@ -625,8 +623,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return ticker.running();
     }
 
-    // ---- running cards and approvals
-
     /**
      * The approval cards that hold up this session's tool calls. A card whose {@code toolUseId} names a running
      * call marks that call; one without an id marks the last running call of its tool, by plain name or as an
@@ -734,8 +730,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     public int zoom() {
         return zoom;
     }
-
-    // ---- layout
 
     private Style style() {
         if (styleStale) {
@@ -1197,8 +1191,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return new Dimension(w, total);
     }
 
-    // ---- painting
-
     @Override
     protected void paintComponent(final Graphics g0) {
         // in a viewport the canvas sits at minus the view's y, and g0 was translated by it before this paint began
@@ -1263,8 +1255,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
         return found;
     }
-
-    // ---- Marks
 
     /** Asked while painting, of a box of the item being painted; outside a paint {@link #NONE}, unless all selected. */
     @Override
@@ -1375,8 +1365,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             clearSelection();
         }
     }
-
-    // ---- mouse
 
     /**
      * Where the box at {@code (x, y)} is in {@link #placed}, -1 when none; only what is shown is laid out for it, the
@@ -1512,8 +1500,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         focusChar = e;
     }
 
-    // ---- selection
-
     public void clearSelection() {
         allSelected = false;
         anchorBox = focusBox = null;
@@ -1640,8 +1626,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
         return items.indexOf(top);
     }
-
-    // ---- find
 
     /**
      * Finds {@code text}, opening the closed items that hold it; returns the number of matches. A new text first
@@ -1808,8 +1792,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         final int i = items.indexOf(item);
         return i < 0 || i >= tops.length ? -1 : tops[i];
     }
-
-    // ---- Scrollable
 
     @Override
     public Dimension getPreferredScrollableViewportSize() {
