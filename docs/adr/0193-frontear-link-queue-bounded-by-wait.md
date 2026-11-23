@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-22 | accepted; built in task 234, §3 extended in task 236; changes the link queue bound of [record 184](0184-frontear-comandos-own-mqtt-octopus-network.md) | Miguel and Claude |
+| 2026-11-22 | accepted; built in task 234, §3 extended in task 236, §3.1 measured again on JDK 25.0.5 in task 221; changes the link queue bound of [record 184](0184-frontear-comandos-own-mqtt-octopus-network.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -29,9 +29,16 @@ refuses to take more.
 | what a refusal says | the same as before: `0x97`, counted in `refused` (QoS 1) or `dropped` (QoS 0); the debug log names the bound that refused |
 
 Why 50 ms: the p99 at 60,000 msg/s, the highest rate the live link kept up with in task 232, was 30.7 ms. A strand
-50 ms behind has fallen behind that.
+50 ms behind has fallen behind that. On JDK 25.0.5 (§3.1) the live link's p99 at 60,000 msg/s is 17.5 to 22.8 ms and
+it keeps up to 120,000 msg/s, so the bound still sits above a strand that keeps up.
 
 ## 3. Measured
+
+Every figure in this section was taken on JDK 25 GA (25+36). That build wakes a virtual thread from a timed park up
+to about a second late under load: a virtual thread parking 1 ms in the stress JVM overslept by up to 990 ms while a
+platform thread beside it overslept by at most 10 ms, and the same tree on JDK 25.0.5 shows neither the late wake-ups
+nor the latency tails (task 221). The refusal counts and the allocation figures below compare runs on the same JDK and
+stand; the latency figures carry that JDK's tails. §3.1 gives the latencies on JDK 25.0.5.
 
 `FrontearStress --minutes 0.5 --rate 40000,60000,80000,100000 --publishers 4 --window 512 --payload 128`, on an Apple
 M2 Max with 12 cores, during other sessions' builds. Back to back, before and after:
@@ -66,6 +73,28 @@ absolute figures, the same way in every run:
 
 `CodecAllocationTest` pins the first: a PUBLISH allocates 48 B and a PUBACK 24 B with their values valid, measured
 by the thread's allocation counter.
+
+### 3.1 Measured again on JDK 25.0.5 (task 221)
+
+comando `e5867eb1`, Temurin 25.0.5.1, Apple M2 Max with 12 cores, 2026-11-23, while other comando sessions built
+(load average 5 to 18, sampled every 5 s). Live: alice's node to bob's over their link, 4 publishers × 512 in flight,
+128-byte QoS 1 publishes on an open-loop schedule, latency from the scheduled send to the arrival on bob, 30 s steps,
+three ladders. Stress: `FrontearStress --minutes 0.5 --rate 40000,80000,100000,120000 --publishers 4 --window 512
+--payload 128`, three runs on JDK 25.0.5 and two on JDK 25 GA, interleaved with the ladders so both met the same load.
+
+| msg/s | live, 3 ladders: p99 ms | live: max ms | stress on 25.0.5, 3 runs: p99 ms | stress on 25 GA, 2 runs: p99 ms |
+|---|---|---|---|---|
+| 20,000 | 17.8, 241.9, 18.0 | 48.7 to 389.4 | | |
+| 40,000 | | | 14.3, 14.9, 14.3 | 69.2, 276.8 |
+| 60,000 | 17.5, 19.5, 20.1 | 37.3 to 86.0 | | |
+| 80,000 | 20.7, 17.6, 19.5 | 56.0 to 75.0 | 24.4, 243.3, 16.0 | 159.4, 49.8 |
+| 100,000 | 22.2, 20.4, 98.9 | 42.8 to 142.2 | 18.4, 20.7, 18.9 | 81.8, 249.6 |
+| 120,000 | 18.2, 19.7, 20.3 | 29.7 to 43.7 | 21.0, 45.6, 22.5 | 117.4, 729.8 |
+
+On JDK 25.0.5 the p50 is 7 to 10.5 ms and the p99 14 to 25 ms in 23 of the 27 steps; the other four reach 46 to 243 ms
+at loads where the neighbouring steps stay low, so they do not follow the load average. On JDK 25 GA at the same load
+(mean 13.6 to 14.4) every step's p99 is 50 to 730 ms and its maximum 255 to 802 ms. The live link kept up to 120,000
+msg/s in all three ladders, with at most one `0x97` in a ladder; one stress run on JDK 25 GA fell behind at 120,000.
 
 ## 4. Consequences
 
