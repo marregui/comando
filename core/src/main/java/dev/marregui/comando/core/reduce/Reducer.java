@@ -172,6 +172,7 @@ public final class Reducer {
                     ? Optional.empty()
                     : TurnRules.commandRefusal(s, i.name(), i.command(), i.from());
             case Intent.RunText i -> QueryRules.promptRefusal(s, i);
+            case Intent.PromptSession i -> TurnRules.promptSessionRefusal(s, i);
             case Intent.PlacePanel i -> PanelRules.placeRefusal(s, i);
             case Intent.ClosePanel i -> PanelRules.closeRefusal(s, i);
             case Intent.SessionEta i -> SessionRules.etaRefusal(i);
@@ -193,7 +194,7 @@ public final class Reducer {
                     Intent.ApprovalRequested _, Intent.ApprovalAnswered _, Intent.ApprovalWithdrawn _,
                     Intent.ShowView _, Intent.CloseView _,
                     Intent.PinView _, Intent.SelectLowerTab _, Intent.Arrange _, Intent.SessionLayout _,
-                    Intent.SessionFocus _, Intent.PromptSession _, Intent.EditPanel _, Intent.OpenFile _,
+                    Intent.SessionFocus _, Intent.EditPanel _, Intent.OpenFile _,
                     Intent.OpenSubagent _, Intent.RunGradle _, Intent.CommandFinished _, Intent.CancelCommand _,
                     Intent.BrowseFolders _, Intent.WatchFolders _, Intent.FolderLoaded _, Intent.ReposLoaded _,
                     Intent.OpenChange _, Intent.ChangeRead _, Intent.DeleteFiles _, Intent.RollBack _,

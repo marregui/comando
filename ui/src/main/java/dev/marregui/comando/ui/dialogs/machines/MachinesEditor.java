@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -19,8 +18,6 @@ import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
-import javax.swing.event.ListDataEvent;
-import javax.swing.event.ListDataListener;
 
 import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.port.MachinesPort.Grant;
@@ -30,6 +27,7 @@ import dev.marregui.comando.ui.dialogs.FormRows;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.format.MachineTexts;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.layout.EmptyText;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -311,31 +309,6 @@ public final class MachinesEditor {
         }
     }
 
-    /** {@code list} saying {@code text} while it is empty, as the sidebar's lists say what to do. */
-    private static <T> void emptyText(final JList<T> list, final String text) {
-        final JLabel hint = new JLabel(text);
-        hint.setForeground(Theme.MUTED_STRONG);
-        hint.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_M));
-        list.setLayout(new BorderLayout());
-        list.add(hint, BorderLayout.NORTH);
-        list.getModel().addListDataListener(new ListDataListener() {
-            @Override
-            public void intervalAdded(final ListDataEvent e) {
-                hint.setVisible(list.getModel().getSize() == 0);
-            }
-
-            @Override
-            public void intervalRemoved(final ListDataEvent e) {
-                hint.setVisible(list.getModel().getSize() == 0);
-            }
-
-            @Override
-            public void contentsChanged(final ListDataEvent e) {
-                hint.setVisible(list.getModel().getSize() == 0);
-            }
-        });
-    }
-
     private void message() {
         form.show(Map.of(), why -> true, refused, note);
     }
@@ -412,7 +385,7 @@ public final class MachinesEditor {
                 MachineTexts.grant(Grant.PEER) + ". " + MachineTexts.grant(Grant.OVERSEER) + ".");
         form.footer(new JLabel(" "), "Note");
         FormRows.onEdit(this::held, List.of(theirToken));
-        emptyText(list, NONE_PAIRED);
+        EmptyText.over(list, NONE_PAIRED);
         load();
         held();
         FormRows.lay(body, left, form.panel());

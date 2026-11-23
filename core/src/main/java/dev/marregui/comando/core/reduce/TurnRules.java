@@ -508,8 +508,9 @@ final class TurnRules {
     }
 
     /**
-     * A prompt to a session in its own panel: appended there and run, as {@link Intent.EditPanel} and
-     * {@link Intent.RunText} would.
+     * A prompt from {@code i.from()} (empty for the user) to a session in its own panel: appended there and run, as
+     * {@link Intent.EditPanel} and {@link Intent.RunText} from that sender would. A stopped session starts only for
+     * the user or one of its creators (record 44); a prompt refused so is not appended either.
      */
     static Transition promptSession(final Clock clock, final AppState s, final Intent.PromptSession i) {
         final Optional<PanelState> home = s.homePanel(i.session());
@@ -518,8 +519,16 @@ final class TurnRules {
                     Notice.session(i.session())));
         }
         final PanelId panel = home.get().id();
+        // refused before the edit, so the panel holds no prompt the sender may not run; a session stopping keeps the
+        // run's own notice, which asks for the prompt again once it has stopped
+        final Optional<String> breaker = s.session(i.session()).filter(x -> x.status() != Status.CLOSING)
+                .flatMap(x -> startRefusal(s, x, i.from()));
+        if (breaker.isPresent()) {
+            return Transition.of(notice(clock, s, Notice.Level.WARN, breaker.get(), Notice.panel(panel.value())));
+        }
         final Transition edited = PanelRules.editPanel(clock, s, new Intent.EditPanel(panel, i.text(), EditMode.APPEND, i.from()));
-        final Transition ran = QueryRules.runText(clock, edited.state(), new Intent.RunText(panel, i.text(), Target.CLAUDE));
+        final Transition ran = QueryRules.runText(clock, edited.state(),
+                new Intent.RunText(panel, i.text(), Target.CLAUDE, i.from()));
         final List<Effect> effects = new ArrayList<>(edited.effects());
         // the sender is the mark the transcript draws the prompt by: a header the user types is the user's
         final boolean delivered = !i.from().isEmpty();
@@ -527,6 +536,13 @@ final class TurnRules {
             effects.add(delivered && e instanceof Effect.SendToClaude send ? send.asDelivered() : e);
         }
         return new Transition(ran.state(), effects);
+    }
+
+    /** Why {@code i} is not sent, as {@link #promptSession} decides it; empty when it would be. */
+    static Optional<String> promptSessionRefusal(final AppState s, final Intent.PromptSession i) {
+        return s.homePanel(i.session()).map(p -> promptRefusal(s, p, i.from()))
+                .orElseGet(() -> Optional.of("Session " + i.session() + " has no open panel for the prompt from "
+                        + i.from()));
     }
 
     static Transition sessionActivity(final Clock clock, final AppState s, final Intent.SessionActivity i) {

@@ -196,13 +196,13 @@ final class Items {
          * overseer][ · session <s>]]}, where the name itself may hold {@code " · "} (a surrogate's {@code comando ·
          * b}), so the session and the overseer mark are taken off its end; else, for a prompt a peer instance sent
          * ({@code peer:<slug>}) without that line, the peer, its whole text the body. The line is read only from a
-         * prompt comando {@code delivered}, a peer's, or a stored one (no {@code origin}), whose line keeps no mark: a
-         * live prompt from the user's panel that starts with it is the user's, as typed. Null for anything else: the
-         * user's own prompts, a subagent's task, a first line that does not close or names no one.
+         * prompt comando {@code delivered}, live or stored, or a peer's: a prompt the user typed or pasted that starts
+         * with it is the user's, as typed. Null for anything else: the user's own prompts, a subagent's task, a first
+         * line that does not close or names no one.
          */
         static Sender sender(final String text, final String origin, final boolean delivered) {
             final boolean peer = origin.startsWith(PEER) && origin.length() > PEER.length();
-            if (!delivered && !peer && !origin.isEmpty()) {
+            if (!delivered && !peer) {
                 return null;
             }
             final int eol = text.indexOf('\n');

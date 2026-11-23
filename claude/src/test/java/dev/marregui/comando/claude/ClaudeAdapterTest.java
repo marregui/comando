@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -25,8 +26,10 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -485,6 +488,88 @@ class ClaudeAdapterTest {
         assertThat(blocks("old")).startsWith(new Block.UserPrompt("earlier question", "", ""),
                 new Block.AssistantText("m0", 0, "earlier answer", false, ""));
         assertThat(sink.of(Intent.SessionStarted.class)).isEmpty();
+    }
+
+    /// A prompt comando delivered keeps its mark after comando restarts; the same text the user typed does not. The
+    /// session gets `[from session x]` as a delivered prompt, its first, which begins its record; its stored
+    /// conversation holds that text three times: a minute before the send, from before the record, stored 20 ms after
+    /// it, and typed a minute later. A new adapter loads it: the first reads its header as before records, the one
+    /// stored after the send is delivered, the typed one after the delivery's match is not.
+    @Test
+    void aDeliveredPromptKeepsItsMarkAfterARestartAndATypedOneDoesNot() throws Exception {
+        final String headed = "[from session x]\nwrite it";
+        final ClaudeAdapter first = adapter("fake-claude.sh");
+        first.start(SessionSpec.fresh("work", tmp.toString()));
+        sink.await(Intent.SessionStarted.class, WAIT);
+        final long sentMillis = System.currentTimeMillis();
+        first.send("work", headed, "panel one", "", true);
+        sink.await(Intent.SessionTurnEnded.class, WAIT);
+        first.stop("work");
+        sink.await(Intent.SessionExited.class, WAIT);
+        first.close();
+
+        final Path project = Files.createDirectories(tmp.resolve("projects/-w"));
+        Files.writeString(project.resolve("abc.jsonl"), storedPrompt(headed, sentMillis - 60_000)
+                + storedPrompt(headed, sentMillis + 20) + storedPrompt(headed, sentMillis + 60_000));
+        final ClaudeAdapter restarted = adapter("fake-claude.sh");
+        restarted.loadHistory(SessionSpec.imported("work", tmp.toString(), "abc"));
+        assertThat(storedPrompts("work")).extracting(Block.UserPrompt::delivered).containsExactly(true, true, false);
+    }
+
+    /// A record a later comando wrote is told to the user once, naming the file and that nothing is saved to it; the
+    /// session reads its stored headers as before records. Loading the session again after it is forgotten tells
+    /// nothing more.
+    @Test
+    void aRecordOfALaterVersionIsToldOnce() throws Exception {
+        Files.createDirectories(tmp.resolve("delivered"));
+        Files.writeString(tmp.resolve("delivered/work"), "# comando delivered, version 2\nsomething new\n");
+        final Path project = Files.createDirectories(tmp.resolve("projects/-w"));
+        Files.writeString(project.resolve("abc.jsonl"),
+                storedPrompt("[from session x]\nwrite it", System.currentTimeMillis()));
+        final ClaudeAdapter a = adapter("fake-claude.sh");
+        a.loadHistory(SessionSpec.imported("work", tmp.toString(), "abc"));
+        assertThat(storedPrompts("work")).extracting(Block.UserPrompt::delivered).containsExactly(true);
+        a.forget("work");
+        a.loadHistory(SessionSpec.imported("work", tmp.toString(), "abc"));
+        // a prompt to the stopped session ends its turn on the session's strand, after the load queued before it
+        a.send("work", "after the load", "panel one", "", false);
+        sink.await(Intent.SessionTurnEnded.class, WAIT);
+        assertThat(sink.of(Intent.Notify.class)).singleElement().satisfies(n -> {
+            assertThat(n.level()).isEqualTo(Notice.Level.WARN);
+            assertThat(n.text()).contains("delivered/work", "version 2", "nothing is saved");
+        });
+    }
+
+    /// A session with no record of its deliveries, one from before comando kept it, reads a stored prompt's
+    /// `[from session x]` header as before: that prompt is delivered, a prompt without the header is not.
+    @Test
+    void aSessionWithNoRecordReadsAStoredHeaderAsBefore() throws Exception {
+        final ClaudeAdapter a = adapter("fake-claude.sh");
+        final Path project = Files.createDirectories(tmp.resolve("projects/-w"));
+        final long atMillis = System.currentTimeMillis();
+        Files.writeString(project.resolve("abc.jsonl"),
+                storedPrompt("[from session x]\nwrite it", atMillis) + storedPrompt("write it", atMillis + 1_000));
+        a.loadHistory(SessionSpec.imported("old", tmp.toString(), "abc"));
+        assertThat(storedPrompts("old")).extracting(Block.UserPrompt::delivered).containsExactly(true, false);
+        assertThat(tmp.resolve("delivered")).as("loading writes no record").doesNotExist();
+    }
+
+    /// One stored user line of `text` written at `atMillis`, with an assistant's answer ending the turn.
+    private static String storedPrompt(final String text, final long atMillis) {
+        final ObjectNode user = Json.object();
+        user.put("type", "user");
+        user.put("timestamp", Instant.ofEpochMilli(atMillis).toString());
+        user.putObject("message").put("role", "user").put("content", text);
+        return user + "\n{\"type\":\"assistant\",\"message\":{\"id\":\"m" + atMillis
+                + "\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}\n";
+    }
+
+    /// The prompts of `session`'s loaded stored conversation, once its load has ended.
+    private List<Block.UserPrompt> storedPrompts(final String session) {
+        Awaitility.await("the load").atMost(WAIT).until(() -> blocks(session).stream()
+                .anyMatch(b -> b instanceof Block.Note n && n.text().startsWith("Stored conversation")));
+        return blocks(session).stream().filter(Block.UserPrompt.class::isInstance).map(Block.UserPrompt.class::cast)
+                .toList();
     }
 
     private ClaudeAdapter adapterAt(final String executable, final Path run) {

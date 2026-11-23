@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -192,6 +193,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
      * cut at its bound) is still ended.
      */
     private final Map<Run, String> started = new ConcurrentHashMap<>();
+    /** The records of deliveries a later comando wrote whose user is told so, once each (record 133); any strand. */
+    private final Set<Path> toldRefused = ConcurrentHashMap.newKeySet();
     /** Each process's stdin writer and exit waiter; closed at the end of {@link #close}, after the processes. */
     private final Errands helpers = new Errands("claude-process");
 
@@ -220,6 +223,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         SessionSubject subject = SessionSubject.NONE;
         /** The last start failed and said so; a prompt sent after it adds no second error. Cleared by a start. */
         boolean startFailed;
+        /** The prompts comando delivered to the session; read from its file at first use, null until then. */
+        DeliveredPrompts delivered;
         /** A process of the session runs; read by the sub-agent thread, which follows running sessions only. */
         volatile boolean live;
 
@@ -324,8 +329,28 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 sink.dispatch(new Intent.SessionTurnEnded(name, 0, -1.0, -1L, 0L, true, "session not running"));
                 return;
             }
+            if (delivered) {
+                // before the line: Claude Code may store it before the write returns
+                delivered(s).add(System.currentTimeMillis(), preface + text);
+            }
             sendLine(s, preface + text);
         });
+    }
+
+    /**
+     * The session's record of the prompts comando delivered to it, a file a later comando wrote told to the user once
+     * a run; on the session's strand.
+     */
+    private DeliveredPrompts delivered(final Session s) {
+        if (s.delivered == null) {
+            final Path file = DeliveredPrompts.fileOf(settings.deliveredDir(), s.name);
+            s.delivered = DeliveredPrompts.read(file);
+            if (!s.delivered.refused().isEmpty() && toldRefused.add(file)) {
+                sink.dispatch(new Intent.Notify(Notice.Level.WARN,
+                        "Session " + s.name + ": delivered/" + s.delivered.refused(), false));
+            }
+        }
+        return s.delivered;
     }
 
     /** Writes one user message to the running process; on the session's strand. */
@@ -398,6 +423,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             }
             s.transcript.clear();
             s.subjects.forget();
+            s.mapper.deliveries(delivered(s).matcher());
             try {
                 Mapped.read(file, m -> {
                     m.lines(bytes -> {

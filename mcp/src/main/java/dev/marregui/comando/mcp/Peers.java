@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import org.jetbrains.annotations.TestOnly;
@@ -1257,7 +1258,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
      * question, headed with who asks, in its panel; created by {@code peer:<from>} in the default folder when missing,
      * in plan mode when the asker's questions are answered so. Waits for the turn that answers it. A session blocked in
      * a wait of its own for a reply is refused at once, and so is one that does not plan for an asker whose questions
-     * are answered in plan mode, and one that would be made past its machine's {@link #MAX_CONSULTS}.
+     * are answered in plan mode, one that would be made past its machine's {@link #MAX_CONSULTS}, and one the reducer
+     * would not prompt for the asker, as a session not running that the asker did not create (record 44).
      */
     private Reply answer(final String correlation, final Asker asker, final String session, final String text) {
         final String from = asker.id();
@@ -1305,7 +1307,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                             me.name(), session);
                 }
                 sink.dispatch(save);
-                if (!awaitSession(session, deadline)) {
+                if (!await(x -> x.session(session).isPresent(), deadline)) {
                     return Thread.currentThread().isInterrupted() ? closing(session)
                             : new Reply(ERROR, "session " + session + " could not be made in " + me.name(), me.name(), session);
                 }
@@ -1323,8 +1325,24 @@ public final class Peers implements AutoCloseable, InstancesPort {
                         me.name(), session);
             } else if (s.homePanel(session).isEmpty()) {
                 sink.dispatch(new Intent.OpenSession(session, s.focused(), PanelId.random()));
+                // the reducer is asked below about the panel the prompt goes to, once it is open
+                if (!await(x -> x.homePanel(session).isPresent(), deadline)) {
+                    return Thread.currentThread().isInterrupted() ? closing(session)
+                            : new Reply(ERROR, "session " + session + " of " + me.name() + " has no open panel for the "
+                                    + "question", me.name(), session);
+                }
             }
-            sink.dispatch(new Intent.PromptSession(session, prompt, PEER + from));
+            final Intent.PromptSession ask = new Intent.PromptSession(session, prompt, PEER + from);
+            // asked first, as an action tool asks: a session that is not running starts only for the user or its
+            // creator (record 44), and the asker hears so now rather than at its timeout
+            final Optional<String> why = Reducer.refusal(state.get(), ask);
+            if (why.isPresent()) {
+                LOG.log(System.Logger.Level.INFO, "question refused by the reducer [id=" + correlation + ", session="
+                        + session + ']');
+                return new Reply(REFUSED, "session " + session + " of " + me.name() + " takes no question: "
+                        + why.get(), me.name(), session);
+            }
+            sink.dispatch(ask);
             LOG.log(System.Logger.Level.INFO, "question prompted [id=" + correlation + ", session=" + session + ']');
         }
         Block block = null;
@@ -1375,13 +1393,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     /**
-     * Waits for the reducer to have made {@code session}, at most {@link #MAKE_WITHIN} and never past {@code deadline}.
+     * Waits for the reducer to have applied what {@code made} looks for (a session made, a panel opened), at most
+     * {@link #MAKE_WITHIN} and never past {@code deadline}.
      */
-    private boolean awaitSession(final String session, final long deadline) {
+    private boolean await(final Predicate<AppState> made, final long deadline) {
         // nanoTime values compare by their difference: they may wrap
         final long now = System.nanoTime();
         final long until = deadline - now < MAKE_WITHIN.toNanos() ? deadline : now + MAKE_WITHIN.toNanos();
-        while (state.get().session(session).isEmpty()) {
+        while (!made.test(state.get())) {
             if (System.nanoTime() - until > 0) {
                 return false;
             }

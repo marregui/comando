@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// A prompt another session or instance sent reads as Markdown in its bubble, under a line naming who sent it.
 /// - the sender is read from the first line, `[from session …]` or `[from instance …]` with its marks, or a peer origin
 /// - a first line that does not close or names no one leaves the prompt as typed
+/// - a stored prompt names its sender only when comando delivered it, a pasted header staying the user's
 /// - the body lays out as paragraphs, parsed once and kept across widths
 /// - the user's own prompts and a subagent's task stay one box of their text as typed
 /// - find reads the body, and copy gives the prompt's raw text, its first line included
@@ -130,6 +131,23 @@ class SentPromptTest {
         assertThat(boxes(pasted)).extracting(TextBox::text).containsExactly(SESSION);
     }
 
+    /// A stored transcript, reloaded, holding a prompt comando delivered and one the user typed or pasted with the
+    /// same header: the loader marks the first delivered from comando's record, and only it is drawn as the
+    /// sender's; the other is the user's, its text as typed, the header line included.
+    @Test
+    void aStoredPromptNamesItsSenderOnlyWhenDelivered() {
+        canvas.append(0, new Block.UserPrompt(SESSION, "", "", Block.UNKNOWN_TIME, true));
+        canvas.append(1, new Block.UserPrompt(SESSION, "", ""));
+        paint(800);
+        final Items.PromptItem delivered = (Items.PromptItem) canvas.itemAt(0);
+        assertThat(delivered.sent()).isTrue();
+        assertThat(delivered.label()).isEqualTo("from foreman");
+        final Items.PromptItem typed = (Items.PromptItem) canvas.itemAt(1);
+        assertThat(typed.sent()).isFalse();
+        assertThat(typed.label()).isEqualTo("you");
+        assertThat(boxes(typed)).extracting(TextBox::text).containsExactly(SESSION);
+    }
+
     /// The body of a sent prompt lays out as paragraphs: a heading, two list items and a paragraph make four boxes, the
     /// header line in none of them, under the label naming the sender and the time.
     @Test
@@ -150,7 +168,7 @@ class SentPromptTest {
     void aSentPromptIsParsedOnceAcrossWidths() {
         final String text = OVERSEER.replace("Then report back.",
                 "Then report back with what failed, what passed and what could not run, one line for each of them.");
-        canvas.append(0, new Block.UserPrompt(text, "", ""));
+        canvas.append(0, new Block.UserPrompt(text, "", "", Block.UNKNOWN_TIME, true));
         paint(800);
         final Items.PromptItem item = (Items.PromptItem) canvas.itemAt(0);
         final List<TextBox> before = boxes(item);
@@ -184,11 +202,12 @@ class SentPromptTest {
     /// Find reads a sent prompt's body box for box as it is shown, laid out or not, and finds no header text.
     @Test
     void findReadsTheBodyAsShown() {
-        final Items.PromptItem unlaid = new Items.PromptItem(new Block.UserPrompt(OVERSEER, "", ""));
+        final Items.PromptItem unlaid =
+                new Items.PromptItem(new Block.UserPrompt(OVERSEER, "", "", Block.UNKNOWN_TIME, true));
         final List<String> read = new ArrayList<>();
         unlaid.findTexts(read);
         assertThat(unlaid.parsed()).as("find parses without keeping the paragraphs").isFalse();
-        canvas.append(0, new Block.UserPrompt(OVERSEER, "", ""));
+        canvas.append(0, new Block.UserPrompt(OVERSEER, "", "", Block.UNKNOWN_TIME, true));
         paint(800);
         final List<String> shown = new ArrayList<>();
         canvas.itemAt(0).findTexts(shown);
@@ -225,9 +244,9 @@ class SentPromptTest {
         g.dispose();
     }
 
-    /// The sender of a stored prompt: no origin, no mark, its first line the only record of who sent it.
+    /// The sender of a stored prompt comando delivered: no origin, its first line naming who sent it.
     private static Items.PromptItem.Sender stored(final String text) {
-        return Items.PromptItem.sender(text, "", false);
+        return Items.PromptItem.sender(text, "", true);
     }
 
     private static List<TextBox> boxes(final Item item) {

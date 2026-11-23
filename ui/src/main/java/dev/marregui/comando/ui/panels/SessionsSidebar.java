@@ -54,8 +54,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.border.AbstractBorder;
 import javax.swing.border.Border;
-import javax.swing.event.ListDataEvent;
-import javax.swing.event.ListDataListener;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
@@ -85,9 +83,9 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
+import dev.marregui.comando.ui.kit.layout.EmptyText;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tabs.TabStrip;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
@@ -255,11 +253,11 @@ public final class SessionsSidebar {
      * shared renderer, filled with each row in turn, parsed every row on every paint of the list.
      */
     private final Map<String, SessionRow> rows = new HashMap<>();
-    private final JList<SessionState> sessions = emptyText(new SessionList(sessionModel),
+    private final JList<SessionState> sessions = EmptyText.over(new SessionList(sessionModel),
             "No sessions yet. Right-click the tab to add one or import stored Claude Code conversations.");
     /** One row for every connection, painted for each in turn: the list is short, and a row parses little. */
     private final ConnectionRow connectionRow = new ConnectionRow();
-    private final JList<ConnectionState> connections = emptyText(new ConnectionList(connectionModel),
+    private final JList<ConnectionState> connections = EmptyText.over(new ConnectionList(connectionModel),
             "No connections yet. Right-click the tab to add one.");
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
@@ -1628,36 +1626,6 @@ public final class SessionsSidebar {
     public void removeConnection(final ConnectionState c) {
         connectionActions.remove(c);
     }
-
-    /** A list that says what to do while it is empty. */
-    private static <T> JList<T> emptyText(final JList<T> list, final String text) {
-        final JLabel hint = new JLabel("<html><div style='width:180px'>" + MarkdownHtml.escape(text) + "</div></html>");
-        hint.setForeground(Theme.MUTED_STRONG);
-        hint.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_M));
-        final JPanel overlay = new JPanel(new BorderLayout());
-        overlay.setOpaque(false);
-        overlay.add(hint, BorderLayout.NORTH);
-        list.setLayout(new BorderLayout());
-        list.add(overlay, BorderLayout.CENTER);
-        list.getModel().addListDataListener(new ListDataListener() {
-            @Override
-            public void intervalAdded(final ListDataEvent e) {
-                overlay.setVisible(list.getModel().getSize() == 0);
-            }
-
-            @Override
-            public void intervalRemoved(final ListDataEvent e) {
-                overlay.setVisible(list.getModel().getSize() == 0);
-            }
-
-            @Override
-            public void contentsChanged(final ListDataEvent e) {
-                overlay.setVisible(list.getModel().getSize() == 0);
-            }
-        });
-        return list;
-    }
-
 
     /**
      * Puts each list's band on the focused panel's row when the focus, or what that panel is bound to, changes; a row

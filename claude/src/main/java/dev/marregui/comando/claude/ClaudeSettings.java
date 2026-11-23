@@ -33,4 +33,9 @@ public record ClaudeSettings(String executable, Path runDir, Path projectsDir, S
         }
         return "claude";
     }
+
+    /** Where the prompts comando delivered to the sessions are kept ({@link DeliveredPrompts}): beside run. */
+    Path deliveredDir() {
+        return runDir.resolveSibling("delivered");
+    }
 }

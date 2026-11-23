@@ -344,7 +344,8 @@ class MachinesEditorTest {
     void withNothingPairedTheListAndTheSelectedMachinesFactsSayNonePaired() throws Exception {
         port.pairs = List.of();
         final MachinesEditor e = editor();
-        assertThat(on(() -> emptyText(e))).as("the list's empty text").containsExactly(MachinesEditor.NONE_PAIRED);
+        assertThat(on(() -> emptyText(e))).as("the list's empty text").singleElement().asString()
+                .contains(MachinesEditor.NONE_PAIRED);
         for (final String fact : SELECTED_FACTS) {
             assertThat(on(() -> ((JLabel) named(e, fact)).getText())).as(fact).isEqualTo(MachinesEditor.NONE_PAIRED);
         }
@@ -465,12 +466,18 @@ class MachinesEditorTest {
     /// The texts the list shows over its rows, visible now: its empty text while it is empty.
     private static List<String> emptyText(final MachinesEditor e) {
         final List<String> out = new ArrayList<>();
-        for (final Component c : list(e).getComponents()) {
-            if (c instanceof JLabel l && l.isVisible()) {
+        shownLabels(list(e), out);
+        return out;
+    }
+
+    private static void shownLabels(final Container c, final List<String> out) {
+        for (final Component child : c.getComponents()) {
+            if (child.isVisible() && child instanceof JLabel l) {
                 out.add(l.getText());
+            } else if (child.isVisible() && child instanceof Container sub) {
+                shownLabels(sub, out);
             }
         }
-        return out;
     }
 
     /// Lays out `c` and everything in it at the size it has, as showing it would.

@@ -583,7 +583,8 @@ public sealed interface Intent {
      * that panel and run there, as if typed. Resolved in the reducer, so a session created by the intent just before
      * gets it.
      *
-     * @param from the session or client that sent it, announced like a session's write
+     * @param from the session or client that sent it, announced like a session's write; empty for the user. A session
+     *             the user stopped is started again only for the user or a creator of it (record 44)
      */
     record PromptSession(String session, String text, String from) implements Intent {
     }

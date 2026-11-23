@@ -103,6 +103,11 @@ final class StreamMapper {
      * it reads a live line; {@link Block#UNKNOWN_TIME} for a stored line without one.
      */
     private long lineMillis = Block.UNKNOWN_TIME;
+    /**
+     * Which stored main-conversation prompts comando delivered; until a session's record is named, one with a
+     * sender's header is, as for a sub-agent's view, which reads no record.
+     */
+    private DeliveredPrompts.Matcher deliveries = DeliveredPrompts.NONE.matcher();
 
     StreamMapper(final String session, final Transcript transcript, final IntentSink sink) {
         this.session = session;
@@ -320,6 +325,11 @@ final class StreamMapper {
     /** Where the base effort of the model a {@code system/init} names is read from. */
     void effortFrom(final Function<String, String> effort) {
         effortOf = effort;
+    }
+
+    /** The stored prompts read from now on are delivered as {@code matcher} says: one per read of a conversation. */
+    void deliveries(final DeliveredPrompts.Matcher matcher) {
+        deliveries = matcher;
     }
 
     /** The result a tool call gets when its process ended, or its stored conversation stopped, before it returned. */
@@ -608,8 +618,10 @@ final class StreamMapper {
             if (history && t.startsWith("<command-name>")) {
                 transcript.append(new Block.Note(Block.NoteKind.COMMAND, commandName(t), parent));
             }
-        } else if (history || !parent.isEmpty()) {
-            transcript.append(new Block.UserPrompt(t, parent.isEmpty() ? "" : "subagent", parent, lineMillis));
+        } else if (history && parent.isEmpty()) {
+            transcript.append(new Block.UserPrompt(t, "", parent, lineMillis, deliveries.delivered(t, lineMillis)));
+        } else if (!parent.isEmpty()) {
+            transcript.append(new Block.UserPrompt(t, "subagent", parent, lineMillis));
         }
         // a live main-conversation prompt was appended by prompt() when comando sent it
     }

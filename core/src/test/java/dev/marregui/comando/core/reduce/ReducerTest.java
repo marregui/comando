@@ -2231,6 +2231,32 @@ class ReducerTest {
         assertThat(effects).as("the user").anyMatch(e -> e instanceof Effect.StartClaude);
     }
 
+    /// A prompt another session sends (session_send) reaches a stopped session under record 44 too: from a session that
+    /// did not create it, nothing starts, nothing is added to its panel and the notice names the sender, as the
+    /// refusal asked first does; the same prompt from its creator, or from the user, starts it.
+    @Test
+    void aPromptFromAnotherSessionStartsAStoppedSessionOnlyForItsCreatorRecord44() {
+        state = state.withSessions(List.of(SessionState.closed(States.WORK.withCreatedBy("foreman"))));
+        final String refused = "rogue did not create session work, which is not running; only the user or its creator "
+                + "starts it (record 44)";
+        final Intent.PromptSession rogue = new Intent.PromptSession("work", "keep going", "rogue");
+        assertThat(Reducer.refusal(state, rogue)).as("asked first, as a tool does").contains(refused);
+        apply(rogue);
+        assertThat(effects).as("a prompt from another session").isEmpty();
+        assertThat(state.notice().text()).isEqualTo(refused);
+
+        final Intent.PromptSession foreman = new Intent.PromptSession("work", "go on", "foreman");
+        assertThat(Reducer.refusal(state, foreman)).as("its creator").isEmpty();
+        apply(foreman);
+        assertThat(effects).as("its creator").anyMatch(e -> e instanceof Effect.StartClaude)
+                .anySatisfy(e -> assertThat(e).isInstanceOfSatisfying(Effect.SendToClaude.class,
+                        c -> assertThat(c.delivered()).isTrue()));
+        state = state.withSessions(List.of(SessionState.closed(States.WORK.withCreatedBy("foreman"))));
+        assertThat(Reducer.refusal(state, new Intent.PromptSession("work", "go on", ""))).as("the user").isEmpty();
+        apply(new Intent.PromptSession("work", "go on", ""));
+        assertThat(effects).as("the user").anyMatch(e -> e instanceof Effect.StartClaude);
+    }
+
     /// The reducer's refusal, asked before sending, names what it would refuse: a checkpoint with no command, a session
     /// name another session's panel holds; text that goes to the database is never refused for a session.
     @Test

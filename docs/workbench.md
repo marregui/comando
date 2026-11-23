@@ -922,6 +922,7 @@ its own data root and its own kit. Help ▸ **Reveal comando folder** opens the 
 | `kit-folders` | which kit folders comando added to `folders.json` |
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
 | `run/` | the MCP configurations of running sessions, owner-only |
+| `delivered/<session>` | the prompts comando delivered to each session from another session or instance, so a prompt you typed or pasted with a `[from …]` line stays yours after a reload |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision, owner-only |
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ **Show the log** opens it |
 | `help/tutorial.md` | the tutorial |

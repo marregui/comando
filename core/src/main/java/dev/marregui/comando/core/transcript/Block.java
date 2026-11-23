@@ -19,8 +19,9 @@ public sealed interface Block {
      * A prompt sent to the session; {@code origin} names the panel, empty for history. {@code atMillis} is when it was
      * sent, epoch milliseconds: comando's clock for a live prompt, the stored line's timestamp for history;
      * {@link #UNKNOWN_TIME} when neither is known. {@code delivered} when comando delivered it from another session or
-     * instance, its text headed with the sender; false for the user's own and for history, whose stored lines keep no
-     * such mark.
+     * instance, its text headed with the sender; false for the user's own. History's stored lines keep no such mark: a
+     * stored prompt is delivered when comando's record of the session's deliveries holds it, and, for a session with
+     * no record, when it starts with a sender's header, that header the only mark it has.
      */
     record UserPrompt(String text, String origin, String parent, long atMillis, boolean delivered) implements Block {
         public UserPrompt {

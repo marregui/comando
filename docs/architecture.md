@@ -372,6 +372,7 @@ Everything an instance keeps is under one folder, the *data root*: `-Dcomando.ho
 | `panels/<title>.md` | each panel's text, a Markdown file you can diff or keep in git |
 | `settings.json`, `themes/` | the window's kept state, your own themes |
 | `run/` | the MCP configuration of each running session, readable by you alone |
+| `delivered/` | per session, the prompts comando delivered to it from another session or instance (send time and a hash of the text, at most 1,000), so a reloaded transcript draws their sender and a typed `[from …]` line as yours |
 | `logs/` | `comando-<n>.log`, and the intent log when recording |
 | `audit/` | every MCP tool call and approval decision, one file per day |
 | `cache/` | drawn diagrams and pictures; safe to delete |

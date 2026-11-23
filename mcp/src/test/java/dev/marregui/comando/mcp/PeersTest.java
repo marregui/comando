@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -697,13 +698,14 @@ class PeersTest {
                 .anyMatch(c -> c.session().equals("Comando G") && c.status() == InstancesState.Status.OK), WAIT);
     }
 
-    /// A question naming a session the peer has prompts that session, in its own panel, and makes none; a name the
-    /// peer's reducer refuses for a new session (the title of another session's panel) is refused with its reason, and
-    /// nothing is prompted.
+    /// A question naming a running session the peer has prompts that session, in its own panel, and makes none; a
+    /// name the peer's reducer refuses for a new session (the title of another session's panel) is refused with its
+    /// reason, and nothing is prompted.
     @Test
     void aNamedSessionThePeerHasIsPromptedAndARefusedNameIsSaid() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
         final Node b = node("b", Peers.ANSWER_WITHIN);
+        running(b, "work");
         final CompletableFuture<McpTools.Outcome> asking = async(main, "foreman", "instance_ask",
                 "{\"instance\":\"b\",\"session\":\"work\",\"text\":\"status?\",\"wait_seconds\":30}");
         final Intent.PromptSession prompt = b.window.recorded.await(Intent.PromptSession.class, WAIT);
@@ -719,6 +721,44 @@ class PeersTest {
         assertThat(refused.error()).isTrue();
         assertThat(refused.text()).contains("session one cannot be made in comando · b", "A panel called one exists");
         assertThat(b.window.recorded.of(Intent.PromptSession.class)).hasSize(1);
+    }
+
+    /// A question naming a session of the peer's that is not running and that the asker did not create is answered at
+    /// once with the reducer's refusal (record 44), well within the asker's wait and the peer's own bound, and nothing
+    /// is prompted there.
+    @Test
+    void aQuestionToAStoppedSessionTheAskerDidNotCreateIsRefusedAtOnce() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final McpTools.Outcome out = call(main, "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"work\",\"text\":\"status?\",\"wait_seconds\":10}");
+        assertThat(out.error()).as(out.text()).isTrue();
+        assertThat(out.text()).startsWith("refused:").contains("session work of comando · b takes no question:",
+                "did not create session work, which is not running; only the user or its creator starts it "
+                        + "(record 44)");
+        assertThat(b.window.recorded.of(Intent.PromptSession.class)).isEmpty();
+    }
+
+    /// A question naming a session of the peer's with no open panel opens that panel before the reducer is asked: one
+    /// not running that the asker did not create is refused (record 44) and not prompted; a running one is prompted.
+    @Test
+    void aQuestionToASessionWithNoPanelOpensItsPanelBeforeTheReducerIsAsked() throws Exception {
+        final Node main = node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        b.window.state.updateAndGet(s -> unpaneled(unpaneled(s, "idle"), "busy"));
+        running(b, "busy");
+        final McpTools.Outcome idle = call(main, "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"idle\",\"text\":\"status?\",\"wait_seconds\":10}");
+        assertThat(idle.error()).as(idle.text()).isTrue();
+        assertThat(idle.text()).contains("session idle of comando · b takes no question:", "(record 44)");
+        assertThat(b.window.recorded.of(Intent.PromptSession.class)).isEmpty();
+
+        final McpTools.Outcome busy = call(main, "instance_ask",
+                "{\"instance\":\"b\",\"session\":\"busy\",\"text\":\"status?\",\"wait_seconds\":0}");
+        assertThat(busy.error()).as(busy.text()).isFalse();
+        assertThat(b.window.recorded.await(Intent.PromptSession.class, WAIT).session()).isEqualTo("busy");
+        assertThat(b.window.recorded.of(Intent.OpenSession.class)).extracting(Intent.OpenSession::session)
+                .containsExactly("idle", "busy");
     }
 
     /// A peer from before session names drops the question's `to` and answers from the asker's consult session: the
@@ -771,6 +811,7 @@ class PeersTest {
     void aSessionWaitingOnItsOwnAskIsRefusedAtOnce() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
         final Node b = node("b", Peers.ANSWER_WITHIN);
+        running(b, "work");
         final CompletableFuture<McpTools.Outcome> bAsks = async(b, "work", "instance_ask",
                 "{\"instance\":\"main\",\"text\":\"what is X?\",\"wait_seconds\":30}");
         final Intent.PromptSession toMain = main.window.recorded.await(Intent.PromptSession.class, WAIT);
@@ -814,6 +855,7 @@ class PeersTest {
     void theWaitingMarkOfAnAskClearsAfterATimeoutAnErrorAndAnInterrupt() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
         final Node b = node("b", Peers.ANSWER_WITHIN);
+        running(b, "work");
         final McpTools.Outcome waited = call(b, "work", "instance_ask",
                 "{\"instance\":\"main\",\"text\":\"one?\",\"wait_seconds\":0}");
         assertThat(waited.error()).as(waited.text()).isFalse();
@@ -848,6 +890,7 @@ class PeersTest {
     void theWaitingMarkOfAnInstanceReplyClearsAfterATimeoutAnErrorAndAnInterrupt() throws Exception {
         final Node main = node("", Peers.ANSWER_WITHIN);
         final Node b = node("b", Peers.ANSWER_WITHIN);
+        running(b, "work");
         final McpTools.Outcome asked = call(b, "work", "instance_ask",
                 "{\"instance\":\"main\",\"text\":\"one?\",\"wait_seconds\":0}");
         final Matcher id = ID.matcher(asked.text());
@@ -1223,7 +1266,8 @@ class PeersTest {
             AppState with = withSession(withSession(s, SessionSpec.fresh("consult-y@c", "/tmp").withPlanMode(true)),
                     SessionSpec.fresh("consult-v", "/tmp"));
             for (int i = 0; i < Peers.MAX_CONSULTS - 1; i++) {
-                with = withSession(with, SessionSpec.fresh("consult-s" + i + "@a", "/tmp").withPlanMode(true));
+                with = withSession(with, SessionSpec.fresh("consult-s" + i + "@a", "/tmp").withPlanMode(true)
+                        .withCreatedBy("peer:s" + i + "@a"));
             }
             return with;
         });
@@ -1280,8 +1324,8 @@ class PeersTest {
         final Node w = node(b, "w", m -> m.equals("a") ? MachinesPort.Grant.PEER : null);
         final Node v = node(b, "v", _ -> null);
         w.window.state.updateAndGet(s -> withSession(withSession(s,
-                SessionSpec.fresh("consult-x@a", "/tmp").withPlanMode(true)),
-                SessionSpec.fresh("consult-v", "/tmp").withPlanMode(true)));
+                SessionSpec.fresh("consult-x@a", "/tmp").withPlanMode(true).withCreatedBy("peer:x@a")),
+                SessionSpec.fresh("consult-v", "/tmp").withPlanMode(true).withCreatedBy("peer:v")));
         reports(w, "consult-x@a", "bypassPermissions");
         reports(w, "consult-v", "acceptEdits");
         final McpTools.Outcome remote = call(x, "instance_ask",
@@ -1299,6 +1343,12 @@ class PeersTest {
         assertThat(call(x, "instance_ask", "{\"instance\":\"w@b\",\"text\":\"again\",\"wait_seconds\":0}").error())
                 .isFalse();
         assertThat(w.window.recorded.await(Intent.PromptSession.class, WAIT).session()).isEqualTo("consult-x@a");
+    }
+
+    /// Has `n`'s session `session` running, as one that asks a question is; only a running session takes the question
+    /// of a peer that did not make it (record 44).
+    private static void running(final Node n, final String session) {
+        n.window.state.updateAndGet(s -> s.withSession(session, x -> x.withStatus(Status.OPEN, "")));
     }
 
     /// Has `n`'s session `session` report permission mode `mode`, as Claude Code's init does.
@@ -1438,12 +1488,13 @@ class PeersTest {
         final Path home = Files.createDirectories(machineDir.resolve(name.isEmpty() ? "main" : name));
         final Window window = new Window();
         final Link link = new Link(on);
-        final Peers peers = new Peers(link, Peers.Me.of(name, "2.0.0", role), window, window.state::get, window.transcripts, home.toString(),
-                home.resolve("agents.json"), answerWithin, expireWithin, presentFor, resendEvery);
+        final Peers peers = new Peers(link, Peers.Me.of(name, "2.0.0", role), window, window::read, window.transcripts,
+                home.toString(), home.resolve("agents.json"), answerWithin, expireWithin, presentFor, resendEvery);
         peers.machine(on.machine);
         peers.grants(grants);
         peers.dataRoot(home);
-        final McpTools tools = new McpTools(window, window.state::get, window.transcripts, null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
+        final McpTools tools = new McpTools(window, window::read, window.transcripts, null, AuditLog.none(),
+                new FakeClock(), Duration.ofMinutes(1));
         tools.peers(peers);
         peers.start();
         link.connect();
@@ -1464,6 +1515,13 @@ class PeersTest {
         return s.withSessions(sessions).withPanels(panels, s.focused());
     }
 
+    /// Adds the closed session `name` with no panel open for it.
+    private static AppState unpaneled(final AppState s, final String name) {
+        final List<SessionState> sessions = new ArrayList<>(s.sessions());
+        sessions.add(SessionState.closed(SessionSpec.fresh(name, "/tmp")));
+        return s.withSessions(sessions);
+    }
+
     private static AppState turns(final AppState s, final String session, final int delta) {
         final List<SessionState> sessions = new ArrayList<>();
         for (final SessionState x : s.sessions()) {
@@ -1479,16 +1537,26 @@ class PeersTest {
     private record Sent(PeerGateway.Message message, long expirySeconds) {
     }
 
-    /** The window and reducer as far as the tests need them: a session with its panel, a prompt shown and counted. */
+    /**
+     * The window and reducer as far as the tests need them: a session with its panel, a prompt shown and counted, and
+     * a session's panel opened, which shows only from the second read of the state after it was sent, as a reducer
+     * that applies an intent once its sender has gone on.
+     */
     private static final class Window implements IntentSink {
         final RecordingSink recorded = new RecordingSink();
         final AtomicReference<AppState> state = new AtomicReference<>(States.twoPanels());
         final TranscriptRegistry transcripts = new TranscriptRegistry();
+        private final AtomicReference<UnaryOperator<AppState>> queued = new AtomicReference<>();
 
         @Override
         public void dispatch(final Intent intent) {
             switch (intent) {
                 case Intent.SaveSession save when save.previousName().isEmpty() -> state.updateAndGet(s -> withSession(s, save.spec()));
+                case Intent.OpenSession open -> queued.set(s -> {
+                    final List<PanelState> panels = new ArrayList<>(s.panels());
+                    panels.add(new PanelState(open.newPanel(), open.session(), "", open.session()));
+                    return s.withPanels(panels, s.focused());
+                });
                 case Intent.PromptSession p -> {
                     state.updateAndGet(s -> turns(s, p.session(), 1));
                     transcripts.of(p.session()).append(new Block.UserPrompt(p.text(), p.session(), ""));
@@ -1497,6 +1565,16 @@ class PeersTest {
                 }
             }
             recorded.dispatch(intent);
+        }
+
+        /** The state as the window holds it now; an intent queued before is applied after it is read. */
+        AppState read() {
+            final AppState now = state.get();
+            final UnaryOperator<AppState> applied = queued.getAndSet(null);
+            if (applied != null) {
+                state.updateAndGet(applied);
+            }
+            return now;
         }
 
         /** Ends the oldest open turn of {@code session} with Claude's texts and a tool call between them. */
