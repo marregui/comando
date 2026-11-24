@@ -242,8 +242,10 @@ class VideoPlayerUiTest {
         try {
             return ready.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final ExecutionException e) {
+            // the future fails on the JavaFX thread; the view's reason reaches the EDT after it
+            Awaitility.await().atMost(WAIT)
+                    .until(() -> onEdt(() -> player.message().startsWith("Cannot play this video: ")));
             final String why = onEdt(player::message);
-            assertThat(why).startsWith("Cannot play this video: ");
             assertThat(isMac()).as("macOS plays H.264, yet: " + why).isFalse();
             return Assumptions.abort("this machine does not decode H.264, and the view says so: " + why);
         }
