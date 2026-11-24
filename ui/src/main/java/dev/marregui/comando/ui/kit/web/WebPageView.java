@@ -1,7 +1,6 @@
 package dev.marregui.comando.ui.kit.web;
 
 import java.awt.Color;
-import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -23,6 +22,7 @@ import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
 
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.fx.FxToolkit;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
@@ -95,9 +95,6 @@ final class WebPageView implements PageView {
                 own.textContent = css;
             })""";
 
-    /** Whether this process has started the JavaFX toolkit. EDT only, as {@link #create()} is. */
-    private static boolean toolkitStarted;
-
     private final Surface panel = new Surface();
 
     /** Called with the links the page does not follow. EDT only. */
@@ -133,7 +130,7 @@ final class WebPageView implements PageView {
      * @throws UnsupportedOperationException when this process has no display, or JavaFX cannot start
      */
     static WebPageView create() {
-        startToolkit();
+        FxToolkit.start();
         final WebPageView v = new WebPageView();
         v.panel.ground();
         Platform.runLater(v::build);
@@ -201,26 +198,6 @@ final class WebPageView implements PageView {
         } catch (final IllegalStateException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot release the page, the JavaFX toolkit has ended", e);
         }
-    }
-
-    private static void startToolkit() {
-        if (toolkitStarted) {
-            return;
-        }
-        if (GraphicsEnvironment.isHeadless()) {
-            throw new UnsupportedOperationException("cannot render a page without a display [java.awt.headless=true]");
-        }
-        try {
-            Platform.startup(() -> {
-            });
-        } catch (final IllegalStateException _) {
-            // a JFXPanel made elsewhere in this process started it already
-        } catch (final RuntimeException | LinkageError e) {
-            throw new UnsupportedOperationException("cannot start the page renderer [cause=" + e + ']', e);
-        }
-        // closing the last page must not end JavaFX: a later page could not start it again
-        Platform.setImplicitExit(false);
-        toolkitStarted = true;
     }
 
     /** Makes the view, on the JavaFX thread. */

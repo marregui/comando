@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - Tilde, relative, and absolute paths resolve from the correct base.
 /// - Markdown and text choose their view specification from line and extension.
 /// - Binary, absent, directory, and oversized files report a path-free reason.
+/// - An MP4 video becomes a video view at any size and any line, by its extension in any case.
 class FileViewTest {
 
     /// [FileView#resolve] expands a home-relative path, resolves a relative path under `/w`, and leaves an absolute
@@ -58,5 +59,25 @@ class FileViewTest {
             f.setLength(FileView.MAX_BYTES + 1);
         }
         assertThatThrownBy(() -> FileView.read(big, 0)).hasMessage("larger than 4 MB");
+    }
+
+    /// [FileView#read] makes `clips/Demo.MP4`, over the four-megabyte text limit and asked at line seven, and
+    /// `a.m4v` video views of their paths, not binary; `a.mp4.txt` and a folder named `x.mp4` are not videos.
+    @Test
+    void anMp4IsAVideoViewOfItsPathAtAnySizeAndLine(@TempDir final Path dir) throws IOException {
+        final Path mp4 = Files.createDirectories(dir.resolve("clips")).resolve("Demo.MP4");
+        try (final RandomAccessFile f = new RandomAccessFile(mp4.toFile(), "rw")) {
+            f.setLength(FileView.MAX_BYTES + 1);
+        }
+        final FileView video = FileView.read(mp4, 7);
+        assertThat(video.title()).isEqualTo("clips/Demo.MP4");
+        assertThat(video.spec()).isEqualTo(new ViewSpec.Video(mp4.toString()));
+        assertThat(video.spec().type()).isEqualTo("video");
+        assertThat(video.binary()).isFalse();
+        final Path m4v = Files.write(dir.resolve("a.m4v"), new byte[]{0, 0, 0, 0x18});
+        assertThat(FileView.read(m4v, 0).spec()).isEqualTo(new ViewSpec.Video(m4v.toString()));
+
+        assertThat(FileView.isVideo(Path.of("a.mp4.txt"))).isFalse();
+        assertThatThrownBy(() -> FileView.read(Files.createDirectories(dir.resolve("x.mp4")), 0)).hasMessage("not a file");
     }
 }

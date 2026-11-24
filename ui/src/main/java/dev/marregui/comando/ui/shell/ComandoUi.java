@@ -88,6 +88,7 @@ import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.media.VideoPlayer;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.HitMarks;
 import dev.marregui.comando.ui.kit.text.Previews;
@@ -120,6 +121,7 @@ import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import dev.marregui.comando.ui.widgets.text.TextWidget;
 import dev.marregui.comando.ui.widgets.transcript.AgentWidget;
 import dev.marregui.comando.ui.widgets.tree.TreeWidget;
+import dev.marregui.comando.ui.widgets.video.VideoWidget;
 
 /**
  * The Swing shell and the UI port. Builds the window from its parts and renders the state on the EDT, at most once
@@ -365,6 +367,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             files.previewFile(file, HitMarks.line(line), true);
             files.pinFile(file);
         }));
+        widgets.register("video", ViewSpec.Video.class, c -> new VideoWidget(VideoPlayer::create));
         widgets.register("tree", ViewSpec.Tree.class, TreeWidget::new);
         widgets.register("search", ViewSpec.Search.class, c -> new SearchWidget(parts.searchHub()));
         widgets.register("console", ViewSpec.Console.class, c -> new ConsoleWidget(c, deps.consoles()));

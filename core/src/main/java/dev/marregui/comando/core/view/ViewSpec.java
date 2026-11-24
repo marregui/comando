@@ -119,6 +119,21 @@ public sealed interface ViewSpec {
     }
 
     /**
+     * A video file played in the view: an MP4 holding H.264 video and AAC audio, the format JavaFX's player decodes on
+     * every platform comando runs on. The view reads the file while it shows; it carries only the path.
+     */
+    record Video(String path) implements ViewSpec {
+        public Video {
+            Objects.requireNonNull(path, "path");
+        }
+
+        @Override
+        public String type() {
+            return "video";
+        }
+    }
+
+    /**
      * A tree node; {@code link} is what activating the node opens ({@link #fileLink} path and line), empty for none.
      */
     record TreeNode(String label, String detail, String link, List<TreeNode> children) {

@@ -16,8 +16,8 @@ import dev.marregui.comando.core.model.HomeDir;
 /**
  * A file shown as a view, read the one way every caller shows a file (the user's click on a link, Claude's
  * {@code ui_open_file}): titled with its parent folder, so two files with one name get two tabs; a Markdown file at no
- * particular line rendered, any other text file as text coloured by its extension at the line; a file that is not
- * UTF-8 text said to be binary rather than shown.
+ * particular line rendered, an MP4 video played at any size, any other text file as text coloured by its extension at
+ * the line; a file that is not UTF-8 text said to be binary rather than shown.
  *
  * @param path   the file, absolute
  * @param title  the view's title: {@code folder/name}
@@ -33,6 +33,16 @@ public record FileView(Path path, String title, ViewSpec spec, boolean binary) {
         final Path name = file.getFileName();
         final String n = name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
         return n.endsWith(".html") || n.endsWith(".htm");
+    }
+
+    /**
+     * Whether {@code file} is a video the view plays: its name ends in {@code .mp4} or {@code .m4v}, in any case. The
+     * container says nothing of the codecs inside; the player says when it cannot decode them.
+     */
+    public static boolean isVideo(final Path file) {
+        final Path name = file.getFileName();
+        final String n = name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
+        return n.endsWith(".mp4") || n.endsWith(".m4v");
     }
 
     /**
@@ -56,6 +66,12 @@ public record FileView(Path path, String title, ViewSpec spec, boolean binary) {
         if (!Files.isRegularFile(path)) {
             throw new IOException("not a file");
         }
+        final Path parent = path.getParent() == null ? null : path.getParent().getFileName();
+        final String title = (parent == null ? "" : parent + "/") + path.getFileName();
+        // a video is played from the file, not read into the view: no size limit, and a line means nothing in it
+        if (isVideo(path)) {
+            return new FileView(path, title, new ViewSpec.Video(path.toString()), false);
+        }
         byte[] bytes;
         // the read itself is bounded: a file that grows between a size check and the read is still refused
         try {
@@ -66,8 +82,6 @@ public record FileView(Path path, String title, ViewSpec spec, boolean binary) {
         if (bytes.length > MAX_BYTES) {
             throw new IOException("larger than " + MAX_BYTES / (1024 * 1024) + " MB");
         }
-        final Path parent = path.getParent() == null ? null : path.getParent().getFileName();
-        final String title = (parent == null ? "" : parent + "/") + path.getFileName();
         final String ext = extension(path);
         String text;
         try {

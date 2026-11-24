@@ -148,6 +148,7 @@ val uiTestClasses = listOf(
     "SessionBarButtonsUiTest",
     "FrontearThemeUiTest",
     "WebPageViewUiTest",
+    "VideoPlayerUiTest",
 )
 
 fun uiShard(spec: String, seconds: String, mac: Boolean): List<String> {

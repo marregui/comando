@@ -299,7 +299,7 @@ The reasons: [a theme is four tiers of tokens](../adr/0100-a-theme-is-four-tiers
 | RSyntaxTextArea | The editor |
 | commonmark, with tables | Markdown to HTML |
 | JediTerm, pty4j | The terminal |
-| OpenJFX 25 (`javafx-web`, `javafx-swing`), per platform | HTML pages in a panel (`kit.web`, [record 190](../adr/0190-html-pages-render-in-a-panel-through-javafx-webview.md)) |
+| OpenJFX 25 (`javafx-web`, `javafx-media`, `javafx-swing`), per platform | HTML pages in a panel (`kit.web`, [record 190](../adr/0190-html-pages-render-in-a-panel-through-javafx-webview.md)); MP4 videos in the side pane (`kit.media`, [record 196](../adr/0196-mp4-videos-play-in-the-side-pane-through-javafx-media.md)); JavaFX started once by `kit.fx.FxToolkit` |
 
 `ui` sees no adapter module and no JDBC. Where the window needs something from outside, it declares an interface and
 [`app`](app.md) implements it: `PanelTexts`, `ServerToggle` and `Setup`. `app` also hands over three ports of `core`
