@@ -619,7 +619,10 @@ public final class McpTools {
         return s.panels().stream().filter(p -> p.id().value().equals(name) || p.title().equalsIgnoreCase(name)).findFirst();
     }
 
-    /** Shows a file in the side pane, read as the user's click on a link reads it ({@link FileView}). */
+    /**
+     * Shows a file where the user's click on a link shows it ({@link FileView}): a video in the lower panel, any other
+     * file in the side pane.
+     */
     private Outcome openFile(final String session, final JsonNode args) {
         final String p = args.path("path").asString("");
         if (p.isBlank()) {
@@ -640,7 +643,7 @@ public final class McpTools {
         } catch (final IOException e) {
             return Outcome.fail("cannot open " + path + ": " + e.getMessage());
         }
-        sink.dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
+        sink.dispatch(new Intent.ShowView(session, file.title(), file.spec(), file.placement()));
         return Outcome.ok(file.binary() ? "opened " + path + ": a binary file, so the view says so instead of showing it"
                 : "opened " + path + " (" + file.spec().type() + ")" + (line > 0 ? " at line " + line : ""));
     }

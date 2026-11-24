@@ -310,8 +310,8 @@ final class PanelFiles {
     }
 
     /**
-     * A file a session or a link names, opened as the sidebar opens it, or shown in the side pane; a page without a
-     * line opens in a panel, rendered. Any thread.
+     * A file a session or a link names, opened as the sidebar opens it, or shown in the side pane, a video in the lower
+     * panel; a page without a line opens in a panel, rendered. Any thread.
      */
     void showFile(final String session, final String path, final String baseDir, final int line) {
         UiErrands.start("show-file", () -> {
@@ -327,10 +327,16 @@ final class PanelFiles {
                 // a file opens on the user's click only: it shows even in a side pane the user hid earlier, and even
                 // when it replaces the same file's view in place
                 Edt.run(() -> {
-                    layout.revealSidePane();
+                    if (file.placement() == Placement.SIDE) {
+                        layout.revealSidePane();
+                    }
                     openedFiles.add(p);
-                    deps.intents().dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
+                    deps.intents().dispatch(new Intent.ShowView(session, file.title(), file.spec(), file.placement()));
                     render.run();
+                    // a video opened on purpose shows, also over a document that hides the lower area while it reads
+                    if (file.placement() == Placement.LOWER) {
+                        layout.lowerFor(deps.state().get(), true);
+                    }
                 });
             } catch (final IOException | RuntimeException e) {
                 // a path that is no path (a NUL in it) is told like a file that cannot be read

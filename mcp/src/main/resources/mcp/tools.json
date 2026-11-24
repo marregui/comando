@@ -230,7 +230,7 @@
   },
   {
     "name": "ui_open_file",
-    "description": "Opens a file in comando's side pane: a Markdown file at no line rendered, an HTML page at no line rendered in a panel instead (page_snapshot and page_read reach it), an MP4 video (.mp4, .m4v) played, at any size, any other text file read-only and scrolled to the line, a binary file said to be one. ~/ is the home folder; relative paths resolve against the session's working directory. At most 4 MB, videos aside.",
+    "description": "Opens a file in comando's side pane: a Markdown file at no line rendered, an HTML page at no line rendered in a panel instead (page_snapshot and page_read reach it), an MP4 video (.mp4, .m4v) played in the lower panel instead, at any size, any other text file read-only and scrolled to the line, a binary file said to be one. ~/ is the home folder; relative paths resolve against the session's working directory. At most 4 MB, videos aside.",
     "inputSchema": {
       "type": "object",
       "properties": {

@@ -16,8 +16,8 @@ import dev.marregui.comando.core.model.HomeDir;
 /**
  * A file shown as a view, read the one way every caller shows a file (the user's click on a link, Claude's
  * {@code ui_open_file}): titled with its parent folder, so two files with one name get two tabs; a Markdown file at no
- * particular line rendered, an MP4 video played at any size, any other text file as text coloured by its extension at
- * the line; a file that is not UTF-8 text said to be binary rather than shown.
+ * particular line rendered, an MP4 video played at any size in the lower panel, any other text file as text coloured
+ * by its extension at the line; a file that is not UTF-8 text said to be binary rather than shown.
  *
  * @param path   the file, absolute
  * @param title  the view's title: {@code folder/name}
@@ -101,5 +101,13 @@ public record FileView(Path path, String title, ViewSpec spec, boolean binary) {
         final String n = path.getFileName().toString().toLowerCase(Locale.ROOT);
         final int dot = n.lastIndexOf('.');
         return dot <= 0 ? "" : n.substring(dot + 1);
+    }
+
+    /**
+     * Where the view goes: a video to the lower panel, whose tabs stay whichever panel has the keyboard, each video in
+     * a tab of its own; any other file to the side pane.
+     */
+    public Placement placement() {
+        return spec instanceof ViewSpec.Video ? Placement.LOWER : Placement.SIDE;
     }
 }

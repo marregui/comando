@@ -88,6 +88,7 @@ import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.media.OnePlaying;
 import dev.marregui.comando.ui.kit.media.VideoPlayer;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.HitMarks;
@@ -367,7 +368,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             files.previewFile(file, HitMarks.line(line), true);
             files.pinFile(file);
         }));
-        widgets.register("video", ViewSpec.Video.class, c -> new VideoWidget(VideoPlayer::create));
+        // one video plays at a time, across every video view of the window
+        final OnePlaying videos = new OnePlaying();
+        widgets.register("video", ViewSpec.Video.class, c -> new VideoWidget(() -> VideoPlayer.create(videos)));
         widgets.register("tree", ViewSpec.Tree.class, TreeWidget::new);
         widgets.register("search", ViewSpec.Search.class, c -> new SearchWidget(parts.searchHub()));
         widgets.register("console", ViewSpec.Console.class, c -> new ConsoleWidget(c, deps.consoles()));

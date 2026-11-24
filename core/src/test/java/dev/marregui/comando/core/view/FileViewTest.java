@@ -16,7 +16,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - Tilde, relative, and absolute paths resolve from the correct base.
 /// - Markdown and text choose their view specification from line and extension.
 /// - Binary, absent, directory, and oversized files report a path-free reason.
-/// - An MP4 video becomes a video view at any size and any line, by its extension in any case.
+/// - An MP4 video becomes a video view at any size and any line, by its extension in any case, placed in the lower
+///   panel; every other file in the side pane.
 class FileViewTest {
 
     /// [FileView#resolve] expands a home-relative path, resolves a relative path under `/w`, and leaves an absolute
@@ -29,8 +30,8 @@ class FileViewTest {
         assertThat(FileView.resolve("/abs/B.java", "/w")).isEqualTo(Path.of("/abs/B.java"));
     }
 
-    /// [FileView#read] renders `PLAN.md` as Markdown at line zero, but returns text with its extension and requested
-    /// line for Markdown at line three and Java source at line one.
+    /// [FileView#read] renders `PLAN.md` as Markdown at line zero in the side pane, but returns text with its
+    /// extension and requested line for Markdown at line three and Java source at line one.
     @Test
     void markdownRendersAtNoLineAndAnyTextFileIsTextAtItsLine(@TempDir final Path dir) throws IOException {
         final Path md = Files.writeString(Files.createDirectories(dir.resolve("docs")).resolve("PLAN.md"), "# plan");
@@ -38,6 +39,7 @@ class FileViewTest {
         assertThat(rendered.title()).isEqualTo("docs/PLAN.md");
         assertThat(rendered.spec()).isEqualTo(new ViewSpec.Markdown("# plan"));
         assertThat(rendered.binary()).isFalse();
+        assertThat(rendered.placement()).isEqualTo(Placement.SIDE);
         assertThat(FileView.read(md, 3).spec()).isEqualTo(new ViewSpec.Text(md.toString(), "# plan", "md", 3));
         final Path java = Files.writeString(dir.resolve("A.java"), "class A {}");
         assertThat(FileView.read(java, 1).spec()).isEqualTo(new ViewSpec.Text(java.toString(), "class A {}", "java", 1));
@@ -62,7 +64,8 @@ class FileViewTest {
     }
 
     /// [FileView#read] makes `clips/Demo.MP4`, over the four-megabyte text limit and asked at line seven, and
-    /// `a.m4v` video views of their paths, not binary; `a.mp4.txt` and a folder named `x.mp4` are not videos.
+    /// `a.m4v` video views of their paths, not binary, placed in the lower panel; `a.mp4.txt` and a folder named
+    /// `x.mp4` are not videos.
     @Test
     void anMp4IsAVideoViewOfItsPathAtAnySizeAndLine(@TempDir final Path dir) throws IOException {
         final Path mp4 = Files.createDirectories(dir.resolve("clips")).resolve("Demo.MP4");
@@ -74,6 +77,7 @@ class FileViewTest {
         assertThat(video.spec()).isEqualTo(new ViewSpec.Video(mp4.toString()));
         assertThat(video.spec().type()).isEqualTo("video");
         assertThat(video.binary()).isFalse();
+        assertThat(video.placement()).isEqualTo(Placement.LOWER);
         final Path m4v = Files.write(dir.resolve("a.m4v"), new byte[]{0, 0, 0, 0x18});
         assertThat(FileView.read(m4v, 0).spec()).isEqualTo(new ViewSpec.Video(m4v.toString()));
 

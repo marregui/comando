@@ -26,6 +26,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.media.OnePlaying;
 import dev.marregui.comando.ui.kit.media.VideoPlayer;
 import dev.marregui.comando.ui.widgets.video.VideoWidget;
 
@@ -37,7 +38,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// and AAC, made by ffmpeg.
 /// - the video gets ready with its length, plays, advances, pauses, and at its end pauses back at its start, where the
 ///   seek bar still moves it
-/// - a view hidden right after play pauses
+/// - a view that stops showing plays on
+/// - of two players sharing one `OnePlaying`, the one asked to play last plays and the other pauses
 /// - a file that is no video fails its readiness and the view says why
 /// - closing twice is fine, and a closed player cancels its readiness and ignores play
 /// - the widget loads its path again at each render
@@ -65,6 +67,8 @@ class VideoPlayerUiTest {
      */
     private static final Duration HOLD_BOUND = HOLD.plusMillis(500);
 
+    private final OnePlaying one = new OnePlaying();
+
     @TempDir
     private Path dir;
 
@@ -75,7 +79,7 @@ class VideoPlayerUiTest {
     @BeforeEach
     void openPlayer() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            player = VideoPlayer.create();
+            player = VideoPlayer.create(one);
             frame = new JFrame("video");
             frame.setUndecorated(true);
             frame.setAutoRequestFocus(false);
@@ -120,17 +124,55 @@ class VideoPlayerUiTest {
         assertThat(onEdt(player::playing)).isFalse();
     }
 
-    /// A view hidden right after play was asked, before the player said it plays, ends paused and stays so for 1 s.
+    /// A video playing in a view that stops showing (another tab, another panel) plays on: still playing 1 s later.
     @Test
-    void aViewHiddenRightAfterPlayPauses() throws Exception {
+    void aHiddenViewPlaysOn() throws Exception {
         readyOrAbort(fixture());
+        SwingUtilities.invokeAndWait(player::toggle);
+        Awaitility.await().atMost(WAIT).until(() -> onEdt(player::playing));
 
-        SwingUtilities.invokeAndWait(() -> {
-            player.toggle();
-            frame.setVisible(false);
+        SwingUtilities.invokeAndWait(() -> frame.setVisible(false));
+
+        Awaitility.await().atMost(HOLD_BOUND).during(HOLD).until(() -> onEdt(player::playing));
+    }
+
+    /// Of two players sharing one [OnePlaying], the one asked to play last plays: B started pauses A, A started
+    /// again pauses B.
+    @Test
+    void theVideoAskedToPlayLastPlaysAndTheOtherPauses() throws Exception {
+        readyOrAbort(fixture());
+        final Path second = dir.resolve("second.mp4");
+        Files.copy(fixture(dir.resolve("copy")), second);
+        final AtomicReference<VideoPlayer> other = new AtomicReference<>();
+        final AtomicReference<JFrame> otherFrame = new AtomicReference<>();
+        final CompletableFuture<Duration> otherReady = onEdt(() -> {
+            other.set(VideoPlayer.create(one));
+            otherFrame.set(new JFrame("second video"));
+            otherFrame.get().setUndecorated(true);
+            otherFrame.get().setAutoRequestFocus(false);
+            otherFrame.get().add(other.get().component());
+            otherFrame.get().setBounds(-5_000, 300, 320, 240);
+            otherFrame.get().setVisible(true);
+            other.get().load(second);
+            return other.get().ready();
         });
+        try {
+            otherReady.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            final VideoPlayer a = player;
+            final VideoPlayer b = other.get();
 
-        Awaitility.await().atMost(HOLD_BOUND).during(HOLD).until(() -> onEdt(() -> !player.playing()));
+            SwingUtilities.invokeAndWait(a::toggle);
+            Awaitility.await().atMost(WAIT).until(() -> onEdt(a::playing));
+            SwingUtilities.invokeAndWait(b::toggle);
+            Awaitility.await().atMost(WAIT).until(() -> onEdt(() -> b.playing() && !a.playing()));
+            SwingUtilities.invokeAndWait(a::toggle);
+            Awaitility.await().atMost(WAIT).until(() -> onEdt(() -> a.playing() && !b.playing()));
+        } finally {
+            SwingUtilities.invokeAndWait(() -> {
+                other.get().close();
+                otherFrame.get().dispose();
+            });
+        }
     }
 
     /// A file named `.mp4` that holds text fails its readiness, by the player's error or by its 10 s deadline, and
@@ -222,6 +264,15 @@ class VideoPlayerUiTest {
         return null;
     }
 
+    private static Path fixture(final Path folder) throws Exception {
+        final Path out = Files.createDirectories(folder).resolve("two-seconds.mp4");
+        try (final InputStream in = VideoPlayerUiTest.class.getResourceAsStream("/video/two-seconds.mp4")) {
+            assertThat(in).isNotNull();
+            Files.copy(in, out);
+        }
+        return out;
+    }
+
     private static boolean isMac() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
     }
@@ -256,11 +307,7 @@ class VideoPlayerUiTest {
     }
 
     private Path fixture() throws Exception {
-        final Path out = dir.resolve("two-seconds.mp4");
-        try (final InputStream in = VideoPlayerUiTest.class.getResourceAsStream("/video/two-seconds.mp4")) {
-            assertThat(in).isNotNull();
-            Files.copy(in, out);
-        }
-        return out;
+        return fixture(dir);
     }
+
 }

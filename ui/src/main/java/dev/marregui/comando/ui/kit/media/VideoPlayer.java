@@ -1,7 +1,6 @@
 package dev.marregui.comando.ui.kit.media;
 
 import java.awt.BorderLayout;
-import java.awt.event.HierarchyEvent;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Locale;
@@ -36,8 +35,9 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  * A video file played by JavaFX's {@link MediaPlayer} inside a Swing panel, with a play/pause button, a seek bar and
  * the time under the picture. The player and its view live on the JavaFX application thread, which every call hands
  * its work to; the panel, the controls and what they show live on the EDT, which the player's events are posted to.
- * A click on the picture, or the space bar while the picture has the keyboard, plays or pauses; the video pauses when
- * its view stops showing, so a hidden tab plays no sound.
+ * A click on the picture, or the space bar while the picture has the keyboard, plays or pauses. A video keeps playing
+ * while its view does not show (another tab, another panel); of the players that share one {@link OnePlaying}, the one
+ * asked to play last plays, and the others pause.
  */
 public final class VideoPlayer implements AutoCloseable {
 
@@ -67,6 +67,9 @@ public final class VideoPlayer implements AutoCloseable {
     private final JLabel time = new JLabel();
 
     private final JLabel message = new JLabel();
+
+    /** The players of which one plays at a time; this one among them. */
+    private final OnePlaying one;
 
     /** Written once by {@link #close()} on the EDT; read on the EDT and on the JavaFX thread before each use. */
     private volatile boolean closed;
@@ -101,7 +104,8 @@ public final class VideoPlayer implements AutoCloseable {
     /** The load whose failure was told; JavaFX thread only, null before the first failure. */
     private CompletableFuture<Duration> told;
 
-    private VideoPlayer() {
+    private VideoPlayer(final OnePlaying one) {
+        this.one = one;
         play = ToolButton.of("play", "Play", this::toggle);
         message.setForeground(Theme.MUTED);
         message.setBorder(BorderFactory.createEmptyBorder(0, Theme.GAP, 2, Theme.GAP));
@@ -123,24 +127,18 @@ public final class VideoPlayer implements AutoCloseable {
         south.add(message, BorderLayout.SOUTH);
         root.add(surface, BorderLayout.CENTER);
         root.add(south, BorderLayout.SOUTH);
-        // a view that stops showing (another tab, a closed pane) pauses: a hidden video plays no sound. Not guarded by
-        // playing, which the EDT learns two hops after play() was asked
-        root.addHierarchyListener(e -> {
-            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0 && !root.isShowing()) {
-                pause();
-            }
-        });
         showControls();
     }
 
     /**
-     * A new player showing nothing until a video is loaded, JavaFX started on the first call. EDT.
+     * A new player showing nothing until a video is loaded, JavaFX started on the first call; of the players made
+     * with {@code one}, the one asked to play last plays. EDT.
      *
      * @throws UnsupportedOperationException when this process has no display, or JavaFX cannot start
      */
-    public static VideoPlayer create() {
+    public static VideoPlayer create(final OnePlaying one) {
         FxToolkit.start();
-        final VideoPlayer v = new VideoPlayer();
+        final VideoPlayer v = new VideoPlayer(one);
         Platform.runLater(v::build);
         return v;
     }
@@ -207,6 +205,7 @@ public final class VideoPlayer implements AutoCloseable {
             return;
         }
         closed = true;
+        one.left(this);
         ready.cancel(false);
         try {
             Platform.runLater(() -> {
@@ -219,17 +218,17 @@ public final class VideoPlayer implements AutoCloseable {
         }
     }
 
+    /** Pauses a playing video; does nothing to one that is not. EDT. */
+    void pause() {
+        onFx(() -> player.pause());
+    }
+
     /** The video's time as {@code m:ss}, or {@code h:mm:ss} from an hour on. */
     static String clock(final long millis) {
         final long s = Math.max(0L, millis) / 1000L;
         return s >= 3600L
                 ? String.format(Locale.ROOT, "%d:%02d:%02d", s / 3600L, s / 60L % 60L, s % 60L)
                 : String.format(Locale.ROOT, "%d:%02d", s / 60L, s % 60L);
-    }
-
-    /** Pauses a playing video; does nothing to one that is not. EDT. */
-    private void pause() {
-        onFx(() -> player.pause());
     }
 
     /** Runs {@code task} on the JavaFX thread while a player exists and this view is not closed. */
@@ -389,15 +388,24 @@ public final class VideoPlayer implements AutoCloseable {
         });
     }
 
-    /** Plays or pauses; JavaFX thread. */
+    /** Plays or pauses; a player that cannot play (not ready, halted) does neither. JavaFX thread. */
     private void toggleOnFx() {
         if (player == null) {
             return;
         }
-        if (player.getStatus() == MediaPlayer.Status.PLAYING) {
+        final MediaPlayer.Status status = player.getStatus();
+        if (status == MediaPlayer.Status.PLAYING) {
             player.pause();
-        } else {
+        } else if (status == MediaPlayer.Status.READY || status == MediaPlayer.Status.PAUSED
+                || status == MediaPlayer.Status.STOPPED) {
+            // a player not yet ready, or halted, does not play, and pauses no other
             player.play();
+            // the one asked last plays: the video that played before pauses
+            Edt.later(() -> {
+                if (!closed) {
+                    one.started(this);
+                }
+            });
         }
     }
 

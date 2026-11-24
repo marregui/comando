@@ -709,6 +709,26 @@ class McpServerTest {
         assertThat(sink.await(Intent.ShowView.class, WAIT).title()).isEqualTo("docs/README.md");
     }
 
+    /// `ui_open_file` on an MP4 shows a video view in the lower panel, at a line too; a Markdown file stays in the side
+    /// pane.
+    @Test
+    void aVideoOpensInTheLowerPanel(@TempDir final Path dir) throws Exception {
+        final Path video = Files.write(dir.resolve("clip.mp4"), new byte[]{0, 0, 0, 0x18});
+        assertThat(text(tool("ui_open_file", "{\"path\":\"" + video + "\"}"))).contains("(video)");
+        final Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
+        assertThat(shown.spec()).isEqualTo(new ViewSpec.Video(video.toString()));
+        assertThat(shown.placement()).isEqualTo(Placement.LOWER);
+
+        sink.clear();
+        tool("ui_open_file", "{\"path\":\"" + video + "\",\"line\":3}");
+        assertThat(sink.await(Intent.ShowView.class, WAIT).placement()).isEqualTo(Placement.LOWER);
+
+        sink.clear();
+        final Path notes = Files.writeString(dir.resolve("notes.md"), "# notes\n");
+        tool("ui_open_file", "{\"path\":\"" + notes + "\"}");
+        assertThat(sink.await(Intent.ShowView.class, WAIT).placement()).isEqualTo(Placement.SIDE);
+    }
+
     /// An HTML page at no line opens in a panel, rendered, as a page a session names does: no side view; at a line it
     /// is text in the side pane.
     @Test

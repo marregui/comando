@@ -1,8 +1,10 @@
 # 196. MP4 videos play in the side pane through JavaFX's media player
 
+Since task 251 they play in the lower panel; the file keeps its name, as other records' links name it.
+
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-24 | accepted; built in task 250; uses the `javafx-media` module that [record 190](0190-html-pages-render-in-a-panel-through-javafx-webview.md) already ships | Miguel and Claude |
+| 2026-11-24 | accepted; built in task 250; moved to the lower panel, one video playing at a time and playing on while hidden, the same day (task 251); uses the `javafx-media` module that [record 190](0190-html-pages-render-in-a-panel-through-javafx-webview.md) already ships | Miguel and Claude |
 
 ## 1. Context
 
@@ -20,10 +22,11 @@ Linux.
 | Question | Rule |
 |---|---|
 | which files | a name ending in `.mp4` or `.m4v`, in any case (`FileView.isVideo`); the container is not read to decide |
-| where it plays | the side pane, as a `video` view (`ViewSpec.Video`, the path only), wherever a file opens: the Files tab, a link, `ui_open_file`; a line asked for is ignored |
+| where it plays | the lower panel, as a `video` view (`ViewSpec.Video`, the path only; `FileView.placement`), wherever a file opens: the Files tab, a link, `ui_open_file`; a line asked for is ignored. Lower tabs stay whichever panel has the keyboard (Miguel, 2026-11-24: "no matter which session panel I open it is still accessible there"). A file opened again reloads its tab; another file opens a tab of its own |
 | size | no limit: the player reads the file, the view does not |
 | the player | `ui.kit.media.VideoPlayer`: a `MediaView` in a `JFXPanel`, play/pause, a seek bar and the time under the picture; a click on the picture or the space bar plays or pauses |
-| a hidden view | pauses: another tab or a closed pane plays no sound, also when hidden before the player said it plays |
+| a hidden view | plays on: another tab or another panel does not stop it (Miguel, 2026-11-24: "the video continues on even if I change tabs or I select a different panel"); closing its tab stops it and frees its player. A document panel in front hides the lower area while it reads; a video opened then shows it again, and one already playing plays on, out of sight, until the area shows |
+| several videos | one plays at a time: a video asked to play pauses the one that played (`ui.kit.media.OnePlaying`, one per window, EDT only) |
 | its end | paused back at its start, where the seek bar still moves it (a stopped player ignores a seek) |
 | shown again | the file loads again from its start: a session may have made it anew |
 | a file it cannot play | the view says why under the controls: the player's error, or, when the platform reports nothing (macOS on a file it cannot parse), that it did not open within 10 s |
@@ -37,7 +40,7 @@ WebView's and the view would be a page, with the page tools, for a file that is 
 
 `VideoPlayerUiTest`, on a MacBook Pro, 2026-11-24: the 2.0 s fixture (H.264 baseline, yuv420p, AAC, 17.9 KB) gets
 ready with its length, plays, pauses, at its end pauses back at its start and seeks to its middle, in 7.3 s; a view
-hidden right after play stays paused; a text file named `.mp4` fails at the 10 s deadline in 10.2 s; the first load of
+hidden while it plays plays on (task 251); of two players, the one started last plays and the other pauses (task 251); a text file named `.mp4` fails at the 10 s deadline in 10.2 s; the first load of
 a process took 6 s, which sets the deadline. A 5 min 32 s High-profile video made by a session played in a one-off
 run of the same test. On Linux the
 test requires a refused video to say why and is skipped there, as the CI machine may lack an H.264 decoder.
