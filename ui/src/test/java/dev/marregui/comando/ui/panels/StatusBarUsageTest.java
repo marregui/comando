@@ -101,6 +101,24 @@ class StatusBarUsageTest {
                 .isEqualTo("Codex Session 4% (resets 19:06 UTC) · Week 3% (resets Thu 20:00 UTC)");
     }
 
+    /// A Pro read names its plan on the bar and in the tooltip, which says the plan has no session window and counts
+    /// the earned full resets; a read that names no plan (`codexsResetsAreReadInTheLocalZone`) keeps the bare text.
+    @Test
+    void aProReadNamesThePlanAndItsResets() throws Exception {
+        final PlanUsage pro = new PlanUsage(PlanUsage.CODEX,
+                List.of(new PlanUsage.Window("Week", 3, "Oct 15 at 13:00")), OCT_14_2026, "", "Pro", 4);
+        assertThat(StatusBar.usageText(pro, ZoneId.of("America/Los_Angeles")))
+                .isEqualTo("Codex Pro · Week 3% (resets Thu 20:00 UTC)");
+        SwingUtilities.invokeAndWait(() -> {
+            final StatusBar bar = new StatusBar(intent -> {
+            });
+            bar.planUsage(pro);
+            assertThat(bar.codexUsageLabel().getToolTipText())
+                    .contains("Plan: Pro", "The Pro plan has no session window", "Full resets available: 4")
+                    .doesNotContain("reports no session window");
+        });
+    }
+
     /// The reset text has no year: a December read of "Jan 2" is next year's Jan 2, a January read of "Dec 30" last
     /// year's, each different from the same date in the read's own year.
     @Test

@@ -15,7 +15,7 @@ import static org.awaitility.Awaitility.await;
 
 /// The usage reader turns account rate-limit replies into `PlanUsage` windows.
 ///
-/// - reads the session and weekly shares
+/// - reads the session and weekly shares, the plan's name and its earned full resets
 /// - rejects unrelated server messages
 /// - reports process failures and timeouts
 class CodexUsageReaderTest {
@@ -78,6 +78,43 @@ class CodexUsageReaderTest {
                 .isEqualTo("not signed in");
         assertThat(CodexUsageReader.answer("{\"id\":2,\"result\":{\"rateLimits\":{}}}", NOW, MADRID).problem())
                 .isEqualTo("no rate limits in Codex's answer");
+    }
+
+    /// A Pro answer, as codex-cli 0.172.0 gave it on 2026-11-26: the week alone as the primary window, no secondary,
+    /// the plan type "prolite" and four earned full resets; it reads as one window, the plan "Pro" and four resets.
+    @Test
+    void aProAnswerIsTheWeekAloneWithThePlanAndItsResets() {
+        final String line = """
+                {"id":2,"result":{"ordinaryUsageAllowed":true,"rateLimits":{"limitId":"codex","limitName":null,\
+                "primary":{"usedPercent":0,"windowDurationMins":10080,"resetsAt":%d},"secondary":null,\
+                "credits":{"hasCredits":false,"unlimited":false,"balance":"0"},\
+                "planType":"prolite","rateLimitReachedType":null},\
+                "rateLimitResetCredits":{"availableCount":4,"credits":null}}}""".formatted(WEEK_ON);
+        final PlanUsage u = CodexUsageReader.answer(line, NOW, MADRID);
+        assertThat(u.windows()).containsExactly(new PlanUsage.Window("Week", 0, "Nov 2 at 8:00"));
+        assertThat(u.plan()).isEqualTo("Pro");
+        assertThat(u.resets()).isEqualTo(4);
+    }
+
+    /// A Plus answer names its plan "Plus" and, without `rateLimitResetCredits`, leaves the resets unknown.
+    @Test
+    void aPlusAnswerNamesThePlanAndLeavesTheResetsUnknown() {
+        final PlanUsage u = CodexUsageReader.answer(answer(4, FIVE_HOURS_ON, 3), NOW, MADRID);
+        assertThat(u.plan()).isEqualTo("Plus");
+        assertThat(u.resets()).isEqualTo(PlanUsage.UNKNOWN);
+    }
+
+    /// The three Pro types take the names Codex shows them by; any other type is capitalised with its underscores as
+    /// spaces; none, and Codex's catch-all "unknown", name no plan.
+    @Test
+    void planTypesTakeTheNamesCodexShows() {
+        assertThat(CodexUsageReader.planName("prolite")).isEqualTo("Pro");
+        assertThat(CodexUsageReader.planName("pro")).isEqualTo("Pro (More)");
+        assertThat(CodexUsageReader.planName("promax")).isEqualTo("Pro (Max)");
+        assertThat(CodexUsageReader.planName("team")).isEqualTo("Team");
+        assertThat(CodexUsageReader.planName("edu_plus")).isEqualTo("Edu plus");
+        assertThat(CodexUsageReader.planName("unknown")).isEmpty();
+        assertThat(CodexUsageReader.planName("")).isEmpty();
     }
 
     /// A read finds the rate-limit answer when the `initialize` answer and a notification share one pipe chunk; the

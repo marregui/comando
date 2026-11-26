@@ -252,11 +252,12 @@ public final class StatusBar {
 
     /**
      * Shows a plan's usage limits, Claude's or Codex's, each on its own label: each window's share used, and when the
-     * session window resets; the tooltip has every reset time, and says so when the plan's tool reports no session
-     * window. Every time it shows is in UTC, the bar's clock; a reset it cannot read keeps the tool's words in the
-     * tooltip. A failed read keeps the last good one, muted, with the reason in the tooltip; with none, shows nothing.
-     * Under the console style the plan shows a gauge per window instead, each coloured by its own share as the label
-     * is by the worst, with the label's tooltip (record 151).
+     * session window resets; the tooltip names the plan when its tool does, has every reset time, says so when the plan
+     * has no session window, and counts the earned full resets when the tool reports them. Every time it shows is in
+     * UTC, the bar's clock; a reset it cannot read keeps the tool's words in the tooltip. A failed read keeps the last
+     * good one, muted, with the reason in the tooltip; with none, shows nothing. Under the console style the plan shows
+     * a gauge per window instead, each coloured by its own share as the label is by the worst, with the label's tooltip
+     * (record 151).
      */
     public void planUsage(final PlanUsage read) {
         final Usage u = read.provider().equals(PlanUsage.CODEX) ? codexUsage : claudeUsage;
@@ -272,13 +273,20 @@ public final class StatusBar {
         final int worst = u.last.windows().stream().mapToInt(PlanUsage.Window::percent).max().orElse(0);
         u.label.setForeground(usageColour(worst, stale));
         final StringBuilder tip = new StringBuilder();
+        if (!u.last.plan().isEmpty()) {
+            tip.append(MarkdownHtml.escape("Plan: " + u.last.plan())).append("<br>");
+        }
         for (final PlanUsage.Window w : u.last.windows()) {
             tip.append(MarkdownHtml.escape(w.name() + ": " + w.percent() + "% used" + (w.resets().isEmpty() ? ""
                     : ", resets " + resetAt(w.resets(), u.last.readAtMillis(), ZoneId.systemDefault())
                     .map(at -> TIP_RESET_UTC.format(at) + " UTC").orElse(w.resets())))).append("<br>");
         }
         if (u.last.windows().stream().noneMatch(w -> w.name().equals(SESSION_WINDOW))) {
-            tip.append(MarkdownHtml.escape(u.source + " reports no session window")).append("<br>");
+            tip.append(MarkdownHtml.escape(u.last.plan().isEmpty() ? u.source + " reports no session window"
+                    : "The " + u.last.plan() + " plan has no session window")).append("<br>");
+        }
+        if (u.last.resets() != PlanUsage.UNKNOWN) {
+            tip.append(MarkdownHtml.escape("Full resets available: " + u.last.resets())).append("<br>");
         }
         tip.append(MarkdownHtml.escape("Read at " + RESET_UTC.format(Instant.ofEpochMilli(u.last.readAtMillis()))
                 + " UTC from " + u.source + ", every 20 minutes"));
@@ -369,10 +377,11 @@ public final class StatusBar {
     }
 
     /**
-     * "Claude Session 5% (resets 17:19 UTC) · Week 43% (resets Thu 11:59 UTC) · Fable 17%": the plan's name, then
-     * each window; the session's reset is the one that comes within hours, the week's comes with its weekday, both in
-     * UTC, the bar's clock. Codex's reads the same. A reset without a date and time it can read is left off the bar, so
-     * no time on it is in another zone.
+     * "Claude Session 5% (resets 17:19 UTC) · Week 43% (resets Thu 11:59 UTC) · Fable 17%": the provider, the plan's
+     * name when its tool gives one ("Codex Pro · Week 3% (resets Thu 13:00 UTC)"), then each window; the session's
+     * reset is the one that comes within hours, the week's comes with its weekday, both in UTC, the bar's clock.
+     * Codex's reads the same. A reset without a date and time it can read is left off the bar, so no time on it is in
+     * another zone.
      */
     static String usageText(final PlanUsage u) {
         return usageText(u, ZoneId.systemDefault());
@@ -380,7 +389,11 @@ public final class StatusBar {
 
     /** {@link #usageText(PlanUsage)}, reading a reset that names no zone in {@code local}. */
     static String usageText(final PlanUsage u, final ZoneId local) {
-        final StringBuilder sb = new StringBuilder(u.provider() + " ");
+        final StringBuilder sb = new StringBuilder(u.provider());
+        if (!u.plan().isEmpty()) {
+            sb.append(' ').append(u.plan()).append(" ·");
+        }
+        sb.append(' ');
         final int start = sb.length();
         for (final PlanUsage.Window w : u.windows()) {
             if (sb.length() > start) {

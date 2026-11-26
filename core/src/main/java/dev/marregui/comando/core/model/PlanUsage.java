@@ -5,18 +5,29 @@ import java.util.Objects;
 
 /**
  * A plan's usage limits as its command-line tool reports them. Claude Code's: the current session's window, the week
- * across all models, and the week of a single model (Fable); Codex's: the 5-hour session window and the week. A read
- * that failed has no windows and says why.
+ * across all models, and the week of a single model (Fable); Codex's: the 5-hour session window and the week on Plus,
+ * the week alone on Pro, with the plan's name and its earned full resets. A read that failed has no windows and says
+ * why.
  *
  * @param provider     whose plan: {@link #CLAUDE} or {@link #CODEX}
  * @param windows      in the order the tool lists them
  * @param readAtMillis when the read finished
  * @param problem      why there are no windows; empty when the read succeeded
+ * @param plan         the plan's name as its tool shows it ("Pro"); empty when the tool does not say
+ * @param resets       the earned full resets the account can still use; {@link #UNKNOWN} when the tool does not say
  */
-public record PlanUsage(String provider, List<Window> windows, long readAtMillis, String problem) {
+public record PlanUsage(
+        String provider,
+        List<Window> windows,
+        long readAtMillis,
+        String problem,
+        String plan,
+        int resets) {
 
     public static final String CLAUDE = "Claude";
     public static final String CODEX = "Codex";
+    /** {@link #resets} when the tool does not say how many the account has. */
+    public static final int UNKNOWN = -1;
 
     /**
      * One limit window.
@@ -37,6 +48,12 @@ public record PlanUsage(String provider, List<Window> windows, long readAtMillis
         Objects.requireNonNull(provider, "provider");
         windows = List.copyOf(windows);
         problem = problem == null ? "" : problem;
+        plan = plan == null ? "" : plan;
+    }
+
+    /** A read that names no plan and no resets, as Claude Code's does. */
+    public PlanUsage(final String provider, final List<Window> windows, final long readAtMillis, final String problem) {
+        this(provider, windows, readAtMillis, problem, "", UNKNOWN);
     }
 
     /** Claude Code's plan. */

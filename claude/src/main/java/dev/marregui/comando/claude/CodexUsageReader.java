@@ -14,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import dev.marregui.comando.core.json.Json;
@@ -24,9 +25,10 @@ import dev.marregui.comando.core.view.Clip;
 
 /**
  * Reads the Codex plan's usage limits from the Codex CLI itself: {@code codex app-server} speaks JSON-RPC over stdio,
- * and {@code account/rateLimits/read} answers with the 5-hour session window and the week, each with its share used
- * and its reset time. The read sends no prompt and spends nothing; it takes about a second (measured on codex-cli
- * 0.163.0). Without Codex installed or signed in, the read says why and the status bar shows nothing.
+ * and {@code account/rateLimits/read} answers with the plan's windows (the 5-hour session window and the week on
+ * Plus, the week alone on Pro), each with its share used and its reset time, the plan's type and the earned full
+ * resets the account still has. The read sends no prompt and spends nothing; it takes about a second (measured on
+ * codex-cli 0.163.0). Without Codex installed or signed in, the read says why and the status bar shows nothing.
  */
 final class CodexUsageReader {
 
@@ -36,6 +38,12 @@ final class CodexUsageReader {
     private static final int MONTH_MINUTES = 43_200;
     /** Worded as Claude Code words its resets, so the status bar reads both alike: "Oct 27 at 12:06". */
     private static final DateTimeFormatter RESETS = DateTimeFormatter.ofPattern("MMM d 'at' H:mm", Locale.ENGLISH);
+    /**
+     * The names Codex shows its Pro plans by ({@code KnownPlan::display_name} in {@code codex-rs/protocol}): the
+     * answer carries only the type, and "prolite" is the plan its subscriber knows as Pro.
+     */
+    private static final Map<String, String> PLAN_NAMES =
+            Map.of("prolite", "Pro", "pro", "Pro (More)", "promax", "Pro (Max)");
     private static final String REQUESTS = """
             {"id":1,"method":"initialize","params":{"clientInfo":{"name":"comando","version":"1"}}}
             {"method":"initialized"}
@@ -201,9 +209,27 @@ final class CodexUsageReader {
             windows.add(new PlanUsage.Window(name(w.path("windowDurationMins").asInt(0)), percent,
                     resetsAt > 0 ? RESETS.format(Instant.ofEpochSecond(resetsAt).atZone(zone)) : ""));
         }
-        return windows.isEmpty()
-                ? PlanUsage.failed(PlanUsage.CODEX, "no rate limits in Codex's answer", readAtMillis)
-                : new PlanUsage(PlanUsage.CODEX, windows, readAtMillis, "");
+        if (windows.isEmpty()) {
+            return PlanUsage.failed(PlanUsage.CODEX, "no rate limits in Codex's answer", readAtMillis);
+        }
+        final JsonNode available = msg.path("result").path("rateLimitResetCredits").path("availableCount");
+        return new PlanUsage(PlanUsage.CODEX, windows, readAtMillis, "", planName(limits.path("planType").asString("")),
+                available.isNumber() ? available.asInt(PlanUsage.UNKNOWN) : PlanUsage.UNKNOWN);
+    }
+
+    /**
+     * The plan's name as Codex shows it: "Pro" for "prolite"; another type capitalised, its underscores as spaces
+     * ("Plus", "Edu plus"); empty for none and for Codex's catch-all "unknown", which names no plan.
+     */
+    static String planName(final String type) {
+        final String known = PLAN_NAMES.get(type);
+        if (known != null) {
+            return known;
+        }
+        if (type.isEmpty() || type.equals("unknown")) {
+            return "";
+        }
+        return Character.toUpperCase(type.charAt(0)) + type.substring(1).replace('_', ' ');
     }
 
     private static boolean isAccount(final JsonNode limits) {

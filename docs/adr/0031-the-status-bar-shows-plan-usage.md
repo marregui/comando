@@ -46,3 +46,11 @@ has passed shows 0 %. The read is bounded at 10 s. Codex is found as `COMANDO_CO
 `/opt/homebrew/bin/codex`, `/usr/local/bin/codex`, else `codex` on the PATH; without Codex installed or signed in,
 the label never shows and the log says why once. The session files Codex writes under `~/.codex/sessions` were not
 used: they carry the same windows, but only as of the last local Codex run.
+
+2026-11-26, decided by Miguel (task 258): the Codex label follows the plan. On Pro (`planType` `prolite`, codex-cli
+0.172.0) the answer has one window, the week, and no 5-hour window. The label names the plan when the answer gives
+one, `Codex Pro · Week N% (resets <weekday> <time> UTC)`, with Codex's own names for the Pro types ("Pro" for
+`prolite`, "Pro (More)" for `pro`, "Pro (Max)" for `promax`; another type capitalised with its underscores as spaces; none for `unknown`). The tooltip names the plan,
+says "The Pro plan has no session window" in place of "codex app-server reports no session window", and counts the
+earned full resets (`rateLimitResetCredits.availableCount`) when the answer has them. Claude's label is unchanged: Claude
+Code's `/usage` names no plan.
