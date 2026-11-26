@@ -1,3 +1,15 @@
+// The classifier of this build's JavaFX jars, from the system it runs on: ui renders pages with them, and app's tests
+// open pages in a child JVM of their own (StoredPageUiTest)
+val javafxPlatform by extra(run {
+    val os = providers.systemProperty("os.name").get().lowercase()
+    val arm = providers.systemProperty("os.arch").get() in listOf("aarch64", "arm64")
+    when {
+        os.contains("mac") -> if (arm) "mac-aarch64" else "mac"
+        os.contains("windows") -> "win"
+        else -> if (arm) "linux-aarch64" else "linux"
+    }
+})
+
 // Conventions shared by every module: JDK 25 toolchain, strict compilation, JUnit Platform,
 // and tests that never touch the user's data root.
 subprojects {

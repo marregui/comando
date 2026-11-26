@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-22 | accepted; built in task 229; the pages that run their scripts widened on 2026-11-23 (task 244) to every page comando's own work makes; takes up the WebView fallback named in [record 2](0002-swing-and-flatlaf-as-the-ui-toolkit.md) §2; a library [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) admits | Miguel and Claude |
+| 2026-11-22 | accepted; built in task 229; the pages that run their scripts widened on 2026-11-23 (task 244) to every page comando's own work makes; takes up the WebView fallback named in [record 2](0002-swing-and-flatlaf-as-the-ui-toolkit.md) §2; a library [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) admits; OpenJFX pinned to 25.0.4 on 2026-11-27, as 25.0.5 and 25.0.5.1 freeze comando on a page whose `localStorage` an earlier run left (§3) | Miguel and Claude |
 
 ## 1. Context
 
@@ -38,9 +38,17 @@ only". The candidates compared on 2026-11-22:
 
 ## 3. Consequences
 
-- New dependency: the OpenJFX 25.0.5.1 jars for the build's platform. Measured in task 229 on an M2 Max
+- New dependency: the OpenJFX jars for the build's platform, 25.0.5.1 when built, 25.0.4 since 2026-11-27 (below).
+  Measured in task 229 on an M2 Max
   (`:app:appImage`, `mac-aarch64`): the six jars are 48.3 MiB, `javafx-web` 40 MB of it; the application image is
   188 MB. The runtime gains `java.net.http`, `jdk.jsobject`, `jdk.unsupported.desktop` and `jdk.xml.dom`.
+- OpenJFX is pinned to 25.0.4 (2026-11-27). On 25.0.5 and 25.0.5.1 a page that reads `localStorage` which an
+  earlier run left never loads: WebKit's main thread, which on macOS is both JavaFX's and AppKit's, waits for WebKit's
+  storage thread, which waits in a one-time initialisation; the EDT then waits for the main thread when it adds a
+  native drop target, and comando freezes at the page's panel, at every start that restores it. The learn-map pages
+  keep their side panel's width there. Measured on an M2 Max with a WebView in a `JFXPanel` over one data folder, two
+  runs each: 21.0.9, 24.0.2, 25.0.1, 25.0.4 and 26.0.2 load both times, 25.0.5 and 25.0.5.1 only the first.
+  `StoredPageUiTest` runs the two runs in child JVMs and fails on 25.0.5.1; Dependabot skips those two versions.
 - The first page opened starts JavaFX on the EDT (`Platform.startup`), once per process; its length is not measured
   yet. Every JVM that opens a page logs JavaFX's warning that its classes came from the unnamed module: comando runs
   on the class path.

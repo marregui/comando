@@ -29,6 +29,14 @@ dependencies {
     testImplementation(libs.archunit)
     // the uiTest lock is a launcher session listener in the test sources
     testImplementation(libs.junit.launcher)
+    // StoredPageUiTest's child JVM opens a page in JavaFX itself, as ui's page view does; ui's jars are on the class path
+    // at run time
+    val javafxPlatform = rootProject.extra["javafxPlatform"] as String
+    for (javafx in listOf(libs.javafx.base, libs.javafx.graphics, libs.javafx.web, libs.javafx.swing)) {
+        testCompileOnly(variantOf(javafx) { classifier(javafxPlatform) }) {
+            isTransitive = false
+        }
+    }
 }
 
 // the PostgreSQL driver brings checker-qual for its annotations only: nothing reads them at run time (record 157)
@@ -148,6 +156,7 @@ val uiTestClasses = listOf(
     "SessionBarButtonsUiTest",
     "FrontearThemeUiTest",
     "WebPageViewUiTest",
+    "StoredPageUiTest",
     "VideoPlayerUiTest",
 )
 

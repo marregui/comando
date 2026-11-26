@@ -1,14 +1,5 @@
-// The classifier of this build's JavaFX jars, from the system it runs on.
-val javafxPlatform: String
-    get() {
-        val os = providers.systemProperty("os.name").get().lowercase()
-        val arm = providers.systemProperty("os.arch").get() in listOf("aarch64", "arm64")
-        return when {
-            os.contains("mac") -> if (arm) "mac-aarch64" else "mac"
-            os.contains("windows") -> "win"
-            else -> if (arm) "linux-aarch64" else "linux"
-        }
-    }
+// The classifier of this build's JavaFX jars, from the root build.
+val javafxPlatform = rootProject.extra["javafxPlatform"] as String
 
 // Swing shell, panels, dialogs, the widget kit and the widgets.
 dependencies {

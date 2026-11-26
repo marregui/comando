@@ -19,3 +19,7 @@ updates:
     groups:
       gradle:
         patterns: ["*"]
+    # these freeze comando on a page whose localStorage an earlier run left (record 190, StoredPageUiTest)
+    ignore:
+      - dependency-name: "org.openjfx:*"
+        versions: ["25.0.5", "25.0.5.1"]

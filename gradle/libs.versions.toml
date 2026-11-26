@@ -23,7 +23,8 @@ pty4j = "0.14.0"
 slf4j = "2.0.20"
 testcontainers = "2.0.5"
 # the WebView that renders HTML pages in panels (record 2); one jar per platform, picked by classifier in ui
-javafx = "25.0.5.1"
+# 25.0.5 and 25.0.5.1 deadlock a page that reads the localStorage an earlier run left (StoredPageUiTest)
+javafx = "25.0.4"
 
 [libraries]
 flatlaf = { module = "com.formdev:flatlaf", version.ref = "flatlaf" }
