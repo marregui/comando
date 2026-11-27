@@ -130,6 +130,8 @@ class CodexAdapterTest {
         assertThat(servers.path("comando").path("enabled").isMissingNode()).isTrue();
         assertThat(servers.path("comando").path("http_headers").path("Authorization").asString())
                 .isEqualTo("Bearer token-s");
+        assertThat(servers.path("comando").path("default_tools_approval_mode").asString())
+                .as("approval is never: comando's tools must not need one").isEqualTo("approve");
         assertThat(servers.size()).isEqualTo(3);
         assertThat(received("initialize").getFirst().path("clientInfo").path("name").asString()).isEqualTo("comando");
         assertThat(sink.of(Intent.SessionStarted.class)).hasSize(1);

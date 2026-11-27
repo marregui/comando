@@ -392,6 +392,8 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
             final ObjectNode comando = servers.putObject("comando");
             comando.put("url", ticket.url());
             comando.putObject("http_headers").put("Authorization", "Bearer " + ticket.token());
+            // approval is never, so a tool that needs one fails; comando's write tools ask the user through its cards
+            comando.put("default_tools_approval_mode", "approve");
         }
         return params;
     }

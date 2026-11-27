@@ -20,7 +20,9 @@ Claude verifies what it proposes.
 3. **One `codex app-server` process per session**, JSON-RPC over stdio. `thread/start` carries the model (`sol` →
    `gpt-6.2-sol`, effort `medium` by default), approval `never`, developer instructions, and a `config` map with a
    permission profile that reads the whole disk and writes only `BRAIN/SCRATCHPAD`, no network, plugins and apps off,
-   the user's MCP servers off and comando's MCP server on with the session's bearer ticket. Probed 2026-11-27 on 0.172.0:
+   the user's MCP servers off and comando's MCP server on with the session's bearer ticket and its tools approved
+   (`default_tools_approval_mode = "approve"`: under approval `never` a tool that needs approval fails; comando's
+   write tools ask the user through its own cards). Probed 2026-11-27 on 0.172.0:
    the thread reports `workspaceWrite` with the scratchpad as its only writable root and `networkAccess: false`; a
    write to `/tmp` or `$HOME` and a `curl` fail.
 4. **Prompts map onto turns.** A prompt is `turn/start`; Interrupt is `turn/interrupt`; `/model X` and `/effort X` change
