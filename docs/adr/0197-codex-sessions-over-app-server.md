@@ -25,6 +25,11 @@ Claude verifies what it proposes.
    write tools ask the user through its own cards). Probed 2026-11-27 on 0.172.0:
    the thread reports `workspaceWrite` with the scratchpad as its only writable root and `networkAccess: false`; a
    write to `/tmp` or `$HOME` and a `curl` fail.
+   Before the thread call, `skills/extraRoots/set` gives Codex the kit's `skills/` folder, when the kit has one, to
+   list beside its own; a refusal is a note in the session, not a failed start.
+   The `config` map also carries `bypass_hook_trust` and a `PreToolUse` hook on the shell tools
+   (`Bash|shell|exec_command`) that runs the kit's `kill-guard` and `instance-guard` through `bin/kit-python`, each
+   whose script exists; probed the same day, `kill-guard` denied a `pkill -f` unchanged.
 4. **Prompts map onto turns.** A prompt is `turn/start`; Interrupt is `turn/interrupt`; `/model X` and `/effort X` change
    the next turn's; a Claude command Codex lacks (`/compact`, `/clear`, the checkpoint) is answered with a note.
 5. **Items map onto blocks.** `agentMessage` → assistant text, `reasoning` → thinking, `commandExecution`, `fileChange`

@@ -244,7 +244,7 @@ public final class App implements AutoCloseable {
             final MetricsLog codexMetrics = metrics;
             final Path brain = root.brain().orElse(root.dir().resolve("BRAIN"));
             codex = own(new CodexAdapter(loop, transcripts, mcp,
-                    new CodexSettings(CodexUsageReader.findExecutable(), brain.resolve("SCRATCHPAD"),
+                    new CodexSettings(CodexUsageReader.findExecutable(), brain.resolve("SCRATCHPAD"), root.dir(),
                             CodexInstructions.text(root.dir(), brain, UiInstructions.text(InstanceName.current()))),
                     name -> {
                         final CodexMapper mapper = new CodexMapper(name, transcripts.of(name), loop);

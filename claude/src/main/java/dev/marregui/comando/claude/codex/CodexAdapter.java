@@ -19,6 +19,7 @@ import java.util.stream.Stream;
 
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.ArrayNode;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.ExecutorStop;
@@ -47,6 +48,12 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
     private static final String CLIENT_VERSION = "1";
     private static final String PERMISSION_PROFILE = "scratch-only";
     private static final String MCP_SERVERS_TABLE = "[mcp_servers.";
+    /** The kit's guards a session's commands pass, each at {@code <kit>/hooks/<name>/<name>.py}. */
+    private static final List<String> GUARD_HOOKS = List.of("kill-guard", "instance-guard");
+    /** The tool names Codex gives its shell commands, as the probe of 2026-11-27 on 0.172.0 matched them. */
+    private static final String SHELL_MATCHER = "Bash|shell|exec_command";
+    /** Codex's limit on one guard run; the value the probe of 2026-11-27 ran kill-guard with. */
+    private static final int HOOK_TIMEOUT_SECONDS = 5; // the kit's settings.json gives its guards 5 s
 
     private final IntentSink sink;
     private final TranscriptRegistry transcripts;
@@ -310,6 +317,11 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         return files;
     }
 
+    /** {@code text} as one POSIX shell word: single-quoted, each {@code '} written {@code '\\''}. */
+    private static String shellQuoted(final String text) {
+        return "'" + text.replace("'", "'\\''") + "'";
+    }
+
     /** The effort a turn runs at: empty is Codex's default, and Claude's {@code max} is Codex's {@code xhigh}. */
     private static String effortOf(final String effort) {
         final String e = effort == null ? "" : effort.strip();
@@ -384,6 +396,17 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         filesystem.put(settings.scratchpadDir().toString(), "write");
         profile.putObject("network").put("enabled", false);
         config.putObject("features").put("plugins", false).put("apps", false);
+        final List<String> guards = guardCommands();
+        if (!guards.isEmpty()) {
+            // hooks given in the thread's config are untrusted to Codex until reviewed in its own app
+            config.put("bypass_hook_trust", true);
+            final ObjectNode shell = config.putObject("hooks").putArray("PreToolUse").addObject();
+            shell.put("matcher", SHELL_MATCHER);
+            final ArrayNode hooks = shell.putArray("hooks");
+            for (final String command : guards) {
+                hooks.addObject().put("type", "command").put("command", command).put("timeout", HOOK_TIMEOUT_SECONDS);
+            }
+        }
         final ObjectNode servers = config.putObject("mcp_servers");
         for (final String name : mcpServers(codexConfig, Path.of(spec.workDir()))) {
             servers.putObject(name).put("enabled", false);
@@ -396,6 +419,35 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
             comando.put("default_tools_approval_mode", "approve");
         }
         return params;
+    }
+
+    /** The command of each guard hook whose script the kit has, run by the kit's Python as its own wiring does. */
+    private List<String> guardCommands() {
+        final Path kit = settings.kitRoot();
+        final List<String> commands = new ArrayList<>();
+        if (kit == null) {
+            return commands;
+        }
+        final Path launcher = kit.resolve("bin").resolve("kit-python");
+        // without the kit's launcher the guard still runs, on the PATH's python3, rather than failing open in Codex
+        final String python = Files.isExecutable(launcher) ? shellQuoted(launcher.toString()) : "python3";
+        for (final String name : GUARD_HOOKS) {
+            final Path script = kit.resolve("hooks").resolve(name).resolve(name + ".py");
+            if (Files.isRegularFile(script)) {
+                commands.add(python + " " + shellQuoted(script.toString()));
+            }
+        }
+        return commands;
+    }
+
+    /** The kit's skills folder, which Codex lists beside its own; null when the kit has none. */
+    private Path skillsRoot() {
+        final Path kit = settings.kitRoot();
+        if (kit == null) {
+            return null;
+        }
+        final Path skills = kit.resolve("skills");
+        return Files.isDirectory(skills) ? skills : null;
     }
 
     // ---- strand work
@@ -468,6 +520,26 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         }
         final String cli = cliVersion(result);
         run.rpc.notify("initialized", null);
+        final Path skills = skillsRoot();
+        if (skills == null) {
+            requestThread(s, run, spec, cli);
+            return;
+        }
+        final ObjectNode roots = Json.object();
+        roots.putArray("extraRoots").add(skills.toString());
+        run.rpc.request("skills/extraRoots/set", roots).whenComplete((_, failure) -> s.run(() -> {
+            if (s.current != run) {
+                return;
+            }
+            if (failure != null) {
+                note(s, "Codex did not take the kit's skills (" + skills + "): " + messageOf(failure));
+            }
+            requestThread(s, run, spec, cli);
+        }));
+    }
+
+    /** Starts, resumes or forks the session's thread, as its start mode says. */
+    private void requestThread(final Session s, final Run run, final SessionSpec spec, final String cli) {
         final ObjectNode params = threadParams(spec, s.model, run.ticket);
         final String method;
         if (spec.startMode() == StartMode.NEW) {

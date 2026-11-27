@@ -1,11 +1,13 @@
 #!/bin/sh
 # Stands in for `codex app-server`: newline JSON-RPC without the jsonrpc field. Appends every line it reads to
-# $FAKE_CODEX_LOG, answers initialize, thread/start, thread/resume, thread/fork and turn/start, replays two item lines of the real
-# transcript at $FAKE_CODEX_REPLAY (codex/turn.jsonl) in each turn, then completes it. $FAKE_CODEX_MODE changes that:
+# $FAKE_CODEX_LOG, answers initialize, skills/extraRoots/set, thread/start, thread/resume, thread/fork and turn/start,
+# replays two item lines of the real transcript at $FAKE_CODEX_REPLAY (codex/turn.jsonl) in each turn, then completes
+# it. $FAKE_CODEX_MODE changes that:
 #   request  asks the client for an approval before it completes the turn, which it does on the client's answer
 #   hold     completes the turn only on turn/interrupt
 #   error    answers thread/start and thread/resume with an error
 #   crash    writes to stderr and exits 3 on turn/start
+#   noskills answers skills/extraRoots/set with an error
 log=${FAKE_CODEX_LOG:-/dev/null}
 mode=${FAKE_CODEX_MODE:-}
 thread=thr-1
@@ -21,6 +23,12 @@ while IFS= read -r line; do
   case "$line" in
     *'"method":"initialize"'*)
       printf '{"id":%s,"result":{"userAgent":"comando/0.172.0 (fake; 0)","platformOs":"macos"}}\n' "$id" ;;
+    *'"method":"skills/extraRoots/set"'*)
+      if [ "$mode" = noskills ]; then
+        printf '{"id":%s,"error":{"code":-32601,"message":"unknown method"}}\n' "$id"
+      else
+        printf '{"id":%s,"result":{}}\n' "$id"
+      fi ;;
     *'"method":"thread/start"'*|*'"method":"thread/resume"'*|*'"method":"thread/fork"'*)
       if [ "$mode" = error ]; then
         printf '{"id":%s,"error":{"code":-32600,"message":"no such thread"}}\n' "$id"

@@ -63,12 +63,20 @@ class CodexAdapterTest {
     private Path work;
     private Path scratch;
     private Path log;
+    private Path kit;
 
     @BeforeEach
     void setUp() throws IOException {
         work = Files.createDirectories(tmp.resolve("work"));
         scratch = Files.createDirectories(tmp.resolve("SCRATCHPAD"));
         log = tmp.resolve("received.jsonl");
+        kit = Files.createDirectories(tmp.resolve("kit"));
+        Files.createDirectories(kit.resolve("skills"));
+        guard(kit, "kill-guard");
+        guard(kit, "instance-guard");
+        final Path launcher = Files.createDirectories(kit.resolve("bin")).resolve("kit-python");
+        Files.writeString(launcher, "#!/bin/sh\nexec python3 \"$@\"\n");
+        assertThat(launcher.toFile().setExecutable(true)).isTrue();
     }
 
     @AfterEach
@@ -135,6 +143,79 @@ class CodexAdapterTest {
         assertThat(servers.size()).isEqualTo(3);
         assertThat(received("initialize").getFirst().path("clientInfo").path("name").asString()).isEqualTo("comando");
         assertThat(sink.of(Intent.SessionStarted.class)).hasSize(1);
+    }
+
+    /// After `initialized` and before the thread, Codex is given the kit's `skills/` to list; the thread's config runs
+    /// the kit's kill-guard and instance-guard, through the kit's Python, on every shell command, trusted unreviewed.
+    @Test
+    void theKitsSkillsAndGuardsReachTheThread() throws IOException {
+        start("", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+
+        sink.await(Intent.SessionInit.class, WAIT);
+        final List<String> methods = new ArrayList<>();
+        for (final ObjectNode m : receivedLines()) {
+            methods.add(m.path("method").asString(""));
+        }
+        assertThat(methods).containsSubsequence("initialized", "skills/extraRoots/set", "thread/start");
+        final JsonNode roots = received("skills/extraRoots/set").getFirst().path("extraRoots");
+        assertThat(roots.size()).isEqualTo(1);
+        assertThat(roots.get(0).asString()).isEqualTo(kit.resolve("skills").toString());
+        final JsonNode cfg = received("thread/start").getFirst().path("config");
+        assertThat(cfg.path("bypass_hook_trust").isBoolean()).isTrue();
+        assertThat(cfg.path("bypass_hook_trust").asBoolean()).isTrue();
+        final JsonNode pre = cfg.path("hooks").path("PreToolUse");
+        assertThat(pre.size()).isEqualTo(1);
+        assertThat(pre.get(0).path("matcher").asString()).isEqualTo("Bash|shell|exec_command");
+        final String python = "'" + kit.resolve("bin").resolve("kit-python") + "'";
+        assertThat(guardCommands(cfg)).containsExactly(
+                python + " '" + kit.resolve("hooks/kill-guard/kill-guard.py") + "'",
+                python + " '" + kit.resolve("hooks/instance-guard/instance-guard.py") + "'");
+        for (final JsonNode hook : pre.get(0).path("hooks").values()) {
+            assertThat(hook.path("type").asString()).isEqualTo("command");
+            assertThat(hook.path("timeout").asInt()).isEqualTo(5);
+        }
+    }
+
+    /// A kit without `skills/` sends no skills request, and a guard whose script is missing is left out of the hooks.
+    @Test
+    void aKitWithoutSkillsOrAGuardLeavesThemOut() throws IOException {
+        kit = Files.createDirectories(tmp.resolve("bare-kit"));
+        guard(kit, "kill-guard");
+        start("", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+
+        sink.await(Intent.SessionInit.class, WAIT);
+        assertThat(received("skills/extraRoots/set")).isEmpty();
+        final JsonNode cfg = received("thread/start").getFirst().path("config");
+        assertThat(guardCommands(cfg)).as("no launcher: the PATH's python3")
+                .containsExactly("python3 '" + kit.resolve("hooks/kill-guard/kill-guard.py") + "'");
+        assertThat(cfg.path("bypass_hook_trust").asBoolean()).isTrue();
+    }
+
+    /// A kit with no guard script gives the thread no hooks and no trust bypass.
+    @Test
+    void aKitWithoutGuardsGivesNoHooks() throws IOException {
+        kit = Files.createDirectories(tmp.resolve("empty-kit"));
+        start("", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+
+        sink.await(Intent.SessionInit.class, WAIT);
+        final JsonNode cfg = received("thread/start").getFirst().path("config");
+        assertThat(cfg.path("hooks").isMissingNode()).isTrue();
+        assertThat(cfg.path("bypass_hook_trust").isMissingNode()).isTrue();
+    }
+
+    /// A server that refuses the kit's skills still starts the thread; the session hears why with a note.
+    @Test
+    void refusedSkillsAreANoteNotAStop() throws IOException {
+        start("noskills", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+
+        sink.await(Intent.SessionInit.class, WAIT);
+        assertThat(received("thread/start")).hasSize(1);
+        assertThat(events.lines()).anyMatch(l -> l.startsWith("note Codex did not take the kit's skills ("
+                + kit.resolve("skills") + "): "));
     }
 
     /// A session whose thread exists resumes it by id, with the same profile.
@@ -320,6 +401,21 @@ class CodexAdapterTest {
         assertThat(revoked).containsExactly("token-s");
     }
 
+    /// Gives {@code kitRoot} the script of the guard hook {@code name}.
+    private static void guard(final Path kitRoot, final String name) throws IOException {
+        final Path dir = Files.createDirectories(kitRoot.resolve("hooks").resolve(name));
+        Files.writeString(dir.resolve(name + ".py"), "");
+    }
+
+    /// The commands of the thread config's shell hooks, in order.
+    private static List<String> guardCommands(final JsonNode config) {
+        final List<String> commands = new ArrayList<>();
+        for (final JsonNode hook : config.path("hooks").path("PreToolUse").path(0).path("hooks").values()) {
+            commands.add(hook.path("command").asString());
+        }
+        return commands;
+    }
+
     /// The adapter under test, its `codex` a wrapper that runs `fake-codex.sh` in {@code mode}.
     private void start(final String mode, final Path codexConfig) throws IOException {
         final Path fake = tmp.resolve("fake-codex.sh");
@@ -338,7 +434,7 @@ class CodexAdapterTest {
         // never the user's ~/.codex/config.toml: an absent file when the test gives none
         final Path config = codexConfig == null ? tmp.resolve("no-config.toml") : codexConfig;
         adapter = new CodexAdapter(sink, transcripts, gateway,
-                new CodexSettings(codex.toString(), scratch, "Write only the scratchpad."), _ -> events, config);
+                new CodexSettings(codex.toString(), scratch, kit, "Write only the scratchpad."), _ -> events, config);
     }
 
     private void awaitLine(final String line) {
