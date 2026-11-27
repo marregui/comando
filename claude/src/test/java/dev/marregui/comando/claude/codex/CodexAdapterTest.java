@@ -25,7 +25,9 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -502,6 +504,79 @@ class CodexAdapterTest {
                 "note Stored Codex thread thr-old loaded; start the session to continue it");
         assertThat(received("thread/start")).isEmpty();
         assertThat(sink.intents()).isEmpty();
+    }
+
+    /// A sub-agent's thread reaches its own transcript as it runs, not the session's; its view follows it.
+    @Test
+    void aSubAgentRunsInItsOwnTranscript() throws IOException {
+        start("spawn", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+        adapter.send("s", "spawn one", "user", "");
+
+        awaitLine("notification turn/completed");
+        final Transcript child = transcripts.of(TranscriptRegistry.subagentKey("s", "call-1"));
+        Awaitility.await().atMost(WAIT).until(() -> child.size() >= 2);
+        assertThat(child.get(0)).isInstanceOfSatisfying(Block.AssistantText.class,
+                text -> assertThat(text.text()).isEqualTo("PONG"));
+        assertThat(events.lines()).filteredOn("notification turn/completed"::equals).hasSize(1);
+
+        adapter.showSubagent("s", "", "call-1");
+        Awaitility.await().atMost(WAIT).until(() -> !sink.of(Intent.ShowView.class).isEmpty());
+        assertThat(sink.of(Intent.ShowView.class)).singleElement().satisfies(view -> {
+            assertThat(view.title()).isEqualTo("agent · pong");
+            assertThat(view.spec()).isEqualTo(new ViewSpec.Agent("s", "call-1", "pong", CodexAdapter.AGENT_ENDED));
+        });
+        assertThat(received("thread/read")).isEmpty();
+    }
+
+    /// A sub-agent still running when its server stops ends with it: its open view says so.
+    @Test
+    void aStoppedServerEndsItsSubAgents() throws IOException {
+        start("spawnhold", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+        adapter.send("s", "spawn one", "user", "");
+        awaitLine("notification turn/completed");
+        adapter.showSubagent("s", "", "call-1");
+        Awaitility.await().atMost(WAIT).until(() -> !sink.of(Intent.ShowView.class).isEmpty());
+        assertThat(sink.of(Intent.ShowView.class).getFirst().spec())
+                .isEqualTo(new ViewSpec.Agent("s", "call-1", "pong", CodexAdapter.AGENT_FOLLOWING));
+
+        adapter.stop("s");
+        Awaitility.await().atMost(WAIT).until(() -> !sink.of(Intent.RefreshView.class).isEmpty());
+        assertThat(sink.of(Intent.RefreshView.class)).singleElement().satisfies(view -> {
+            assertThat(view.title()).isEqualTo("agent · pong");
+            assertThat(view.spec()).isEqualTo(new ViewSpec.Agent("s", "call-1", "pong", CodexAdapter.AGENT_ENDED));
+        });
+    }
+
+    /// A stored session's sub-agent is read from its own stored thread when its view opens.
+    @Test
+    void aStoredSubAgentIsReadFromItsThread() throws IOException {
+        start("spawnread", null);
+        adapter.loadHistory(resumed("thr-old"));
+        awaitLine("note Stored Codex thread thr-old loaded; start the session to continue it");
+
+        adapter.showSubagent("s", "thr-old", "call-1");
+        Awaitility.await().atMost(WAIT).until(() -> !sink.of(Intent.ShowView.class).isEmpty());
+        assertThat(sink.of(Intent.ShowView.class).getFirst().spec())
+                .isEqualTo(new ViewSpec.Agent("s", "call-1", "pong", CodexAdapter.AGENT_STORED));
+        assertThat(received("thread/read")).extracting(p -> p.path("threadId").asString())
+                .containsExactly("thr-old", "thr-child");
+        final Transcript child = transcripts.of(TranscriptRegistry.subagentKey("s", "call-1"));
+        assertThat(child.get(0)).isInstanceOfSatisfying(Block.UserPrompt.class,
+                prompt -> assertThat(prompt.text()).isEqualTo("say PONG"));
+        assertThat(child.get(1)).isInstanceOfSatisfying(Block.AssistantText.class,
+                text -> assertThat(text.text()).isEqualTo("PONG stored"));
+    }
+
+    /// A sub-agent the session never saw is a note.
+    @Test
+    void anUnknownSubAgentIsANote() throws IOException {
+        start("", null);
+        adapter.showSubagent("s", "", "call-9");
+
+        awaitLine("note This Codex sub-agent's thread is not known to the session");
+        assertThat(sink.of(Intent.ShowView.class)).isEmpty();
     }
 
     /// A thread Codex cannot read leaves the transcript as it was, with a note that says so.

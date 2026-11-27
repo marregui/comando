@@ -37,6 +37,8 @@ public final class CodexMapper implements CodexEvents {
     private final String session;
     private final IntentSink sink;
     private final Transcript transcript;
+    /** Each sub-agent's spawn call id, by the sub-agent's thread id; it outlives the turn that spawned it. */
+    private final Map<String, String> agents = new HashMap<>();
     /** The context size: input tokens of the thread's last model call; 0 until one is reported. */
     private long contextTokens;
     /** The model's context window, as the last token report gave it; 0 when unknown. */
@@ -122,6 +124,7 @@ public final class CodexMapper implements CodexEvents {
         if (!conversation.isEmpty() && !conversation.equals(threadId)) {
             contextTokens = 0; // a new thread (/clear) starts with an empty context
             lastAnswer = "";
+            agents.clear();
         }
         conversation = threadId;
         if (!model.equals(this.model)) {
@@ -132,6 +135,13 @@ public final class CodexMapper implements CodexEvents {
         this.effort = effort;
         // the adapter dispatches SessionInit with the thread's folder and policy; this adds what ran
         sink.dispatch(new Intent.SessionRanAt(session, model, effort, true));
+    }
+
+    /** A sub-agent's name: its path below the root agent, {@code /root/pong} shown as {@code pong}. */
+    static String agentName(final JsonNode item) {
+        final String path = item.path("agentPath").asString("");
+        final String name = path.startsWith("/root/") ? path.substring("/root/".length()) : path;
+        return name.isEmpty() ? item.path("agentThreadId").asString("sub-agent") : name;
     }
 
     private static String clip(final String s, final int max) {
@@ -242,6 +252,7 @@ public final class CodexMapper implements CodexEvents {
             case "commandExecution" -> commandExecution(id, item, completed);
             case "fileChange" -> fileChange(id, item, completed);
             case "mcpToolCall" -> mcpToolCall(id, item, completed);
+            case "subAgentActivity" -> subAgent(id, item);
             case "contextCompaction" -> {
                 if (completed) {
                     transcript.append(new Block.Note(Block.NoteKind.COMPACT, "Conversation compacted", ""));
@@ -251,6 +262,49 @@ public final class CodexMapper implements CodexEvents {
                 // the prompt is already shown; plans, searches and other items have no block yet
             }
         }
+    }
+
+    /**
+     * A sub-agent shows as Claude's do, an {@code Agent} call under the spawn call's id, running from its
+     * {@code started} activity until its {@code completed} or {@code interrupted} one (ADR 0197).
+     */
+    private void subAgent(final String id, final JsonNode item) {
+        final String thread = item.path("agentThreadId").asString("");
+        if (thread.isEmpty()) {
+            return;
+        }
+        switch (item.path("kind").asString("")) {
+            case "started" -> {
+                agents.putIfAbsent(thread, id);
+                if (agentCall(agents.get(thread)) < 0) { // also when a cleared transcript is read again
+                    final ObjectNode input = Json.object().put("description", agentName(item))
+                            .put("subagent_type", "codex").put("model", item.path("model").asString(""));
+                    transcript.append(new Block.ToolCall(agents.get(thread), "Agent", Json.write(input), "",
+                            Block.ToolStatus.RUNNING, ""));
+                }
+            }
+            case "completed", "interrupted" -> {
+                final int at = agentCall(agents.getOrDefault(thread, ""));
+                if (at >= 0 && transcript.get(at) instanceof Block.ToolCall call) {
+                    final boolean interrupted = "interrupted".equals(item.path("kind").asString(""));
+                    transcript.replace(at, call.withResult("Sub-agent " + agentName(item)
+                            + (interrupted ? " interrupted" : " completed"), interrupted));
+                }
+            }
+            default -> {
+                // "interacted": the call shows no change
+            }
+        }
+    }
+
+    /** Where the {@code Agent} call {@code callId} is in the transcript, -1 when it is not (cleared, never shown). */
+    private int agentCall(final String callId) {
+        for (int i = transcript.size() - 1; i >= 0; i--) {
+            if (transcript.get(i) instanceof Block.ToolCall call && call.toolUseId().equals(callId)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void mcpToolCall(final String id, final JsonNode item, final boolean completed) {

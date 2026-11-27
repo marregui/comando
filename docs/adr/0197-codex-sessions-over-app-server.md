@@ -44,6 +44,12 @@ Claude verifies what it proposes.
 5. **Items map onto blocks.** `agentMessage` → assistant text, `reasoning` → thinking, `commandExecution`, `fileChange`
    and `mcpToolCall` → tool calls, `turn/completed` → turn end; `thread/tokenUsage/updated` → context; each turn writes
    the metrics `turn` event.
+6. **Sub-agents show as Claude's do.** A `subAgentActivity` item of kind `started` (the spawn call's id, the child's
+   `agentThreadId` and `agentPath`) is an `Agent` call, running until the activity of kind `completed` or
+   `interrupted`. The child thread's notifications arrive on the session's connection with the child's `threadId`
+   (probed 2026-11-27, 0.172.0) and go to a mapper of its own, into the transcript the sub-agent view shows, so the view
+   follows it live; notifications of any other thread are dropped. A sub-agent of a stored thread is read, when its
+   view opens, from its own stored thread (`thread/read`), by the running server or a short-lived one.
 
 ## 3. Consequences
 
@@ -58,5 +64,5 @@ Claude verifies what it proposes.
   engine, and the next start fails; make a new session instead.
 - Known limits: the turn end reports no queued prompts; an interrupt asked before a turn's id arrives is sent once it
   arrives.
-- Not yet: the subagent view. `thread/read` with `includeTurns` is deprecated for paginated threads in 0.172.0
+- `thread/read` with `includeTurns` is deprecated for paginated threads in 0.172.0
   (`thread/turns/list` and `thread/items/list` replace it); the history moves to them when `includeTurns` goes.

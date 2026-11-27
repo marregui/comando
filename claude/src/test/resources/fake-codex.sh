@@ -61,6 +61,19 @@ while IFS= read -r line; do
           printf '{"id":"srv-%s","method":"item/commandExecution/requestApproval",%s}\n' "$n" \
             '"params":{"threadId":"'"$thread"'","turnId":"'"$turn"'","command":"touch /tmp/x"}' ;;
         hold) ;;
+        spawn|spawnhold)
+          spawned='{"type":"subAgentActivity","id":"call-1","kind":"started","agentThreadId":"thr-child","agentPath":"/root/pong","model":"gpt-6.2-sol"}'
+          printf '{"method":"item/started","params":{"threadId":"%s","item":%s}}\n' "$thread" "$spawned"
+          printf '{"method":"item/completed","params":{"threadId":"%s","item":%s}}\n' "$thread" "$spawned"
+          printf '{"method":"turn/started","params":{"threadId":"thr-child","turn":{"id":"ct-1"}}}\n'
+          printf '{"method":"item/completed","params":{"threadId":"thr-child","item":%s}}\n' \
+            '{"type":"agentMessage","id":"cm-1","text":"PONG"}'
+          printf '{"method":"turn/completed","params":{"threadId":"thr-child","turn":{"id":"ct-1","status":"completed"}}}\n'
+          if [ "$mode" = spawn ]; then
+            printf '{"method":"item/completed","params":{"threadId":"%s","item":%s}}\n' "$thread" \
+              '{"type":"subAgentActivity","id":"done-1","kind":"completed","agentThreadId":"thr-child","agentPath":"/root/pong"}'
+          fi
+          completed completed ;;
         foreign)
           printf '{"method":"item/completed","params":{"threadId":"thr-gone","item":%s}}\n' \
             '{"type":"contextCompaction","id":"cmp-old"}'
@@ -81,6 +94,16 @@ while IFS= read -r line; do
     *'"method":"thread/read"'*)
       if [ "$mode" = noread ]; then
         printf '{"id":%s,"error":{"code":-32600,"message":"thread not found"}}\n' "$id"
+      elif [ "$mode" = spawnread ]; then
+        case "$line" in
+          *thr-child*)
+            printf '{"id":%s,"result":{"thread":{"id":"thr-child","turns":[{"id":"ct-1","status":"completed","items":[%s,%s]}]}}}\n' \
+              "$id" '{"type":"userMessage","id":"cu-1","content":[{"type":"text","text":"say PONG"}]}' \
+              '{"type":"agentMessage","id":"cm-1","text":"PONG stored"}' ;;
+          *)
+            printf '{"id":%s,"result":{"thread":{"id":"thr-old","turns":[{"id":"t-1","status":"completed","items":[%s]}]}}}\n' \
+              "$id" '{"type":"subAgentActivity","id":"call-1","kind":"started","agentThreadId":"thr-child","agentPath":"/root/pong"}' ;;
+        esac
       else
         printf '{"id":%s,"result":{"thread":{"id":"thr-old","turns":[{"id":"t-1","status":"completed",%s,"items":[%s,%s,%s]}]}}}\n' \
           "$id" '"durationMs":1200,"completedAt":1795761749' \

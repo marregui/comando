@@ -154,6 +154,47 @@ class CodexMapperTest {
         assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::numTurns).containsExactly(2, 1);
     }
 
+    /// A sub-agent shows as an `Agent` call under the spawn call's id, running until its completed activity.
+    @Test
+    void aSubAgentShowsAsAnAgentCall() {
+        final String started = "{\"item\":{\"type\":\"subAgentActivity\",\"id\":\"call-1\",\"kind\":\"started\","
+                + "\"agentThreadId\":\"thr-c\",\"agentPath\":\"/root/pong\",\"model\":\"gpt-6.2-sol\"}}";
+        mapper.notification("turn/started", params("{}"));
+        mapper.notification("item/started", params(started));
+        mapper.notification("item/completed", params(started));
+
+        assertThat(blocks(Block.ToolCall.class)).singleElement().satisfies(call -> {
+            assertThat(call.toolUseId()).isEqualTo("call-1");
+            assertThat(call.isSubagent()).isTrue();
+            assertThat(call.status()).isEqualTo(Block.ToolStatus.RUNNING);
+            assertThat(call.inputJson()).contains("\"description\":\"pong\"");
+        });
+
+        mapper.notification("item/completed", params("{\"item\":{\"type\":\"subAgentActivity\",\"id\":\"done-1\","
+                + "\"kind\":\"completed\",\"agentThreadId\":\"thr-c\",\"agentPath\":\"/root/pong\"}}"));
+        assertThat(blocks(Block.ToolCall.class)).singleElement().satisfies(call -> {
+            assertThat(call.status()).isNotEqualTo(Block.ToolStatus.RUNNING);
+            assertThat(call.resultText()).isEqualTo("Sub-agent pong completed");
+        });
+    }
+
+    /// A transcript emptied and read again shows its sub-agent again, and the end marks the new block.
+    @Test
+    void aSubAgentReadAgainShowsAgain() {
+        final String started = "{\"item\":{\"type\":\"subAgentActivity\",\"id\":\"call-1\",\"kind\":\"started\","
+                + "\"agentThreadId\":\"thr-c\",\"agentPath\":\"/root/pong\"}}";
+        mapper.notification("item/completed", params(started));
+        transcript.clear();
+        mapper.note("before");
+        mapper.notification("item/completed", params(started));
+        mapper.notification("item/completed", params("{\"item\":{\"type\":\"subAgentActivity\",\"id\":\"done-1\","
+                + "\"kind\":\"completed\",\"agentThreadId\":\"thr-c\",\"agentPath\":\"/root/pong\"}}"));
+
+        assertThat(transcript.get(0)).isInstanceOf(Block.Note.class);
+        assertThat(blocks(Block.ToolCall.class)).singleElement()
+                .extracting(Block.ToolCall::resultText).isEqualTo("Sub-agent pong completed");
+    }
+
     /// A new thread (`/clear`) starts with an empty context: the old thread's context size is not reported.
     @Test
     void aNewThreadStartsWithAnEmptyContext() {

@@ -15,6 +15,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -35,6 +37,8 @@ import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * The Codex sessions (ADR 0197): one {@code codex app-server} per running session, its thread started or resumed with
@@ -45,6 +49,10 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
 
     /** The prompts a session holds while a turn runs; one more is refused with a note. Unmeasured, a choice. */
     static final int QUEUED_PROMPTS = 16;
+    static final String AGENT_FOLLOWING = "Updating while the sub-agent runs.";
+    static final String AGENT_ENDED = "The sub-agent ended.";
+    static final String AGENT_STORED = "Read from the sub-agent's stored thread.";
+
     private static final System.Logger LOG = System.getLogger(CodexAdapter.class.getName());
     /** The version comando's client reports in {@code initialize}, as the plan-usage read does. */
     private static final String CLIENT_VERSION = "1";
@@ -240,7 +248,7 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
     @Override
     public void showSubagent(final String name, final String claudeSessionId, final String toolUseId) {
         final Session s = session(name);
-        s.run(() -> note(s, "Codex sessions have no sub-agent view"));
+        s.run(() -> openSubagent(s, toolUseId));
     }
 
     /** Stops every server and the strands. Idempotent. */
@@ -411,6 +419,45 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         return cause.getMessage() == null ? cause.toString() : cause.getMessage();
     }
 
+    /** Each stored turn's items, as the live turn showed them ({@code seen} sees each first), then a turn end. */
+    private static void replay(
+            final CodexEvents events,
+            final JsonNode turns,
+            final String origin,
+            final Consumer<JsonNode> seen
+    ) {
+        for (final JsonNode turn : turns) {
+            for (final JsonNode item : turn.path("items")) {
+                if ("userMessage".equals(item.path("type").asString(""))) {
+                    events.prompt(userText(item), origin, false);
+                } else {
+                    seen.accept(item);
+                    events.notification("item/completed", Json.object().set("item", item));
+                }
+            }
+            events.notification(CodexMapper.HISTORY_TURN_ENDED, Json.object().set("turn", turn));
+        }
+    }
+
+    /** A view title no other sub-agent of the session has. */
+    private static String agentTitle(final Session s, final Child c) {
+        final String base = "agent · " + c.description;
+        String title = base;
+        for (int n = 2; titleTaken(s, title); n++) {
+            title = base + " (" + n + ')';
+        }
+        return title;
+    }
+
+    private static boolean titleTaken(final Session s, final String title) {
+        for (final Child other : s.children.values()) {
+            if (other.title.equals(title)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * The session, made on first use; one made during or after {@link #close} takes no task, so no server starts then.
      */
@@ -507,22 +554,136 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
             return; // a running session's transcript is already current
         }
         final String threadId = spec.claudeSessionId();
-        final Path workDir;
-        try {
-            workDir = Path.of(spec.workDir());
-        } catch (final InvalidPathException e) {
-            LOG.log(System.Logger.Level.INFO, "codex history not read, working directory is not a path [session="
-                    + s.name + ", thread=" + threadId + ']');
+        s.workDir = spec.workDir();
+        final ObjectNode read = Json.object().put("threadId", threadId).put("includeTurns", true);
+        readStored(s, spec.workDir(), read, (result, error) -> showHistory(s, threadId, result, error));
+    }
+
+    /** Shows each stored turn's items as the live turn showed them, then a turn end. */
+    private void showHistory(final Session s, final String threadId, final ObjectNode result, final Throwable error) {
+        if (error != null) {
+            LOG.log(System.Logger.Level.INFO, "codex history not read [session=" + s.name + ", thread=" + threadId
+                    + ']', error);
+            if (s.current == null) {
+                note(s, "Stored Codex thread " + threadId + " not loaded: " + messageOf(error));
+            }
             return;
         }
+        if (s.current != null) {
+            return; // started meanwhile: the live thread is what the transcript shows
+        }
+        s.transcript.clear();
+        replay(s.events, result.path("thread").path("turns"), HISTORY_ORIGIN,
+                item -> child(s, "item/completed", item, false));
+        note(s, "Stored Codex thread " + threadId + " loaded; start the session to continue it");
+    }
+
+    /**
+     * Keeps track of the sub-agents a parent thread's items name: a {@code started} activity gives the spawn call's id
+     * and the child thread, whose notifications then reach a mapper of their own when {@code live}; an ended one
+     * refreshes its open view.
+     */
+    private void child(final Session s, final String method, final JsonNode item, final boolean live) {
+        if (!"subAgentActivity".equals(item.path("type").asString("")) || !method.startsWith("item/")) {
+            return;
+        }
+        final String thread = item.path("agentThreadId").asString("");
+        final Child known = s.childByThread.get(thread);
+        switch (item.path("kind").asString("")) {
+            case "started" -> {
+                if (known == null && !thread.isEmpty()) {
+                    final Child c = new Child(s, item.path("id").asString(""), thread, CodexMapper.agentName(item));
+                    c.live = live;
+                    s.children.put(c.callId, c);
+                    s.childByThread.put(thread, c);
+                }
+            }
+            case "completed", "interrupted" -> {
+                if (known != null && !known.ended) {
+                    known.ended = true;
+                    if (!known.title.isEmpty() && known.live) {
+                        sink.dispatch(new Intent.RefreshView(known.title, known.spec(AGENT_ENDED)));
+                    }
+                }
+            }
+            default -> {
+                // "interacted": nothing changes
+            }
+        }
+    }
+
+    /** The server is gone: its live sub-agents run no more, and their open views say so. */
+    private void endChildren(final Session s) {
+        for (final Child c : s.children.values()) {
+            if (c.live && !c.ended) {
+                c.ended = true;
+                if (!c.title.isEmpty()) {
+                    sink.dispatch(new Intent.RefreshView(c.title, c.spec(AGENT_ENDED)));
+                }
+            }
+        }
+    }
+
+    /**
+     * Shows a sub-agent's transcript in a view: as it ran, when this server ran it; else read from its stored thread,
+     * by the running server or a short-lived one.
+     */
+    private void openSubagent(final Session s, final String callId) {
+        final Child c = s.children.get(callId);
+        if (c == null) {
+            note(s, "This Codex sub-agent's thread is not known to the session");
+            return;
+        }
+        if (c.title.isEmpty()) {
+            c.title = agentTitle(s, c);
+        }
+        if (c.live) {
+            sink.dispatch(new Intent.ShowView("", c.title, c.spec(c.ended ? AGENT_ENDED : AGENT_FOLLOWING),
+                    Placement.LOWER));
+            return;
+        }
+        final ObjectNode read = Json.object().put("threadId", c.threadId).put("includeTurns", true);
+        if (s.current != null && s.current.rpc.isAlive()) {
+            s.current.rpc.request("thread/read", read).orTimeout(HISTORY_WAIT_SECONDS, TimeUnit.SECONDS)
+                    .whenComplete((result, error) -> s.run(() -> showChild(s, c, result, error)));
+            return;
+        }
+        readStored(s, s.workDir, read, (result, error) -> showChild(s, c, result, error));
+    }
+
+    private void showChild(final Session s, final Child c, final ObjectNode result, final Throwable error) {
+        if (error != null) {
+            LOG.log(System.Logger.Level.INFO, "codex sub-agent not read [session=" + s.name + ", thread="
+                    + c.threadId + ']', error);
+            note(s, "Codex sub-agent " + c.description + " not loaded: " + messageOf(error));
+            return;
+        }
+        if (c.live) {
+            return; // it ran again meanwhile: the live transcript is the current one
+        }
+        c.transcript.clear();
+        replay(new CodexMapper(s.name, c.transcript, _ -> { }), result.path("thread").path("turns"), "subagent",
+                _ -> { });
+        c.transcript.changed();
+        sink.dispatch(new Intent.ShowView("", c.title, c.spec(AGENT_STORED), Placement.LOWER));
+    }
+
+    /**
+     * Reads a stored thread with a short-lived {@code codex app-server} of its own (no MCP ticket); {@code then} runs
+     * on the strand with the result or the failure, and the server closes after it.
+     */
+    private void readStored(
+            final Session s,
+            final String dir,
+            final ObjectNode read,
+            final BiConsumer<ObjectNode, Throwable> then
+    ) {
         final CodexRpc rpc;
         try {
-            rpc = CodexRpc.start(s.name + "-history", List.of(settings.codexExecutable(), "app-server"), workDir,
+            rpc = CodexRpc.start(s.name + "-read", List.of(settings.codexExecutable(), "app-server"), Path.of(dir),
                     IGNORED);
-        } catch (final IOException e) {
-            LOG.log(System.Logger.Level.INFO, "codex history not read, cannot start the server [session=" + s.name
-                    + ", thread=" + threadId + ']', e);
-            note(s, "Stored Codex thread " + threadId + " not loaded: codex did not start");
+        } catch (final IOException | InvalidPathException e) {
+            then.accept(null, e);
             return;
         }
         readers.add(rpc);
@@ -532,52 +693,20 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         }
         final ObjectNode init = Json.object();
         init.putObject("clientInfo").put("name", "comando").put("version", CLIENT_VERSION);
-        final ObjectNode read = Json.object().put("threadId", threadId).put("includeTurns", true);
         rpc.request("initialize", init).orTimeout(HISTORY_WAIT_SECONDS, TimeUnit.SECONDS)
                 .thenCompose(_ -> {
                     rpc.notify("initialized", null);
                     return rpc.request("thread/read", read).orTimeout(HISTORY_WAIT_SECONDS, TimeUnit.SECONDS);
                 })
-                .whenComplete((result, error) -> s.run(() -> showHistory(s, rpc, threadId, result, error)));
-    }
-
-    /** Shows each stored turn's items as the live turn showed them, then a turn end; then closes the reader. */
-    private void showHistory(
-            final Session s,
-            final CodexRpc rpc,
-            final String threadId,
-            final ObjectNode result,
-            final Throwable error
-    ) {
-        try {
-            if (error != null) {
-                LOG.log(System.Logger.Level.INFO, "codex history not read [session=" + s.name + ", thread="
-                        + threadId + ']', error);
-                if (s.current == null) {
-                    note(s, "Stored Codex thread " + threadId + " not loaded: " + messageOf(error));
-                }
-                return;
-            }
-            if (s.current != null) {
-                return; // started meanwhile: the live thread is what the transcript shows
-            }
-            s.transcript.clear();
-            for (final JsonNode turn : result.path("thread").path("turns")) {
-                for (final JsonNode item : turn.path("items")) {
-                    if ("userMessage".equals(item.path("type").asString(""))) {
-                        s.events.prompt(userText(item), HISTORY_ORIGIN, false);
-                    } else {
-                        s.events.notification("item/completed", Json.object().set("item", item));
+                .whenComplete((result, error) -> s.run(() -> {
+                    try {
+                        then.accept(result, error);
+                    } finally {
+                        if (readers.remove(rpc)) {
+                            rpc.close();
+                        }
                     }
-                }
-                s.events.notification(CodexMapper.HISTORY_TURN_ENDED, Json.object().set("turn", turn));
-            }
-            note(s, "Stored Codex thread " + threadId + " loaded; start the session to continue it");
-        } finally {
-            if (readers.remove(rpc)) {
-                rpc.close();
-            }
-        }
+                }));
     }
 
     private void startServer(final Session s, final SessionSpec spec) {
@@ -589,6 +718,7 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
             sink.dispatch(new Intent.SessionStarted(s.name));
             return;
         }
+        s.workDir = spec.workDir();
         final Path workDir;
         try {
             workDir = Path.of(spec.workDir());
@@ -859,8 +989,14 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         }
         final String thread = params.path("threadId").asString("");
         if (!thread.isEmpty() && !thread.equals(s.threadId)) {
-            return; // a thread the session left by /clear: its late items belong to no transcript
+            final Child child = s.childByThread.get(thread);
+            if (child != null && child.live) {
+                child.events.notification(method, params);
+                child.transcript.changed();
+            }
+            return; // else a thread the session left by /clear: its late items belong to no transcript
         }
+        child(s, method, params.path("item"), true);
         s.events.notification(method, params);
         s.transcript.changed();
         switch (method) {
@@ -906,6 +1042,7 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         }
         s.current = null;
         clearTurns(s);
+        endChildren(s);
         final boolean clean = code == 0;
         s.events.exited(clean ? "" : stderr.isBlank() ? "codex app-server exited [code=" + code + ']' : stderr);
         s.transcript.changed();
@@ -920,6 +1057,7 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         }
         s.current = null;
         clearTurns(s);
+        endChildren(s);
         end(s.name, run);
         LOG.log(System.Logger.Level.INFO, "codex stopped [session=" + s.name + ']');
         s.events.exited("");
@@ -939,6 +1077,7 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
     private void failRun(final Session s, final Run run, final String message) {
         s.current = null;
         clearTurns(s);
+        endChildren(s);
         end(s.name, run);
         LOG.log(System.Logger.Level.WARNING, "codex session failed [session=" + s.name + ", cause=" + message + ']');
         s.events.exited(message);
@@ -1016,6 +1155,9 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         final ExecutorService strand;
         /** Prompts sent while a turn runs or before the thread is ready, at most {@link #QUEUED_PROMPTS}. */
         final ArrayDeque<String> queued = new ArrayDeque<>();
+        /** The sub-agents its threads spawned, by spawn call id and by thread id. */
+        final Map<String, Child> children = new LinkedHashMap<>();
+        final Map<String, Child> childByThread = new LinkedHashMap<>();
         Run current;
         /** What the running server started with; a new thread on Clear takes the same parameters. */
         SessionSpec spec;
@@ -1031,6 +1173,8 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         String turnId = "";
         /** An interrupt came before the running turn's id did. */
         boolean interruptAsked;
+        /** The folder the session last ran or was read in; a stored sub-agent thread is read there. */
+        String workDir = "";
 
         Session(final String name) {
             this.name = name;
@@ -1051,6 +1195,34 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
             } catch (final RejectedExecutionException e) {
                 LOG.log(System.Logger.Level.DEBUG, "session closed, task dropped [session=" + name + ']');
             }
+        }
+    }
+
+    /** A sub-agent of a session: its spawn call's id, its thread, and the transcript its view shows. */
+    private final class Child {
+        final String session;
+        final String callId;
+        final String threadId;
+        final String description;
+        final Transcript transcript;
+        final CodexEvents events;
+        /** Its notifications reach {@link #events} as they come: this server spawned it. */
+        boolean live;
+        boolean ended;
+        /** Its view's title once shown, else empty. */
+        String title = "";
+
+        Child(final Session s, final String callId, final String threadId, final String description) {
+            this.session = s.name;
+            this.callId = callId;
+            this.threadId = threadId;
+            this.description = description;
+            this.transcript = transcripts.of(TranscriptRegistry.subagentKey(s.name, callId));
+            this.events = new CodexMapper(s.name, transcript, _ -> { });
+        }
+
+        ViewSpec.Agent spec(final String state) {
+            return new ViewSpec.Agent(session, callId, description, state);
         }
     }
 }
