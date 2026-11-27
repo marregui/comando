@@ -6,9 +6,9 @@ import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 
 /**
- * A session's transcript as text for another session, from a block index on: the prompts, Claude's text, the tool
- * calls with their results, notes and turn ends. A block still streaming or running is shown as such, and the cursor
- * returned stops at the first of them, so the next read shows it again once it has finished.
+ * A session's transcript as text for another session, from a block index on: the prompts, the assistant's text, the
+ * tool calls with their results, notes and turn ends. A block still streaming or running is shown as such, and the
+ * cursor returned stops at the first of them, so the next read shows it again once it has finished.
  */
 final class TranscriptText {
 
@@ -25,10 +25,11 @@ final class TranscriptText {
 
     /**
      * Blocks from {@code after} on, as at most {@code maxChars} characters of text (and at least one block);
-     * {@code status} heads the text. An {@code after} beyond the end (a transcript that restarted) reads from the
-     * start.
+     * {@code status} heads the text and {@code assistant} names who wrote the assistant's text ({@code Claude} or
+     * {@code Codex}). An {@code after} beyond the end (a transcript that restarted) reads from the start.
      */
-    static Read read(final String session, final String status, final Transcript t, int after, final int maxChars) {
+    static Read read(final String session, final String status, final String assistant, final Transcript t, int after,
+            final int maxChars) {
         final int size = t.size();
         final StringBuilder body = new StringBuilder();
         String restarted = "";
@@ -44,7 +45,7 @@ final class TranscriptText {
                 next = i; // cleared under the reader
                 break;
             }
-            final String entry = entry(i, b);
+            final String entry = entry(i, b, assistant);
             if (body.length() + entry.length() > maxChars && body.length() > 0) {
                 next = i;
                 break;
@@ -126,11 +127,12 @@ final class TranscriptText {
         };
     }
 
-    private static String entry(final int i, final Block b) {
+    private static String entry(final int i, final Block b, final String assistant) {
         final String sub = b.parent().isEmpty() ? "" : "(subagent) ";
         final String line = switch (b) {
             case Block.UserPrompt p -> "prompt" + (p.origin().isEmpty() ? "" : " from panel " + p.origin()) + ":\n" + indent(clip(p.text(), MAX_TEXT));
-            case Block.AssistantText a -> "Claude" + (a.streaming() ? " (still writing)" : "") + ":\n" + indent(clip(a.text(), MAX_TEXT));
+            case Block.AssistantText a -> assistant + (a.streaming() ? " (still writing)" : "") + ":\n"
+                    + indent(clip(a.text(), MAX_TEXT));
             case Block.Thinking th -> "thinking" + (th.tokens() > 0 ? " (" + th.tokens() + " tokens)" : "") + (th.streaming() ? " (still thinking)" : "");
             case Block.ToolCall c -> "tool " + c.name() + " " + clip(c.inputJson(), MAX_TOOL_INPUT) + " → " + c.status().name().toLowerCase(Locale.ROOT)
                     + (c.resultText().isEmpty() ? "" : ":\n" + indent(clip(c.resultText(), MAX_TOOL_RESULT)));

@@ -48,6 +48,8 @@ public final class CodexMapper implements CodexEvents {
     private long turnCachedTokens;
     private long turnCacheWriteTokens;
     private long turnInputTokens;
+    /** The running turn's model calls: one token report each. */
+    private int turnModelCalls;
     private long turnOutputTokens;
     private long turnReasoningTokens;
     private boolean turnRunning;
@@ -70,7 +72,8 @@ public final class CodexMapper implements CodexEvents {
         final String message = error.isEmpty() ? "the session ended during the turn" : clip(error, 500);
         final long durationMs = turnRunning ? (System.nanoTime() - turnStartedNanos) / 1_000_000L : 0L;
         turnRunning = false;
-        transcript.append(new Block.TurnEnd(0, durationMs, 0, true, message).at(System.currentTimeMillis()));
+        transcript.append(new Block.TurnEnd(0, durationMs, turnModelCalls, true, message)
+                .at(System.currentTimeMillis()));
         sink.dispatch(new Intent.SessionTurnEnded(session, 0, 0, contextTokens, contextWindow, true, message));
     }
 
@@ -302,6 +305,7 @@ public final class CodexMapper implements CodexEvents {
     private void tokenUsage(final JsonNode usage) {
         final JsonNode last = usage.path("last");
         final long input = last.path("inputTokens").asLong(0);
+        turnModelCalls++;
         turnInputTokens += input;
         turnCachedTokens += last.path("cachedInputTokens").asLong(0);
         turnCacheWriteTokens += last.path("cacheWriteInputTokens").asLong(0);
@@ -328,7 +332,9 @@ public final class CodexMapper implements CodexEvents {
         final long durationMs = turn.path("durationMs").asLong(0);
         turnRunning = false;
         items.clear();
-        transcript.append(new Block.TurnEnd(0, durationMs, 0, error, error ? message : status)
+        // a completed turn made at least one model call, though no token report came for it
+        final int turns = error ? turnModelCalls : Math.max(1, turnModelCalls);
+        transcript.append(new Block.TurnEnd(0, durationMs, turns, error, error ? message : status)
                 .at(System.currentTimeMillis()));
         sink.dispatch(new Intent.SessionTurnEnded(session, 0, 0, contextTokens, contextWindow, error, message,
                 error ? "" : lastAnswer, false));
@@ -365,6 +371,7 @@ public final class CodexMapper implements CodexEvents {
         turnRunning = true;
         turnStartedNanos = System.nanoTime();
         turnInputTokens = 0L;
+        turnModelCalls = 0;
         turnCachedTokens = 0L;
         turnCacheWriteTokens = 0L;
         turnOutputTokens = 0L;

@@ -38,6 +38,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.Engine;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PermissionRules;
@@ -923,7 +924,8 @@ public final class McpTools {
         if (!settled) {
             status += ", still working after " + wait + " s";
         }
-        return Outcome.ok(TranscriptText.read(of, status, t, after, MAX_RESULT_CHARS).text());
+        final String assistant = x != null && Engine.of(x.spec().model()) == Engine.CODEX ? "Codex" : "Claude";
+        return Outcome.ok(TranscriptText.read(of, status, assistant, t, after, MAX_RESULT_CHARS).text());
     }
 
     private Peers peers() {

@@ -1051,6 +1051,21 @@ class McpServerTest {
                 .doesNotContain("[1]");
     }
 
+    /// `session_read` names a Codex session's answers `Codex`, by the session's model.
+    @Test
+    void readingACodexSessionNamesItsAnswersCodex() throws Exception {
+        final AppState s = state.get();
+        final List<SessionState> sessions = new ArrayList<>(s.sessions());
+        final SessionSpec codex = SessionSpec.fresh("coder", "/tmp").withModel("sol");
+        sessions.add(SessionState.closed(codex).withStatus(Status.OPEN, ""));
+        state.set(s.withSessions(sessions));
+        transcripts.of("coder").append(new Block.AssistantText("m1", 0, "Done.", false, ""));
+
+        assertThat(text(tool("session_read", "{\"session\":\"coder\",\"after\":0}")))
+                .contains("[0] Codex:\n  Done.")
+                .doesNotContain("Claude:");
+    }
+
     /// Without a cursor the last block is shown; a cursor past the end reads from block 0 and says it restarted; an
     /// unknown session is an error.
     @Test

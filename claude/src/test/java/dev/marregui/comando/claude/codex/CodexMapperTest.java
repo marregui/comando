@@ -57,6 +57,7 @@ class CodexMapperTest {
         assertThat(blocks(Block.TurnEnd.class)).singleElement().satisfies(end -> {
             assertThat(end.error()).isFalse();
             assertThat(end.durationMillis()).isEqualTo(10_040L);
+            assertThat(end.numTurns()).as("one per model call's token report").isEqualTo(2);
         });
 
         assertThat(sink.of(Intent.SessionInit.class)).as("the adapter dispatches it").isEmpty();
@@ -137,6 +138,20 @@ class CodexMapperTest {
         assertThat(sink.of(Intent.SessionTurnEnded.class)).extracting(Intent.SessionTurnEnded::message)
                 .containsExactly("usage limit reached", "interrupted");
         assertThat(sink.of(Intent.SessionTurnEnded.class)).allMatch(Intent.SessionTurnEnded::error);
+        assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::numTurns).containsExactly(0, 0);
+    }
+
+    /// A completed turn with no token report counts one model call; the next turn counts its own calls only.
+    @Test
+    void aCompletedTurnWithoutATokenReportCountsOneModelCall() {
+        mapper.notification("turn/started", params("{}"));
+        mapper.notification("thread/tokenUsage/updated", params("{\"tokenUsage\":{\"last\":{\"inputTokens\":5}}}"));
+        mapper.notification("thread/tokenUsage/updated", params("{\"tokenUsage\":{\"last\":{\"inputTokens\":7}}}"));
+        mapper.notification("turn/completed", params("{\"turn\":{\"status\":\"completed\",\"durationMs\":3}}"));
+        mapper.notification("turn/started", params("{}"));
+        mapper.notification("turn/completed", params("{\"turn\":{\"status\":\"completed\",\"durationMs\":4}}"));
+
+        assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::numTurns).containsExactly(2, 1);
     }
 
     /// A file change shows as an `Edit` call with its paths and diffs, done when Codex applied it.
