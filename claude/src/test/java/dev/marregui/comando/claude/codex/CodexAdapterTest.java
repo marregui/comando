@@ -115,7 +115,7 @@ class CodexAdapterTest {
         final Intent.SessionInit init = sink.await(Intent.SessionInit.class, WAIT);
         assertThat(init.info().claudeSessionId()).isEqualTo("thr-1");
         assertThat(init.info().cliVersion()).isEqualTo("0.172.0");
-        assertThat(events.lines()).contains("thread thr-1 gpt-6.2-sol medium");
+        awaitLine("thread thr-1 gpt-6.2-sol medium"); // the strand tells the events after it dispatched the init
         final ObjectNode params = received("thread/start").getFirst();
         assertThat(params.path("model").asString()).isEqualTo("gpt-6.2-sol");
         assertThat(params.path("cwd").asString()).isEqualTo(work.toString());
