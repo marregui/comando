@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
+import dev.marregui.comando.core.model.Engine;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.KitRoot;
@@ -86,9 +87,11 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                         .about("What the session talks in. A new conversation starts empty. A stored one, which Claude Code keeps on disk, "
                                 + "is continued where it left off, or copied so the original stays as it was; the session then runs in "
                                 + "its folder. After a session's first start, its own conversation is the one listed first."),
-                Attribute.openChoice("model", "Model", orDefault(SessionSpec.MODELS), follows)
-                        .about("The Claude model the session uses. The default follows the kit's settings.json, so a later change there "
-                                + "reaches the session; a model picked here holds for this session.")
+                Attribute.openChoice("model", "Model", orDefault(Engine.sessionModels()), follows)
+                        .about("The model the session uses. The default follows the kit's settings.json, so a "
+                                + "later change there reaches the session; a model picked here holds for this session. "
+                                + "sol, astra and luna run the session on Codex: it reads everything and writes only "
+                                + "the brain's scratchpad (ADR 0197).")
                         .whenEmpty(model),
                 Attribute.choice("effort", "Effort", orDefault(SessionSpec.EFFORTS), follows)
                         .about("How much the model thinks before answering: higher is slower and more thorough. The default follows the kit's "

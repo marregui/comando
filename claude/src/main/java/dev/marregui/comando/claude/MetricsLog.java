@@ -247,6 +247,19 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
         write(e);
     }
 
+    /**
+     * A {@code turn} event of a session on another engine (a Codex session, ADR 0197): {@code fields} as that engine's
+     * mapper filled them, stamped now. Never blocks.
+     */
+    public void turn(final ObjectNode fields) {
+        if (sink == null) {
+            return;
+        }
+        final ObjectNode e = event("turn");
+        fields.properties().forEach(f -> e.set(f.getKey(), f.getValue()));
+        write(e);
+    }
+
     /** Hands {@code event} to the sink, which never blocks; {@code event} must not change after. */
     void write(final ObjectNode event) {
         if (sink != null) {

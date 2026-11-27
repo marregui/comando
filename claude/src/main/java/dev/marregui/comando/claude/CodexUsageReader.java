@@ -30,7 +30,7 @@ import dev.marregui.comando.core.view.Clip;
  * resets the account still has. The read sends no prompt and spends nothing; it takes about a second (measured on
  * codex-cli 0.163.0). Without Codex installed or signed in, the read says why and the status bar shows nothing.
  */
-final class CodexUsageReader {
+public final class CodexUsageReader {
 
     private static final System.Logger LOG = System.getLogger(CodexUsageReader.class.getName());
     static final Duration TIMEOUT = Duration.ofSeconds(10);
@@ -54,7 +54,7 @@ final class CodexUsageReader {
     }
 
     /** {@code COMANDO_CODEX}, else the Codex CLI where its installers put it, else {@code codex} on the PATH. */
-    static String findExecutable() {
+    public static String findExecutable() {
         final String env = System.getenv("COMANDO_CODEX");
         if (env != null && !env.isBlank()) {
             return env;

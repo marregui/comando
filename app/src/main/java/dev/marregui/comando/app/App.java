@@ -22,12 +22,17 @@ import dev.marregui.comando.claude.ClaudeAdapter;
 import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.claude.ClaudeTopics;
 import dev.marregui.comando.claude.ClaudeVersion;
+import dev.marregui.comando.claude.CodexUsageReader;
 import dev.marregui.comando.claude.MetricsEndpoint;
 import dev.marregui.comando.claude.MetricsLog;
 import dev.marregui.comando.claude.RootLaunch;
 import dev.marregui.comando.claude.SessionCatalogue;
 import dev.marregui.comando.claude.TranscriptSearch;
 import dev.marregui.comando.claude.UiInstructions;
+import dev.marregui.comando.claude.codex.CodexAdapter;
+import dev.marregui.comando.claude.codex.CodexInstructions;
+import dev.marregui.comando.claude.codex.CodexMapper;
+import dev.marregui.comando.claude.codex.CodexSettings;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
@@ -47,6 +52,7 @@ import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
+import dev.marregui.comando.core.port.EnginePort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.MachinesPort;
 import dev.marregui.comando.core.reduce.Reducer;
@@ -123,6 +129,8 @@ public final class App implements AutoCloseable {
     private final StateLoop loop;
     private final TranscriptRegistry transcripts;
     private final ClaudeAdapter claude;
+    private final CodexAdapter codex;
+    private final EnginePort engines;
     private final Errands errands;
     private final ComandoUi ui;
     private final ToolsAdapter tools;
@@ -233,6 +241,16 @@ public final class App implements AutoCloseable {
             metrics = own(metricsLog(machineCdb, config.home(), cdb, loop,
                     machineCdb ? MetricsLog.machineShadow() : null));
             claude.metrics(metrics);
+            final MetricsLog codexMetrics = metrics;
+            final Path brain = root.brain().orElse(root.dir().resolve("BRAIN"));
+            codex = own(new CodexAdapter(loop, transcripts, mcp,
+                    new CodexSettings(CodexUsageReader.findExecutable(), brain.resolve("SCRATCHPAD"),
+                            CodexInstructions.text(root.dir(), brain, UiInstructions.text(InstanceName.current()))),
+                    name -> {
+                        final CodexMapper mapper = new CodexMapper(name, transcripts.of(name), loop);
+                        mapper.metrics(codexMetrics::turn);
+                        return mapper;
+                    }));
             mcpTools.waits(metrics);
             claude.checkpointByComando();
             final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
@@ -312,7 +330,8 @@ public final class App implements AutoCloseable {
                 mcpTools.machines(MachinesPort.NONE);
                 ui.machines(MachinesPort.NONE);
             }
-            effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
+            engines = new EnginePort(claude, codex);
+            effects.target = new EffectRouter(db, engines, mcp, ui, store, devTools);
             // the kit check uses KitGit, Peers and the window: its strand stops before them
             own(() -> ExecutorStop.now("app", kitCheck));
             // this instance's node stops before the machine's cdb; the others' keep running, their links to it queueing
@@ -355,7 +374,7 @@ public final class App implements AutoCloseable {
         final List<SessionSpec> withHistory = loop.state().sessions().stream().map(SessionState::spec)
                 .filter(s -> !s.claudeSessionId().isEmpty()).toList();
         for (final SessionSpec s : withHistory) {
-            claude.loadHistory(s);
+            engines.loadHistory(s);
         }
         final String executable = claudeExecutable;
         errands.start("claude-version", () -> {

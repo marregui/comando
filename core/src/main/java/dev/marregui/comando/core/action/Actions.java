@@ -11,6 +11,7 @@ import dev.marregui.comando.core.action.Action.Arg;
 import dev.marregui.comando.core.action.Action.Kind;
 import dev.marregui.comando.core.action.Action.Type;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Engine;
 import dev.marregui.comando.core.model.SessionSpec;
 
 /**
@@ -36,7 +37,9 @@ public final class Actions {
                             + "session does.",
                     List.of(Arg.required("name", Type.STRING, "unique; also the CLI's --name"),
                             Arg.required("work_dir", Type.STRING, "the folder the session runs in; ~/ expands"),
-                            Arg.optional("model", Type.STRING, "empty: the CLI's default").among(withDefault(SessionSpec.MODELS)),
+                            Arg.optional("model", Type.STRING,
+                                            "empty: the CLI's default; sol, astra or luna: a Codex session (ADR 0197)")
+                                    .among(withDefault(Engine.sessionModels())),
                             Arg.optional("effort", Type.STRING, "empty: the CLI's default").among(withDefault(SessionSpec.EFFORTS)),
                             Arg.optional("checkpoint", Type.STRING, "the prompt Reflect sends; default /reflect"),
                             Arg.optional("prompt", Type.STRING, "a first prompt: the session starts and runs it")),
