@@ -21,6 +21,11 @@ import dev.marregui.comando.core.transcript.Transcript;
  */
 public final class CodexMapper implements CodexEvents {
 
+    /**
+     * Not a Codex method: what the adapter sends after a stored turn's items, {@code params.turn} the stored turn. It
+     * ends the turn in the transcript without a turn event or an intent, as the turn ended long ago.
+     */
+    static final String HISTORY_TURN_ENDED = "comando/historyTurnEnded";
     private static final System.Logger LOG = System.getLogger(CodexMapper.class.getName());
     /** A tool's result is clipped where a Claude session's is. */
     private static final int MAX_RESULT_CHARS = 64 * 1024;
@@ -101,6 +106,7 @@ public final class CodexMapper implements CodexEvents {
             case "thread/tokenUsage/updated" -> tokenUsage(params.path("tokenUsage"));
             case "turn/completed" -> turnCompleted(params.path("turn"));
             case "error" -> error(params);
+            case HISTORY_TURN_ENDED -> historyTurnEnded(params.path("turn"));
             default -> LOG.log(System.Logger.Level.DEBUG,
                     "notification ignored [session=" + session + ", method=" + method + ']');
         }
@@ -113,6 +119,10 @@ public final class CodexMapper implements CodexEvents {
 
     @Override
     public void threadStarted(final String threadId, final String model, final String effort) {
+        if (!conversation.isEmpty() && !conversation.equals(threadId)) {
+            contextTokens = 0; // a new thread (/clear) starts with an empty context
+            lastAnswer = "";
+        }
         conversation = threadId;
         if (!model.equals(this.model)) {
             final String text = "Model " + model + " · Codex · effort " + effort;
@@ -213,6 +223,17 @@ public final class CodexMapper implements CodexEvents {
         tool(id, "Edit", input, completed, status, !status.equals("completed"));
     }
 
+    /** A stored turn's end: its block, as {@link #turnCompleted} writes it, without the intent or the metric. */
+    private void historyTurnEnded(final JsonNode turn) {
+        final String status = turn.path("status").asString("");
+        final boolean error = !status.equals("completed");
+        final String message = error ? turn.path("error").path("message").asString(status) : status;
+        final long completedSeconds = turn.path("completedAt").asLong(0);
+        items.clear();
+        transcript.append(new Block.TurnEnd(0, turn.path("durationMs").asLong(0), 1, error, clip(message, 500))
+                .at(completedSeconds > 0 ? completedSeconds * 1_000L : System.currentTimeMillis()));
+    }
+
     private void item(final JsonNode item, final boolean completed) {
         final String id = item.path("id").asString("");
         switch (item.path("type").asString("")) {
@@ -221,6 +242,11 @@ public final class CodexMapper implements CodexEvents {
             case "commandExecution" -> commandExecution(id, item, completed);
             case "fileChange" -> fileChange(id, item, completed);
             case "mcpToolCall" -> mcpToolCall(id, item, completed);
+            case "contextCompaction" -> {
+                if (completed) {
+                    transcript.append(new Block.Note(Block.NoteKind.COMPACT, "Conversation compacted", ""));
+                }
+            }
             default -> {
                 // the prompt is already shown; plans, searches and other items have no block yet
             }

@@ -24,6 +24,7 @@ import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.testkit.RecordingSink;
 
@@ -34,7 +35,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// - Starts the thread with comando's permission profile, or resumes the session's thread.
 /// - Sends prompts as turns, one at a time, with the session's model and effort.
-/// - Answers the commands Codex lacks with a note, and declines what the server asks.
+/// - Compacts the thread on `/compact`, starts a new one on `/clear`, and answers the commands Codex lacks with a
+///   note; declines what the server asks.
+/// - Reads a stopped session's stored thread with a server of its own.
 /// - Stops, revokes the ticket, and reports a crash with its stderr.
 class CodexAdapterTest {
 
@@ -298,6 +301,18 @@ class CodexAdapterTest {
                 "notification turn/completed");
     }
 
+    /// A notification of another thread, one the session left by `/clear`, reaches no transcript.
+    @Test
+    void anotherThreadsNotificationIsDropped() throws IOException {
+        start("foreign", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+        adapter.send("s", "hello", "user", "");
+
+        awaitLine("notification turn/completed");
+        assertThat(events.lines()).containsSubsequence("notification turn/started", "notification turn/completed")
+                .doesNotContain("notification item/completed");
+    }
+
     /// A prompt sent while a turn runs waits for it; an interrupt names the running turn, and its end starts the
     /// waiting prompt.
     @Test
@@ -325,7 +340,7 @@ class CodexAdapterTest {
         adapter.start(SessionSpec.fresh("s", work.toString()));
         adapter.send("s", "/model astra", "user", "");
         adapter.send("s", "/effort max", "user", "");
-        adapter.send("s", "/compact", "user", "");
+        adapter.send("s", "/cost", "user", "");
         adapter.send("s", "/model opus", "user", "");
         adapter.send("s", "/Users/x/notes.md says hi", "user", "");
 
@@ -338,7 +353,7 @@ class CodexAdapterTest {
                 .isEqualTo("/Users/x/notes.md says hi");
         assertThat(events.lines()).contains("note The next turn runs on gpt-6.2-astra",
                 "note The next turn runs at effort xhigh",
-                "note /compact is a Claude Code command; Codex sessions do not have it",
+                "note /cost is a Claude Code command; Codex sessions do not have it",
                 "note opus is a Claude model; a Codex session runs Codex models (sol, astra, luna): make a Claude "
                         + "session for it");
         assertThat(sink.of(Intent.SessionTurnEnded.class)).hasSize(4).allMatch(t -> !t.error());
@@ -401,6 +416,118 @@ class CodexAdapterTest {
         assertThat(revoked).containsExactly("token-s");
     }
 
+    /// `/compact` compacts the running thread, with a note, and the compaction's notifications reach the events; a
+    /// refused compaction is a note.
+    @Test
+    void compactCompactsTheThread() throws IOException {
+        start("", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+        sink.await(Intent.SessionInit.class, WAIT);
+        adapter.send("s", "/compact", "user", "");
+
+        awaitLine("notification thread/compacted");
+        assertThat(received("thread/compact/start")).singleElement()
+                .satisfies(p -> assertThat(p.path("threadId").asString()).isEqualTo("thr-1"));
+        assertThat(events.lines()).containsSubsequence("note Compacting the Codex thread",
+                "notification item/completed", "notification thread/compacted");
+        assertThat(received("turn/start")).isEmpty();
+    }
+
+    /// A compaction Codex refuses is a note, and the session goes on.
+    @Test
+    void aRefusedCompactionIsANote() throws IOException {
+        start("nocompact", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+        sink.await(Intent.SessionInit.class, WAIT);
+        adapter.send("s", "/compact", "user", "");
+
+        Awaitility.await().atMost(WAIT).until(() -> events.lines().stream()
+                .anyMatch(l -> l.startsWith("note Codex did not compact the thread: thread not found")));
+        assertThat(sink.of(Intent.SessionExited.class)).isEmpty();
+    }
+
+    /// `/clear` starts a new thread on the running server with the same parameters: the transcript empties, the new
+    /// thread's id reaches the session as its conversation id, and the next prompt runs on it.
+    @Test
+    void clearStartsANewThread() throws IOException {
+        start("", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+        sink.await(Intent.SessionInit.class, WAIT);
+        transcripts.of("s").append(new Block.Note(Block.NoteKind.INFO, "before", ""));
+        adapter.send("s", "/clear", "user", "");
+        adapter.send("s", "after", "user", "");
+
+        sink.await(Intent.SessionInit.class, i -> i.info().claudeSessionId().equals("thr-2"), WAIT);
+        Awaitility.await().atMost(WAIT).until(() -> received("turn/start").size() == 1);
+        final List<ObjectNode> threads = received("thread/start");
+        assertThat(threads).hasSize(2);
+        assertThat(threads.getLast().path("config")).isEqualTo(threads.getFirst().path("config"));
+        assertThat(threads.getLast().path("model").asString()).isEqualTo("gpt-6.2-sol");
+        assertThat(received("turn/start").getFirst().path("threadId").asString()).isEqualTo("thr-2");
+        assertThat(transcripts.of("s").size()).isZero();
+        assertThat(sink.of(Intent.SessionInit.class).getLast().info().cliVersion()).isEqualTo("0.172.0");
+        assertThat(events.lines()).contains("thread thr-2 gpt-6.2-sol medium",
+                "note New Codex thread thr-2; the previous one, thr-1, stays stored");
+    }
+
+    /// Reflect, the checkpoint, gets a note that a Codex session cannot write memory, and no turn.
+    @Test
+    void reflectSaysACodexSessionCannotWriteMemory() throws IOException {
+        start("", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+        adapter.send("s", "/reflect --no-ask", "user", "");
+
+        awaitLine("note /reflect is a Claude Code command; a Codex session cannot write memory; ask a Claude session "
+                + "to reflect");
+        assertThat(received("turn/start")).isEmpty();
+    }
+
+    /// A stopped session's stored thread is read by a server of its own, with no ticket: each turn's prompt shows as
+    /// a prompt from the history, its other items as completed items, then the turn's end, and a note.
+    @Test
+    void historyReadsTheStoredThread() throws IOException {
+        start("", null);
+        adapter.loadHistory(resumed("thr-old"));
+
+        awaitLine("note Stored Codex thread thr-old loaded; start the session to continue it");
+        assertThat(received("thread/read")).singleElement().satisfies(p -> {
+            assertThat(p.path("threadId").asString()).isEqualTo("thr-old");
+            assertThat(p.path("includeTurns").asBoolean()).isTrue();
+        });
+        assertThat(received("initialize")).hasSize(1);
+        assertThat(receivedLines()).filteredOn(m -> "initialized".equals(m.path("method").asString(""))).hasSize(1);
+        assertThat(events.lines()).containsExactly("prompt list the files history false",
+                "notification item/completed", "notification item/completed",
+                "notification " + CodexMapper.HISTORY_TURN_ENDED,
+                "note Stored Codex thread thr-old loaded; start the session to continue it");
+        assertThat(received("thread/start")).isEmpty();
+        assertThat(sink.intents()).isEmpty();
+    }
+
+    /// A thread Codex cannot read leaves the transcript as it was, with a note that says so.
+    @Test
+    void anUnreadableHistoryIsANote() throws IOException {
+        start("noread", null);
+        transcripts.of("s").append(new Block.Note(Block.NoteKind.INFO, "kept", ""));
+        adapter.loadHistory(resumed("thr-old"));
+
+        Awaitility.await().atMost(WAIT).until(() -> !received("thread/read").isEmpty());
+        Awaitility.await().atMost(WAIT).until(() -> !events.lines().isEmpty());
+        assertThat(events.lines()).singleElement().asString().startsWith("note Stored Codex thread thr-old not loaded");
+        assertThat(transcripts.of("s").size()).isEqualTo(1);
+    }
+
+    /// A running session's history is not read: its transcript is already current.
+    @Test
+    void aRunningSessionReadsNoHistory() throws IOException {
+        start("", null);
+        adapter.start(SessionSpec.fresh("s", work.toString()));
+        sink.await(Intent.SessionInit.class, WAIT);
+        adapter.loadHistory(resumed("thr-1"));
+
+        Awaitility.await().during(Duration.ofMillis(500)).atMost(WAIT).until(() -> received("thread/read").isEmpty());
+    }
+
     /// Gives {@code kitRoot} the script of the guard hook {@code name}.
     private static void guard(final Path kitRoot, final String name) throws IOException {
         final Path dir = Files.createDirectories(kitRoot.resolve("hooks").resolve(name));
@@ -439,6 +566,12 @@ class CodexAdapterTest {
 
     private void awaitLine(final String line) {
         Awaitility.await().atMost(WAIT).until(() -> events.lines().contains(line));
+    }
+
+    /// A stopped session that resumes {@code threadId} when it starts.
+    private SessionSpec resumed(final String threadId) {
+        return new SessionSpec("s", work.toString(), "sol", "", 0.0, threadId, StartMode.RESUME,
+                SessionSpec.DEFAULT_CHECKPOINT, "");
     }
 
     /// The params of every {@code method} the fake read, in order.

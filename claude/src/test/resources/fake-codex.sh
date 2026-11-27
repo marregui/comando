@@ -1,16 +1,20 @@
 #!/bin/sh
 # Stands in for `codex app-server`: newline JSON-RPC without the jsonrpc field. Appends every line it reads to
-# $FAKE_CODEX_LOG, answers initialize, skills/extraRoots/set, thread/start, thread/resume, thread/fork and turn/start,
-# replays two item lines of the real transcript at $FAKE_CODEX_REPLAY (codex/turn.jsonl) in each turn, then completes
-# it. $FAKE_CODEX_MODE changes that:
+# $FAKE_CODEX_LOG, answers initialize, skills/extraRoots/set, thread/start (thr-1, then thr-2, ...), thread/resume,
+# thread/fork, turn/start, thread/compact/start (a contextCompaction item and thread/compacted follow) and thread/read
+# (one stored turn: a prompt, a command, an answer); replays two item lines of the real transcript at
+# $FAKE_CODEX_REPLAY (codex/turn.jsonl) in each turn, then completes it. $FAKE_CODEX_MODE changes that:
 #   request  asks the client for an approval before it completes the turn, which it does on the client's answer
 #   hold     completes the turn only on turn/interrupt
 #   error    answers thread/start and thread/resume with an error
 #   crash    writes to stderr and exits 3 on turn/start
 #   noskills answers skills/extraRoots/set with an error
+#   nocompact answers thread/compact/start with an error
+#   noread   answers thread/read with an error
 log=${FAKE_CODEX_LOG:-/dev/null}
 mode=${FAKE_CODEX_MODE:-}
 thread=thr-1
+threads=0
 n=0
 turn=
 completed() {
@@ -30,6 +34,9 @@ while IFS= read -r line; do
         printf '{"id":%s,"result":{}}\n' "$id"
       fi ;;
     *'"method":"thread/start"'*|*'"method":"thread/resume"'*|*'"method":"thread/fork"'*)
+      case "$line" in
+        *'"method":"thread/start"'*) threads=$((threads+1)); thread="thr-$threads" ;;
+      esac
       if [ "$mode" = error ]; then
         printf '{"id":%s,"error":{"code":-32600,"message":"no such thread"}}\n' "$id"
       else
@@ -46,15 +53,41 @@ while IFS= read -r line; do
       printf '{"id":%s,"result":{"turn":{"id":"%s","status":"inProgress"}}}\n' "$id" "$turn"
       printf '{"method":"turn/started","params":{"threadId":"%s","turn":{"id":"%s"}}}\n' "$thread" "$turn"
       if [ -n "$FAKE_CODEX_REPLAY" ]; then
-        sed -n '15,16p' "$FAKE_CODEX_REPLAY"
+        # the recorded items, on this fake's thread
+        sed -n '15,16p' "$FAKE_CODEX_REPLAY" | sed 's/"threadId":"[^"]*"/"threadId":"'"$thread"'"/g'
       fi
       case "$mode" in
         request)
           printf '{"id":"srv-%s","method":"item/commandExecution/requestApproval",%s}\n' "$n" \
             '"params":{"threadId":"'"$thread"'","turnId":"'"$turn"'","command":"touch /tmp/x"}' ;;
         hold) ;;
+        foreign)
+          printf '{"method":"item/completed","params":{"threadId":"thr-gone","item":%s}}\n' \
+            '{"type":"contextCompaction","id":"cmp-old"}'
+          completed completed ;;
         *) completed completed ;;
       esac ;;
+    *'"method":"thread/compact/start"'*)
+      if [ "$mode" = nocompact ]; then
+        printf '{"id":%s,"error":{"code":-32600,"message":"thread not found: %s"}}\n' "$id" "$thread"
+      else
+        printf '{"id":%s,"result":{}}\n' "$id"
+        printf '{"method":"item/started","params":{"threadId":"%s","item":%s}}\n' "$thread" \
+          '{"type":"contextCompaction","id":"cmp-1"}'
+        printf '{"method":"item/completed","params":{"threadId":"%s","item":%s}}\n' "$thread" \
+          '{"type":"contextCompaction","id":"cmp-1"}'
+        printf '{"method":"thread/compacted","params":{"threadId":"%s","turnId":"cmp"}}\n' "$thread"
+      fi ;;
+    *'"method":"thread/read"'*)
+      if [ "$mode" = noread ]; then
+        printf '{"id":%s,"error":{"code":-32600,"message":"thread not found"}}\n' "$id"
+      else
+        printf '{"id":%s,"result":{"thread":{"id":"thr-old","turns":[{"id":"t-1","status":"completed",%s,"items":[%s,%s,%s]}]}}}\n' \
+          "$id" '"durationMs":1200,"completedAt":1795761749' \
+          '{"type":"userMessage","id":"u-1","content":[{"type":"text","text":"list the files"}]}' \
+          '{"type":"commandExecution","id":"c-1","command":"ls","cwd":"/w","status":"completed","aggregatedOutput":"a\nb","exitCode":0}' \
+          '{"type":"agentMessage","id":"m-1","text":"Two files."}'
+      fi ;;
     *'"method":"turn/interrupt"'*)
       printf '{"id":%s,"result":{}}\n' "$id"
       completed interrupted ;;

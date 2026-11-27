@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -21,6 +22,7 @@ import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.ArrayNode;
 import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
@@ -54,6 +56,27 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
     private static final String SHELL_MATCHER = "Bash|shell|exec_command";
     /** Codex's limit on one guard run; the value the probe of 2026-11-27 ran kill-guard with. */
     private static final int HOOK_TIMEOUT_SECONDS = 5; // the kit's settings.json gives its guards 5 s
+    /** How long a history read waits for each answer before it gives up; a choice, ample for a slow disk. */
+    private static final long HISTORY_WAIT_SECONDS = 30;
+    /** The origin a stored thread's prompts are shown with. */
+    private static final String HISTORY_ORIGIN = "history";
+    /** A history reader's listener: what its server sends besides the answers is not shown. */
+    private static final CodexRpc.Listener IGNORED = new CodexRpc.Listener() {
+        @Override
+        public void notification(final String method, final ObjectNode params) {
+            // only the answers are read
+        }
+
+        @Override
+        public ObjectNode request(final String method, final ObjectNode params) {
+            return null;
+        }
+
+        @Override
+        public void exited(final int code, final String error) {
+            // the reader closes the server once the read is answered or fails
+        }
+    };
 
     private final IntentSink sink;
     private final TranscriptRegistry transcripts;
@@ -65,6 +88,8 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
     private final ConcurrentHashMap<String, Session> sessions = new ConcurrentHashMap<>();
     /** Each run's session, from its start to its end; read by {@link #close} after the strands stop. */
     private final Map<Run, String> started = new ConcurrentHashMap<>();
+    /** The servers reading a stored thread, from their start to their close; closed by {@link #close} as well. */
+    private final Set<CodexRpc> readers = ConcurrentHashMap.newKeySet();
     /** Written by {@link #close}; read by any thread that makes a session and by the strands' starts. */
     private volatile boolean closed;
 
@@ -182,10 +207,17 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         });
     }
 
+    /**
+     * Shows the stored thread of a session that is not running, read by a short-lived {@code codex app-server} of its
+     * own (no MCP ticket); a failure is a log line and a note after what the transcript held.
+     */
     @Override
     public void loadHistory(final SessionSpec spec) {
+        if (spec.claudeSessionId().isEmpty()) {
+            return;
+        }
         final Session s = session(spec.name());
-        s.run(() -> note(s, "Codex sessions do not load the history of their thread"));
+        s.run(() -> readHistory(s, spec));
     }
 
     @Override
@@ -226,6 +258,10 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         // what still runs after the strands stopped: no exit handler runs for it any more
         for (final Map.Entry<Run, String> e : Map.copyOf(started).entrySet()) {
             end(e.getValue(), e.getKey());
+        }
+        for (final CodexRpc rpc : List.copyOf(readers)) {
+            readers.remove(rpc);
+            rpc.close();
         }
     }
 
@@ -356,6 +392,20 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         return lines.isEmpty() ? "" : lines.getLast();
     }
 
+    /** The text parts of a stored {@code userMessage} item, one per line. */
+    private static String userText(final JsonNode item) {
+        final StringBuilder sb = new StringBuilder();
+        for (final JsonNode part : item.path("content")) {
+            if ("text".equals(part.path("type").asString(""))) {
+                if (!sb.isEmpty()) {
+                    sb.append('\n');
+                }
+                sb.append(part.path("text").asString(""));
+            }
+        }
+        return sb.toString();
+    }
+
     private static String messageOf(final Throwable t) {
         final Throwable cause = t.getCause() != null ? t.getCause() : t;
         return cause.getMessage() == null ? cause.toString() : cause.getMessage();
@@ -452,6 +502,84 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
 
     // ---- strand work
 
+    private void readHistory(final Session s, final SessionSpec spec) {
+        if (closed || s.current != null) {
+            return; // a running session's transcript is already current
+        }
+        final String threadId = spec.claudeSessionId();
+        final Path workDir;
+        try {
+            workDir = Path.of(spec.workDir());
+        } catch (final InvalidPathException e) {
+            LOG.log(System.Logger.Level.INFO, "codex history not read, working directory is not a path [session="
+                    + s.name + ", thread=" + threadId + ']');
+            return;
+        }
+        final CodexRpc rpc;
+        try {
+            rpc = CodexRpc.start(s.name + "-history", List.of(settings.codexExecutable(), "app-server"), workDir,
+                    IGNORED);
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.INFO, "codex history not read, cannot start the server [session=" + s.name
+                    + ", thread=" + threadId + ']', e);
+            note(s, "Stored Codex thread " + threadId + " not loaded: codex did not start");
+            return;
+        }
+        readers.add(rpc);
+        if (closed && readers.remove(rpc)) {
+            rpc.close(); // close() ran between the start and the add: it did not see this reader
+            return;
+        }
+        final ObjectNode init = Json.object();
+        init.putObject("clientInfo").put("name", "comando").put("version", CLIENT_VERSION);
+        final ObjectNode read = Json.object().put("threadId", threadId).put("includeTurns", true);
+        rpc.request("initialize", init).orTimeout(HISTORY_WAIT_SECONDS, TimeUnit.SECONDS)
+                .thenCompose(_ -> {
+                    rpc.notify("initialized", null);
+                    return rpc.request("thread/read", read).orTimeout(HISTORY_WAIT_SECONDS, TimeUnit.SECONDS);
+                })
+                .whenComplete((result, error) -> s.run(() -> showHistory(s, rpc, threadId, result, error)));
+    }
+
+    /** Shows each stored turn's items as the live turn showed them, then a turn end; then closes the reader. */
+    private void showHistory(
+            final Session s,
+            final CodexRpc rpc,
+            final String threadId,
+            final ObjectNode result,
+            final Throwable error
+    ) {
+        try {
+            if (error != null) {
+                LOG.log(System.Logger.Level.INFO, "codex history not read [session=" + s.name + ", thread="
+                        + threadId + ']', error);
+                if (s.current == null) {
+                    note(s, "Stored Codex thread " + threadId + " not loaded: " + messageOf(error));
+                }
+                return;
+            }
+            if (s.current != null) {
+                return; // started meanwhile: the live thread is what the transcript shows
+            }
+            s.transcript.clear();
+            for (final JsonNode turn : result.path("thread").path("turns")) {
+                for (final JsonNode item : turn.path("items")) {
+                    if ("userMessage".equals(item.path("type").asString(""))) {
+                        s.events.prompt(userText(item), HISTORY_ORIGIN, false);
+                    } else {
+                        s.events.notification("item/completed", Json.object().set("item", item));
+                    }
+                }
+                s.events.notification(CodexMapper.HISTORY_TURN_ENDED, Json.object().set("turn", turn));
+            }
+            note(s, "Stored Codex thread " + threadId + " loaded; start the session to continue it");
+        } finally {
+            if (readers.remove(rpc)) {
+                rpc.close();
+            }
+        }
+    }
+
     private void startServer(final Session s, final SessionSpec spec) {
         if (closed) {
             LOG.log(System.Logger.Level.DEBUG, "closing, start dropped [session=" + s.name + ']');
@@ -488,6 +616,7 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         }
         s.current = run;
         started.put(run, s.name);
+        s.spec = spec;
         s.model = Engine.codexModelId(spec.model());
         s.effort = effortOf(spec.effort());
         s.ready = false;
@@ -570,6 +699,7 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
             return;
         }
         s.threadId = result.path("thread").path("id").asString("");
+        s.cli = cli;
         final String model = result.path("model").asString(s.model);
         final String effort = result.path("reasoningEffort").asString(s.effort);
         LOG.log(System.Logger.Level.INFO, "codex thread ready [session=" + s.name + ", thread=" + s.threadId
@@ -583,7 +713,10 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         startNext(s, run);
     }
 
-    /** Handles {@code /model}, {@code /effort} and the Claude commands Codex lacks; false for a prompt. */
+    /**
+     * Handles {@code /model}, {@code /effort}, {@code /compact}, {@code /clear} and the Claude commands Codex lacks;
+     * false for a prompt.
+     */
     private boolean command(final Session s, final String text) {
         if (!text.startsWith("/")) {
             return false;
@@ -612,9 +745,64 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
                 }
                 note(s, "The next turn runs at effort " + s.effort);
             }
+            case "/compact" -> compact(s, s.current);
+            case "/clear" -> clear(s, s.current);
+            case "/reflect" -> note(s, "/reflect is a Claude Code command; a Codex session cannot write memory; ask a "
+                    + "Claude session to reflect");
             default -> note(s, word + " is a Claude Code command; Codex sessions do not have it");
         }
         return true;
+    }
+
+    /** Asks Codex to compact the thread; its {@code contextCompaction} item reaches the mapper as any item does. */
+    private void compact(final Session s, final Run run) {
+        if (!s.ready) {
+            note(s, "Not compacted: the Codex thread has not started");
+            return;
+        }
+        if (s.turnRunning) {
+            note(s, "Not compacted: a Codex thread is compacted between turns");
+            return;
+        }
+        note(s, "Compacting the Codex thread");
+        run.rpc.request("thread/compact/start", Json.object().put("threadId", s.threadId))
+                .whenComplete((_, error) -> s.run(() -> {
+                    if (s.current == run && error != null) {
+                        note(s, "Codex did not compact the thread: " + messageOf(error));
+                    }
+                }));
+    }
+
+    /**
+     * Starts a new thread on the running server with the parameters the session started with; the transcript empties,
+     * and the new thread's id becomes the session's conversation id. Refused while a turn runs.
+     */
+    private void clear(final Session s, final Run run) {
+        if (!s.ready || s.turnRunning) {
+            note(s, "Not cleared: a Codex thread is cleared between turns; interrupt the running turn first");
+            return;
+        }
+        s.ready = false; // prompts sent meanwhile wait for the new thread
+        final SessionSpec spec = s.spec;
+        final String old = s.threadId;
+        run.rpc.request("thread/start", threadParams(spec, s.model, run.ticket))
+                .whenComplete((result, error) -> s.run(() -> {
+                    if (s.current != run) {
+                        return;
+                    }
+                    if (error != null) {
+                        s.ready = true;
+                        note(s, "Codex did not start a new thread; the conversation goes on: " + messageOf(error));
+                        startNext(s, run);
+                        return;
+                    }
+                    s.transcript.clear();
+                    s.transcript.changed();
+                    LOG.log(System.Logger.Level.INFO, "codex thread cleared [session=" + s.name + ", old=" + old
+                            + ']');
+                    onThread(s, run, spec, s.cli, result, null);
+                    note(s, "New Codex thread " + s.threadId + "; the previous one, " + old + ", stays stored");
+                }));
     }
 
     private void startTurn(final Session s, final Run run, final String prompt) {
@@ -668,6 +856,10 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
     private void onNotification(final Session s, final Run run, final String method, final ObjectNode params) {
         if (s.current != run) {
             return;
+        }
+        final String thread = params.path("threadId").asString("");
+        if (!thread.isEmpty() && !thread.equals(s.threadId)) {
+            return; // a thread the session left by /clear: its late items belong to no transcript
         }
         s.events.notification(method, params);
         s.transcript.changed();
@@ -825,7 +1017,11 @@ public final class CodexAdapter implements ClaudePort, AutoCloseable {
         /** Prompts sent while a turn runs or before the thread is ready, at most {@link #QUEUED_PROMPTS}. */
         final ArrayDeque<String> queued = new ArrayDeque<>();
         Run current;
+        /** What the running server started with; a new thread on Clear takes the same parameters. */
+        SessionSpec spec;
         String threadId = "";
+        /** The Codex CLI's version, as {@code initialize} reported it. */
+        String cli = "";
         String model = "";
         String effort = "";
         /** The thread started: a prompt can become a turn. */

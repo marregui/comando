@@ -31,7 +31,16 @@ Claude verifies what it proposes.
    (`Bash|shell|exec_command`) that runs the kit's `kill-guard` and `instance-guard` through `bin/kit-python`, each
    whose script exists; probed the same day, `kill-guard` denied a `pkill -f` unchanged.
 4. **Prompts map onto turns.** A prompt is `turn/start`; Interrupt is `turn/interrupt`; `/model X` and `/effort X` change
-   the next turn's; a Claude command Codex lacks (`/compact`, `/clear`, the checkpoint) is answered with a note.
+   the next turn's. `/compact` (the compact buttons, the automatic checkpoint) is `thread/compact/start` on the running
+   thread, with a note; its `contextCompaction` item shows as the compaction note a Claude session shows, and a refusal
+   is a note. `/clear` starts a new thread on the running server with the parameters the session started with, between
+   turns only: the transcript empties and the new thread's id reaches the session as its conversation id. A Claude
+   command Codex lacks is answered with a note; the checkpoint's `/reflect` says a Codex session cannot write memory.
+   A stopped session's history is its stored thread, read by a short-lived `codex app-server` of its own (no MCP
+   ticket): `thread/read` with `includeTurns`, each stored item shown as the live turn showed it and a turn end per
+   turn, without a turn event or an intent; a thread that cannot be read is a log line and a note. Notifications
+   of a thread the session left by `/clear` are dropped, and `/compact`, like `/clear`, runs between turns only. A resume keeps sending the
+   whole permission table: without it Codex 0.172.0 refuses the saved profile (probed 2026-11-27).
 5. **Items map onto blocks.** `agentMessage` → assistant text, `reasoning` → thinking, `commandExecution`, `fileChange`
    and `mcpToolCall` → tool calls, `turn/completed` → turn end; `thread/tokenUsage/updated` → context; each turn writes
    the metrics `turn` event.
@@ -49,4 +58,5 @@ Claude verifies what it proposes.
   engine, and the next start fails; make a new session instead.
 - Known limits: the turn end reports no queued prompts; an interrupt asked before a turn's id arrives is sent once it
   arrives.
-- Not yet: compaction, the subagent view, the history of threads started outside comando.
+- Not yet: the subagent view. `thread/read` with `includeTurns` is deprecated for paginated threads in 0.172.0
+  (`thread/turns/list` and `thread/items/list` replace it); the history moves to them when `includeTurns` goes.

@@ -154,6 +154,21 @@ class CodexMapperTest {
         assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::numTurns).containsExactly(2, 1);
     }
 
+    /// A new thread (`/clear`) starts with an empty context: the old thread's context size is not reported.
+    @Test
+    void aNewThreadStartsWithAnEmptyContext() {
+        mapper.threadStarted(THREAD, "gpt-6.2-sol", "medium");
+        mapper.notification("turn/started", params("{}"));
+        mapper.notification("thread/tokenUsage/updated", params("{\"tokenUsage\":{\"last\":{\"inputTokens\":900}}}"));
+        mapper.notification("turn/completed", params("{\"turn\":{\"status\":\"completed\",\"durationMs\":3}}"));
+        mapper.threadStarted("thr-new", "gpt-6.2-sol", "medium");
+        mapper.notification("turn/started", params("{}"));
+        mapper.exited("codex exited with code 1");
+
+        assertThat(sink.of(Intent.SessionTurnEnded.class)).extracting(Intent.SessionTurnEnded::contextTokens)
+                .containsExactly(900L, 0L);
+    }
+
     /// A file change shows as an `Edit` call with its paths and diffs, done when Codex applied it.
     @Test
     void aFileChangeShowsAsAnEdit() {
@@ -251,6 +266,38 @@ class CodexMapperTest {
 
         assertThat(transcript.size()).isZero();
         assertThat(sink.intents()).isEmpty();
+    }
+
+    /// A completed `contextCompaction` item shows as the compaction note a Claude session shows, once; its start and
+    /// `thread/compacted` add nothing.
+    @Test
+    void aCompactionShowsAsTheCompactionNote() {
+        final String item = "{\"item\":{\"type\":\"contextCompaction\",\"id\":\"cmp-1\"}}";
+        mapper.notification("item/started", params(item));
+        mapper.notification("item/completed", params(item));
+        mapper.notification("thread/compacted", params("{\"threadId\":\"t\",\"turnId\":\"cmp\"}"));
+
+        assertThat(blocks()).singleElement().isInstanceOfSatisfying(Block.Note.class, note -> {
+            assertThat(note.kind()).isEqualTo(Block.NoteKind.COMPACT);
+            assertThat(note.text()).isEqualTo("Conversation compacted");
+        });
+        assertThat(sink.intents()).isEmpty();
+    }
+
+    /// A stored turn's end shows its turn end with its length and status, failed when the turn failed, and sends no
+    /// intent and no metric: the turn ended long ago.
+    @Test
+    void aStoredTurnEndsWithoutAnIntentOrAMetric() {
+        mapper.metrics(events::add);
+        mapper.notification(CodexMapper.HISTORY_TURN_ENDED,
+                params("{\"turn\":{\"status\":\"completed\",\"durationMs\":1200,\"completedAt\":1795761749}}"));
+        mapper.notification(CodexMapper.HISTORY_TURN_ENDED,
+                params("{\"turn\":{\"status\":\"failed\",\"error\":{\"message\":\"quota\"}}}"));
+
+        assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::durationMillis, Block.TurnEnd::error,
+                Block.TurnEnd::text).containsExactly(tuple(1_200L, false, "completed"), tuple(0L, true, "quota"));
+        assertThat(sink.intents()).isEmpty();
+        assertThat(events).isEmpty();
     }
 
     private static ObjectNode params(final String json) {
